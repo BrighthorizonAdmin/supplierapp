@@ -16,10 +16,14 @@ export default {
           800: '#1e40af',
           900: '#1e3a8a',
         },
-        sidebar: '#0f172a',
+        sidebar: '#0f2744',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      borderRadius: {
+        '2xl': '1rem',
+        '3xl': '1.25rem',
       },
     },
   },

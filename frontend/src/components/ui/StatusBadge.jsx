@@ -5,13 +5,13 @@ const STATUS_MAP = {
   suspended: 'badge-red',
   rejected: 'badge-red',
   verified: 'badge-green',
-  // Orders
-  draft: 'badge-gray',
-  confirmed: 'badge-blue',
-  processing: 'badge-blue',
-  shipped: 'badge-purple',
-  delivered: 'badge-green',
-  cancelled: 'badge-red',
+  // Orders — solid Figma style
+  draft: 'badge-solid-gray',
+  confirmed: 'badge-solid-blue',
+  processing: 'badge-solid-purple',
+  shipped: 'badge-solid-blue',
+  delivered: 'badge-solid-green',
+  cancelled: 'badge-solid-red',
   // Payments
   paid: 'badge-green',
   partial: 'badge-yellow',

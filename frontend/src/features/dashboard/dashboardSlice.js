@@ -29,6 +29,13 @@ export const fetchTopDealers = createAsyncThunk('dashboard/topDealers', async (_
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
+export const fetchRecentOrders = createAsyncThunk('dashboard/recentOrders', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/orders', { params: { limit: 6, sort: '-createdAt' } });
+    return data.data?.orders || data.data || [];
+  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+});
+
 const dashboardSlice = createSlice({
   name: 'dashboard',
   initialState: {
@@ -36,6 +43,7 @@ const dashboardSlice = createSlice({
     activity: [],
     salesChart: [],
     topDealers: [],
+    recentOrders: [],
     loading: false,
     chartPeriod: 'month',
   },
@@ -50,7 +58,8 @@ const dashboardSlice = createSlice({
       .addCase(fetchKPIs.rejected, (state) => { state.loading = false; })
       .addCase(fetchRecentActivity.fulfilled, (state, action) => { state.activity = action.payload; })
       .addCase(fetchSalesChart.fulfilled, (state, action) => { state.salesChart = action.payload; })
-      .addCase(fetchTopDealers.fulfilled, (state, action) => { state.topDealers = action.payload; });
+      .addCase(fetchTopDealers.fulfilled, (state, action) => { state.topDealers = action.payload; })
+      .addCase(fetchRecentOrders.fulfilled, (state, action) => { state.recentOrders = action.payload; });
   },
 });
 
