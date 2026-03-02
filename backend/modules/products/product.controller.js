@@ -1,0 +1,42 @@
+const productService = require('./product.service');
+const asyncHandler = require('../../utils/asyncHandler');
+const { success, paginated } = require('../../utils/response');
+const { AppError } = require('../../middlewares/error.middleware');
+
+const createProduct = asyncHandler(async (req, res) => {
+  const product = await productService.createProduct(req.body, req.user.id);
+  return success(res, product, 'Product created', 201);
+});
+
+const getProducts = asyncHandler(async (req, res) => {
+  const { data, pagination } = await productService.getProducts(req.query);
+  return paginated(res, data, pagination, 'Products fetched');
+});
+
+const getProductById = asyncHandler(async (req, res) => {
+  const product = await productService.getProductById(req.params.id);
+  return success(res, product, 'Product fetched');
+});
+
+const updateProduct = asyncHandler(async (req, res) => {
+  const product = await productService.updateProduct(req.params.id, req.body, req.user.id);
+  return success(res, product, 'Product updated');
+});
+
+const deleteProduct = asyncHandler(async (req, res) => {
+  await productService.deleteProduct(req.params.id, req.user.id);
+  return success(res, null, 'Product deactivated');
+});
+
+const addProductImage = asyncHandler(async (req, res) => {
+  if (!req.file) throw new AppError('No image uploaded', 400);
+  const product = await productService.addProductImage(req.params.id, req.file, req.user.id);
+  return success(res, product, 'Image added');
+});
+
+const getCategories = asyncHandler(async (req, res) => {
+  const categories = await productService.getCategories();
+  return success(res, categories, 'Categories fetched');
+});
+
+module.exports = { createProduct, getProducts, getProductById, updateProduct, deleteProduct, addProductImage, getCategories };

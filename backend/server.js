@@ -1,0 +1,131 @@
+require('express-async-errors');
+const http = require('http');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const mongoSanitize = require('express-mongo-sanitize');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
+
+const env = require('./config/env');
+const connectDB = require('./config/db');
+const logger = require('./utils/logger');
+const { initSocket } = require('./websocket/socket');
+const errorMiddleware = require('./middlewares/error.middleware');
+
+// Route imports
+const authRoutes = require('./modules/auth/auth.routes');
+const dealerRoutes = require('./modules/dealer/dealer.routes');
+const documentRoutes = require('./modules/dealer/document.routes');
+const productRoutes = require('./modules/products/product.routes');
+const warehouseRoutes = require('./modules/inventory/warehouse.routes');
+const inventoryRoutes = require('./modules/inventory/inventory.routes');
+const orderRoutes = require('./modules/orders/order.routes');
+const retailOrderRoutes = require('./modules/retailOrders/retailOrder.routes');
+const paymentRoutes = require('./modules/payments/payment.routes');
+const invoiceRoutes = require('./modules/payments/invoice.routes');
+const returnRoutes = require('./modules/returns/return.routes');
+const financeRoutes = require('./modules/finance/finance.routes');
+const auditRoutes = require('./modules/audit/audit.routes');
+const notificationRoutes = require('./modules/notifications/notification.routes');
+const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
+
+const app = express();
+
+// Security headers
+app.use(helmet());
+
+// CORS
+app.use(
+  cors({
+    origin: env.FRONTEND_URL,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
+// Auth rate limit (100 req / 15 min)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { success: false, message: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// General API rate limit
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/auth', authLimiter);
+app.use('/api', apiLimiter);
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// NoSQL injection sanitization
+app.use(mongoSanitize());
+
+// HTTP logging
+if (env.isDev) {
+  app.use(morgan('dev'));
+}
+
+// Static file serving for uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), env: env.NODE_ENV });
+});
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/dealers', dealerRoutes);
+app.use('/api/documents', documentRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/warehouses', warehouseRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/retail-orders', retailOrderRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/returns', returnRoutes);
+app.use('/api/finance', financeRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });
+});
+
+// Centralized error handler
+app.use(errorMiddleware);
+
+// Bootstrap
+const startServer = async () => {
+  await connectDB();
+  const httpServer = http.createServer(app);
+  initSocket(httpServer);
+
+  httpServer.listen(env.PORT, () => {
+    logger.info(`Server running on port ${env.PORT} [${env.NODE_ENV}]`);
+    logger.info(`Health: http://localhost:${env.PORT}/health`);
+  });
+
+  process.on('unhandledRejection', (err) => {
+    logger.error(`Unhandled Rejection: ${err.message}`);
+    httpServer.close(() => process.exit(1));
+  });
+};
+
+startServer();
