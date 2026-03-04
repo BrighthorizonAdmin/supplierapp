@@ -9,6 +9,13 @@ export const fetchInventory = createAsyncThunk('inventory/fetchAll', async (para
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
+export const fetchInventoryStats = createAsyncThunk('inventory/fetchStats', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/inventory/stats');
+    return data.data;
+  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+});
+
 export const fetchWarehouses = createAsyncThunk('inventory/warehouses', async (_, { rejectWithValue }) => {
   try {
     const { data } = await api.get('/warehouses');
@@ -35,27 +42,32 @@ export const createWarehouse = createAsyncThunk('inventory/createWarehouse', asy
 const inventorySlice = createSlice({
   name: 'inventory',
   initialState: {
-    list: [],
+    list:       [],
     warehouses: [],
+    stats:      null,
+    statsLoading: false,
     pagination: null,
-    loading: false,
-    error: null,
-    filters: { warehouseId: '', lowStock: false },
+    loading:    false,
+    error:      null,
+    filters:    { warehouseId: '', lowStock: false },
   },
   reducers: {
     setFilters: (state, action) => { state.filters = { ...state.filters, ...action.payload }; },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchInventory.pending, (state) => { state.loading = true; })
+      .addCase(fetchInventory.pending,  (state) => { state.loading = true; })
       .addCase(fetchInventory.fulfilled, (state, action) => {
-        state.loading = false;
-        state.list = action.payload.data;
+        state.loading    = false;
+        state.list       = action.payload.data;
         state.pagination = action.payload.pagination;
       })
-      .addCase(fetchInventory.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
-      .addCase(fetchWarehouses.fulfilled, (state, action) => { state.warehouses = action.payload; })
-      .addCase(createWarehouse.fulfilled, (state, action) => { state.warehouses.push(action.payload); });
+      .addCase(fetchInventory.rejected,  (state, action) => { state.loading = false; state.error = action.payload; })
+      .addCase(fetchInventoryStats.pending,  (state) => { state.statsLoading = true; })
+      .addCase(fetchInventoryStats.fulfilled, (state, action) => { state.statsLoading = false; state.stats = action.payload; })
+      .addCase(fetchInventoryStats.rejected,  (state) => { state.statsLoading = false; })
+      .addCase(fetchWarehouses.fulfilled,    (state, action) => { state.warehouses = action.payload; })
+      .addCase(createWarehouse.fulfilled,    (state, action) => { state.warehouses.push(action.payload); });
   },
 });
 

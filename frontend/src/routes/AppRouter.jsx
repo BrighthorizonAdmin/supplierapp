@@ -37,8 +37,8 @@ const AppRouter = () => {
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="onboarding" element={<DealerOnboardingPage />} />
           <Route path="dealers" element={<DealerListPage />} />
-          <Route path="dealers/new" element={<DealerOnboardingPage />} />
           <Route path="dealers/:id" element={<DealerDetailPage />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="products" element={<ProductListPage />} />
@@ -51,6 +51,7 @@ const AppRouter = () => {
           <Route path="invoices" element={<InvoiceListPage />} />
           <Route path="returns" element={<ReturnListPage />} />
           <Route path="finance" element={<FinancePage />} />
+          <Route path="finance-reports" element={<FinancePage />} />
           <Route path="audit" element={<AuditPage />} />
           <Route path="notifications" element={<NotificationPage />} />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />

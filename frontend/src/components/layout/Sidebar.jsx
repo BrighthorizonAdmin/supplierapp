@@ -1,5 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
+import { useState } from 'react';
+import { X } from 'lucide-react';
 import {
   LayoutDashboard, Users, Package, Boxes, ShoppingCart,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
@@ -12,7 +14,7 @@ import toast from 'react-hot-toast';
 
 const NAV_ITEMS = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', perm: 'dashboard:read' },
-  { to: '/dealers', icon: UserPlus, label: 'Onboarding', perm: 'dealer:read', end: false },
+  { to: '/onboarding', icon: UserPlus, label: 'Onboarding', perm: 'dealer:read' },
   { to: '/dealers', icon: Users, label: 'Dealer Management', perm: 'dealer:read', end: false },
   { to: '/inventory', icon: Boxes, label: 'Inventory', perm: 'inventory:read' },
   { to: '/products', icon: Package, label: 'Product Catalog', perm: 'products:read' },
@@ -21,7 +23,6 @@ const NAV_ITEMS = [
   { to: '/payments', icon: CreditCard, label: 'Payments & Credits', perm: 'payments:read' },
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
   { to: '/audit', icon: BarChart2, label: 'Analytics', perm: 'audit:read' },
-  { to: '/finance', icon: DollarSign, label: 'Finance Reports', perm: 'finance:read' },
   { to: '/notifications', icon: Settings, label: 'Settings', perm: null },
 ];
 
@@ -31,6 +32,7 @@ const Sidebar = () => {
   const sidebarOpen = useSelector((s) => s.ui.sidebarOpen);
   const { user } = useSelector((s) => s.auth);
   const { hasPermission } = usePermission();
+  const [showHelpCard, setShowHelpCard] = useState(true);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -44,7 +46,7 @@ const Sidebar = () => {
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full bg-sidebar text-white z-30 flex flex-col transition-all duration-200 ${
+      className={`fixed left-0 top-0 h-full  text-white z-30 flex flex-col transition-all duration-200 ${
         sidebarOpen ? 'w-64' : 'w-16'
       }`}
     >
@@ -56,7 +58,7 @@ const Sidebar = () => {
         {sidebarOpen && (
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white truncate leading-tight">Company Name</p>
-            <p className="text-xs text-blue-300 truncate leading-tight">Supplier Admin Portal</p>
+            <p className="text-xs text-blue-600 truncate leading-tight">Supplier Admin Portal</p>
           </div>
         )}
         <button
@@ -69,17 +71,18 @@ const Sidebar = () => {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {NAV_ITEMS.map(({ to, icon: Icon, label, perm }) => {
+        {NAV_ITEMS.map(({ to, icon: Icon, label, perm, end }) => {
           if (perm && !hasPermission(null, perm)) return null;
           return (
             <NavLink
               key={`${to}-${label}`}
               to={to}
+              end={end !== false}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-blue-200/80 hover:text-white hover:bg-white/10'
+                    : 'text-blue-600  hover:bg-white/10'
                 }`
               }
             >
@@ -91,20 +94,32 @@ const Sidebar = () => {
       </nav>
 
       {/* Need Help card */}
-      {sidebarOpen && (
-        <div className="mx-3 mb-3 p-3 bg-blue-600/90 rounded-2xl flex-shrink-0">
-          <div className="flex items-center gap-2 mb-1">
-            <HelpCircle size={15} className="text-blue-100 flex-shrink-0" />
-            <span className="text-sm font-semibold text-white">Need Help?</span>
-          </div>
-          <p className="text-xs text-blue-200 mb-2 leading-relaxed">
-            Contact our support team for assistance.
-          </p>
-          <button className="w-full text-xs bg-white text-blue-700 font-semibold py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
-            Contact Support
-          </button>
-        </div>
-      )}
+      {/* Need Help card */}
+{sidebarOpen && showHelpCard && (
+  <div className="mx-3 mb-3 p-3 bg-blue-600/90 rounded-2xl relative flex-shrink-0">
+    
+    {/* Close Button */}
+    <button
+      onClick={() => setShowHelpCard(false)}
+      className="absolute top-2 right-2 text-blue-200 hover:text-white transition-colors"
+    >
+      <X size={14} />
+    </button>
+
+    <div className="flex items-center gap-2 mb-1">
+      <HelpCircle size={15} className="text-blue-100 flex-shrink-0" />
+      <span className="text-sm font-semibold text-white">Need Help?</span>
+    </div>
+
+    <p className="text-xs text-blue-200 mb-2 leading-relaxed">
+      Contact our support team for assistance.
+    </p>
+
+    <button className="w-full text-xs bg-white text-blue-700 font-semibold py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+      Contact Support
+    </button>
+  </div>
+)}
 
       {/* User profile */}
       <div
