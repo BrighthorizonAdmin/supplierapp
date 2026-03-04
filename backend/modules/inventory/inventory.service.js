@@ -84,15 +84,38 @@ const getInventory = async (query = {}) => {
   const match = {};
 
   if (query.warehouseId) match.warehouseId = query.warehouseId;
-  if (query.productId) match.productId = query.productId;
-  if (query.lowStock === 'true') {
+  if (query.productId)   match.productId   = query.productId;
+
+  // Stock status filters
+  if (query.status === 'low-stock' || query.lowStock === 'true') {
+    match.quantityOnHand = { $gt: 0 };
     match.$expr = { $lte: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] };
+  } else if (query.status === 'out-of-stock') {
+    match.quantityOnHand = 0;
+  } else if (query.status === 'high-stock') {
+    match.$expr = { $gt: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, { $multiply: ['$reorderLevel', 2] }] };
+  }
+
+  // Search: pre-fetch matching product IDs
+  if (query.search) {
+    const re = new RegExp(query.search, 'i');
+    const hits = await Product.find({ $or: [{ name: re }, { productCode: re }] }).select('_id').lean();
+    match.productId = { $in: hits.map((p) => p._id) };
+  }
+
+  // Category: pre-fetch matching product IDs
+  if (query.category) {
+    const catHits = await Product.find({ category: query.category }).select('_id').lean();
+    const catIds = catHits.map((p) => p._id);
+    match.productId = match.productId
+      ? { $in: match.productId.$in.filter((id) => catIds.some((c) => c.equals(id))) }
+      : { $in: catIds };
   }
 
   const [data, total] = await Promise.all([
     Inventory.find(match)
-      .populate('productId', 'name productCode category unit')
-      .populate('warehouseId', 'name code')
+      .populate('productId', 'name productCode category unit basePrice')
+      .populate('warehouseId', 'name code address')
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -101,6 +124,40 @@ const getInventory = async (query = {}) => {
   ]);
 
   return { data, pagination: buildMeta(total, page, limit) };
+};
+
+const getInventoryStats = async () => {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const ninetyDaysAgo  = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  const lowStockExpr  = { $lte: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] };
+  const highStockExpr = { $gt:  [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] };
+
+  const [totalAgg, distinctSKUs, lowStockCount, outOfStockCount, inStockCount, fastMovingCount, slowMovingCount] =
+    await Promise.all([
+      Inventory.aggregate([{ $group: { _id: null, totalOnHand: { $sum: '$quantityOnHand' }, totalAllocated: { $sum: '$quantityAllocated' } } }]),
+      Inventory.distinct('productId').then((ids) => ids.length),
+      Inventory.countDocuments({ quantityOnHand: { $gt: 0 }, $expr: lowStockExpr }),
+      Inventory.countDocuments({ quantityOnHand: 0 }),
+      Inventory.countDocuments({ quantityOnHand: { $gt: 0 }, $expr: highStockExpr }),
+      Inventory.countDocuments({ lastRestockedAt: { $gte: thirtyDaysAgo } }),
+      Inventory.countDocuments({ $or: [{ lastRestockedAt: { $lt: ninetyDaysAgo } }, { lastRestockedAt: null }] }),
+    ]);
+
+  const totalOnHand    = totalAgg[0]?.totalOnHand    || 0;
+  const totalAllocated = totalAgg[0]?.totalAllocated || 0;
+
+  return {
+    totalOnHand,
+    totalAllocated,
+    totalSKUs:      distinctSKUs,
+    lowStockCount,
+    outOfStockCount,
+    inStockCount,
+    fastMovingCount,
+    slowMovingCount,
+    distribution: { inStock: inStockCount, lowStock: lowStockCount, outOfStock: outOfStockCount },
+  };
 };
 
 const getInventoryById = async (id) => {
@@ -143,7 +200,7 @@ const updateWarehouse = async (id, updates, userId) => {
 };
 
 module.exports = {
-  adjustStock, allocateStock, releaseAllocation, getInventory,
+  adjustStock, allocateStock, releaseAllocation, getInventory, getInventoryStats,
   getInventoryById, upsertInventory, getOrCreateInventory,
   createWarehouse, getWarehouses, updateWarehouse,
 };

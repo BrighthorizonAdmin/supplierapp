@@ -13,6 +13,7 @@ const STATUS_MAP = {
   delivered: 'badge-solid-green',
   cancelled: 'badge-solid-red',
   // Payments
+  confirmed: 'badge-solid-green',
   paid: 'badge-green',
   partial: 'badge-yellow',
   issued: 'badge-blue',

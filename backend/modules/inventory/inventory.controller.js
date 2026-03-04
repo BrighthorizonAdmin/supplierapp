@@ -7,6 +7,11 @@ const getInventory = asyncHandler(async (req, res) => {
   return paginated(res, data, pagination, 'Inventory fetched');
 });
 
+const getInventoryStats = asyncHandler(async (req, res) => {
+  const stats = await inventoryService.getInventoryStats();
+  return success(res, stats, 'Inventory stats fetched');
+});
+
 const getInventoryById = asyncHandler(async (req, res) => {
   const inv = await inventoryService.getInventoryById(req.params.id);
   return success(res, inv, 'Inventory record fetched');
@@ -41,6 +46,6 @@ const updateWarehouse = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  getInventory, getInventoryById, adjustStock, upsertInventory,
+  getInventory, getInventoryStats, getInventoryById, adjustStock, upsertInventory,
   createWarehouse, getWarehouses, updateWarehouse,
 };

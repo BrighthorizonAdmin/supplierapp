@@ -1,22 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchReturns, processReturn } from '../returnSlice';
-import Table from '../../../components/ui/Table';
-import Pagination from '../../../components/ui/Pagination';
 import StatusBadge from '../../../components/ui/StatusBadge';
+import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
+import { Search, Filter } from 'lucide-react';
+
+const STATUS_TABS = [
+  { label: 'All Requests', value: '' },
+  { label: 'Pending',      value: 'pending' },
+  { label: 'Approved',     value: 'approved' },
+  { label: 'Rejected',     value: 'rejected' },
+  { label: 'Refunded',     value: 'refunded' },
+];
 
 const ReturnListPage = () => {
   const dispatch = useDispatch();
   const { list, pagination, loading } = useSelector((s) => s.return);
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('dealers');
+  const [search, setSearch] = useState('');
   const [processModal, setProcessModal] = useState(null);
   const { register, handleSubmit, reset } = useForm();
 
-  useEffect(() => { dispatch(fetchReturns({ page, limit: 20, status })); }, [dispatch, page, status]);
+  useEffect(() => {
+    dispatch(fetchReturns({ page, limit: 20, status: statusFilter }));
+  }, [dispatch, page, statusFilter]);
 
   const onProcess = (data) => {
     dispatch(processReturn({ id: processModal._id, ...data })).then((res) => {
@@ -24,37 +36,168 @@ const ReturnListPage = () => {
     });
   };
 
-  const columns = [
-    { key: 'rmaNumber', label: 'RMA #', render: (v) => <span className="font-mono text-xs font-medium">{v}</span> },
-    { key: 'dealerId', label: 'Dealer', render: (v) => v?.businessName || '—' },
-    { key: 'orderId', label: 'Order', render: (v) => v?.orderNumber || '—' },
-    { key: 'reason', label: 'Reason', render: (v) => <span className="truncate max-w-32 block">{v}</span> },
-    { key: 'status', label: 'Status', render: (v) => <StatusBadge status={v} /> },
-    { key: 'refundAmount', label: 'Refund', render: (v) => v ? `₹${v.toLocaleString('en-IN')}` : '—' },
-    { key: 'createdAt', label: 'Date', render: (v) => format(new Date(v), 'dd MMM yyyy') },
-    {
-      key: 'actions', label: 'Actions',
-      render: (_, row) => ['requested','approved','received'].includes(row.status) ? (
-        <button onClick={() => setProcessModal(row)} className="text-xs text-green-600 hover:text-green-700 font-medium">
-          Process Refund
-        </button>
-      ) : null,
-    },
-  ];
+  const filtered = list.filter((r) =>
+    !search ||
+    r.rmaNumber?.toLowerCase().includes(search.toLowerCase()) ||
+    r.dealerId?.businessName?.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-slate-900">Returns & RMA</h1>
-      <div className="card p-4">
-        <select className="input w-40" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All Status</option>
-          {['requested','approved','received','refunded','rejected'].map((s) => (
-            <option key={s} value={s} className="capitalize">{s}</option>
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Returns & Refunds</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Review pending returns and manage refund approvals.</p>
+        </div>
+        <div className="flex items-center border border-slate-200 rounded-lg p-1 bg-white">
+          {['Dealers', 'Retails'].map((t) => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t.toLowerCase())}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                typeFilter === t.toLowerCase()
+                  ? 'border border-blue-600 text-blue-600 bg-white'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {t}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
+
       <div className="card">
-        <Table columns={columns} data={list} loading={loading} />
+        {/* Filter tabs + Search row */}
+        <div className="flex items-center justify-between px-4 border-b border-slate-100">
+          <div className="flex items-center">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => { setStatusFilter(tab.value); setPage(1); }}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  statusFilter === tab.value
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 py-2">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search Product Name, Dealer, SKU..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-72"
+              />
+            </div>
+            <button className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-500 transition-colors">
+              <Filter size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        {loading ? (
+          <div className="flex items-center justify-center h-48">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Return ID</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Type</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Dealer</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Date</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Items</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Amount</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Payment</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Status</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-12 text-center text-slate-400">No returns found</td>
+                  </tr>
+                ) : (
+                  filtered.map((row, idx) => (
+                    <tr key={row._id || idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap font-mono text-xs font-semibold text-slate-700">
+                        {row.rmaNumber || '—'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700 uppercase tracking-wide">
+                          Dealer
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-700">
+                        {row.dealerId?.businessName || '—'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">
+                        {row.createdAt ? format(new Date(row.createdAt), 'yyyy-MM-dd') : '—'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">
+                        {row.items?.length ? `${row.items.length} Items` : '—'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">
+                        {row.refundAmount ? `₹${row.refundAmount.toLocaleString('en-IN')}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">
+                        {row.refundMethod || 'Credit'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {row.status === 'requested' ? (
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              onClick={() => dispatch(processReturn({ id: row._id, status: 'approved' }))}
+                              className="text-xs text-blue-600 hover:underline font-medium text-left"
+                            >
+                              Accept Return
+                            </button>
+                            <button
+                              onClick={() => dispatch(processReturn({ id: row._id, status: 'rejected' }))}
+                              className="text-xs text-red-500 hover:underline font-medium text-left"
+                            >
+                              Reject Return
+                            </button>
+                          </div>
+                        ) : (
+                          <StatusBadge status={row.status} />
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {row.status === 'requested' ? (
+                          <span className="text-slate-400 text-sm select-none">—</span>
+                        ) : row.status === 'pending' ? (
+                          <button
+                            onClick={() => setProcessModal(row)}
+                            className="text-xs text-blue-600 font-medium border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-50 transition-colors"
+                          >
+                            Review
+                          </button>
+                        ) : (
+                          <button className="text-xs text-blue-600 font-medium border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-50 transition-colors">
+                            Details
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
 
@@ -67,7 +210,9 @@ const ReturnListPage = () => {
           <div>
             <label className="label">Refund Method</label>
             <select className="input" {...register('refundMethod', { required: true })}>
-              {['bank-transfer','cheque','cash','upi'].map((m) => <option key={m} value={m}>{m}</option>)}
+              {['bank-transfer', 'cheque', 'cash', 'upi'].map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
             </select>
           </div>
           <div className="flex gap-3 justify-end">

@@ -2,11 +2,65 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchProducts, fetchCategories } from '../productSlice';
-import Table from '../../../components/ui/Table';
 import Pagination from '../../../components/ui/Pagination';
-import { Plus, Search } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Search, Upload, Package } from 'lucide-react';
 
+// ─── Product Card ────────────────────────────────────────────────────────────
+const ProductCard = ({ product, onAdd, onNavigate }) => (
+  <div
+    className="card overflow-hidden cursor-pointer group hover:shadow-md transition-shadow"
+    onClick={() => onNavigate(product._id)}
+  >
+    {/* Image area */}
+    <div className="relative bg-slate-100 h-44 flex items-center justify-center">
+      <span className="absolute top-3 right-3 text-[10px] font-bold bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide">
+        {product.isActive ? 'IN STOCK' : 'INACTIVE'}
+      </span>
+      {product.imageUrl ? (
+        <img
+          src={product.imageUrl}
+          alt={product.name}
+          className="h-28 w-28 object-contain"
+        />
+      ) : (
+        <Package size={52} strokeWidth={1.2} className="text-slate-300" />
+      )}
+    </div>
+
+    {/* Card body */}
+    <div className="p-3">
+      <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">
+        {product.category || 'GENERAL'}
+      </p>
+      <h3 className="font-bold text-slate-900 text-sm leading-snug mb-1 line-clamp-1">
+        {product.name}
+      </h3>
+      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-3 min-h-[2.5rem]">
+        {product.description || product.brand
+          ? `${product.description || ''}${product.description && product.brand ? ' · ' : ''}${product.brand || ''}`
+          : 'No description available.'}
+      </p>
+
+      {/* Price row */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[10px] text-slate-400 font-medium">Dealer Price</p>
+          <p className="text-sm font-bold text-slate-900">
+            ₹{(product.basePrice || 0).toLocaleString('en-IN')}
+          </p>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onAdd(product); }}
+          className="w-7 h-7 rounded-full bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center transition-colors flex-shrink-0 shadow-sm"
+        >
+          <Plus size={14} />
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 const ProductListPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -20,47 +74,71 @@ const ProductListPage = () => {
     dispatch(fetchProducts({ page, limit: 20, search, category, isActive: 'true' }));
   }, [dispatch, page, search, category]);
 
-  const columns = [
-    { key: 'productCode', label: 'Code', render: (v) => <span className="font-mono text-xs text-slate-600">{v}</span> },
-    { key: 'name', label: 'Name', render: (v, row) => (
-      <button onClick={() => navigate(`/products/${row._id}/edit`)} className="text-primary-600 hover:underline font-medium">{v}</button>
-    )},
-    { key: 'category', label: 'Category' },
-    { key: 'brand', label: 'Brand', render: (v) => v || '—' },
-    { key: 'unit', label: 'Unit' },
-    { key: 'basePrice', label: 'Base Price', render: (v) => `₹${(v || 0).toLocaleString('en-IN')}` },
-    { key: 'taxRate', label: 'GST %', render: (v) => `${v}%` },
-    { key: 'isActive', label: 'Status', render: (v) => <span className={v ? 'badge-green' : 'badge-red'}>{v ? 'Active' : 'Inactive'}</span> },
-    { key: 'createdAt', label: 'Added', render: (v) => format(new Date(v), 'dd MMM yyyy') },
-  ];
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Product Catalog</h1>
-        <button onClick={() => navigate('/products/new')} className="btn-primary flex items-center gap-2">
-          <Plus size={16} /> Add Product
-        </button>
+        <h1 className="text-2xl font-bold text-slate-900">Product Market Place</h1>
+        <div className="flex items-center gap-2">
+          <button className="btn-secondary flex items-center gap-2 text-sm py-2 px-4">
+            <Upload size={14} /> Bulk Upload
+          </button>
+          <button
+            onClick={() => navigate('/products/new')}
+            className="btn-primary flex items-center gap-2 text-sm py-2 px-4"
+          >
+            Add Single Product
+          </button>
+        </div>
       </div>
 
-      <div className="card p-4 flex flex-wrap gap-3">
+      {/* ── Filters ── */}
+      <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            type="text" placeholder="Search products..." className="input pl-9"
-            value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            type="text"
+            placeholder="Search products..."
+            className="input pl-9 text-sm"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
-        <select className="input w-44" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }}>
+        <select
+          className="input w-44 text-sm"
+          value={category}
+          onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+        >
           <option value="">All Categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
-      <div className="card">
-        <Table columns={columns} data={list} loading={loading} />
-        <Pagination pagination={pagination} onPageChange={setPage} />
-      </div>
+      {/* ── Grid ── */}
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+        </div>
+      ) : list.length === 0 ? (
+        <div className="card flex items-center justify-center h-64 text-slate-400 text-sm">
+          No products found
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {list.map((product) => (
+              <ProductCard
+                key={product._id}
+                product={product}
+                onNavigate={(id) => navigate(`/products/${id}/edit`)}
+                onAdd={(p) => navigate(`/products/${p._id}/edit`)}
+              />
+            ))}
+          </div>
+          <Pagination pagination={pagination} onPageChange={setPage} />
+        </>
+      )}
     </div>
   );
 };
