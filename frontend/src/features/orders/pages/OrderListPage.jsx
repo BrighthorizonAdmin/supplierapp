@@ -27,6 +27,18 @@ const STATUS_TABS = [
   { id: 'cancelled',  label: 'Cancelled'   },
 ];
 
+// ─── Type badge ───────────────────────────────────────────────────────────────
+const TypeBadge = ({ type }) => {
+  const isRetail = type === 'b2c';
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${
+      isRetail ? 'bg-red-100 text-red-500' : 'bg-blue-100 text-blue-600'
+    }`}>
+      {isRetail ? 'Retail' : 'B2B'}
+    </span>
+  );
+};
+
 // ─── Priority badge ───────────────────────────────────────────────────────────
 const PRIORITY_CLS = {
   urgent: 'bg-red-100 text-red-700',
@@ -136,14 +148,23 @@ const OrderListPage = () => {
   const navigate  = useNavigate();
   const { list, pagination, loading } = useSelector((s) => s.order);
 
-  const [page,      setPage]      = useState(1);
-  const [search,    setSearch]    = useState('');
-  const [typeTab,   setTypeTab]   = useState('all');
-  const [statusTab, setStatusTab] = useState('');
-  const [counts,    setCounts]    = useState({
+  const [page,        setPage]        = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [search,      setSearch]      = useState('');
+  const [typeTab,     setTypeTab]     = useState('all');
+  const [statusTab,   setStatusTab]   = useState('');
+  const [exporting,   setExporting]   = useState(false);
+  const [counts,      setCounts]      = useState({
     processing: 0, shipped: 0, delivered: 0, cancelled: 0,
     total: 0, draft: 0,
   });
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      setSearch(searchInput);
+      setPage(1);
+    }
+  };
 
   // Fetch aggregate counts
   useEffect(() => {
@@ -166,13 +187,76 @@ const OrderListPage = () => {
     }).catch(() => {});
   }, []);
 
+  // CSV export
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = { page: 1, limit: 10000 };
+      if (statusTab)         params.status    = statusTab;
+      if (search)            params.search    = search;
+      if (typeTab === 'b2b') params.orderType = 'b2b';
+      if (typeTab === 'b2c') params.orderType = 'b2c';
+
+      const res = await api.get('/orders', { params });
+      const orders = res.data.orders || res.data.data || [];
+
+      const isRetail = typeTab === 'b2c';
+      const headers = isRetail
+        ? ['Order ID', 'Type', 'Customer', 'Date', 'Time', 'Items', 'Amount', 'Payment', 'Status']
+        : ['Order ID', 'Dealer', 'Date', 'Time', 'Items', 'Amount', 'Payment', 'Priority', 'Status'];
+
+      const rows = orders.map((o) => {
+        const date = format(new Date(o.createdAt), 'yyyy-MM-dd');
+        const time = format(new Date(o.createdAt), 'hh:mm a');
+        const orderId = `Order #${o.orderNumber || o._id?.slice(-4)}`;
+        const amount = (o.netAmount || 0).toLocaleString('en-IN');
+        const items = `${o.items?.length ?? 0} Items`;
+        if (isRetail) {
+          return [
+            orderId,
+            o.orderType || 'b2c',
+            o.customerId?.name || o.customerName || o.dealerId?.businessName || '',
+            date, time, items, amount,
+            o.paymentMethod || o.pricingTier || '',
+            o.status || '',
+          ];
+        }
+        return [
+          orderId,
+          o.dealerId?.businessName || '',
+          date, time, items, amount,
+          o.pricingTier || '',
+          o.priority || 'Normal',
+          o.status || '',
+        ];
+      });
+
+      const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+      const csv = [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `orders-${typeTab}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Fetch orders list
   useEffect(() => {
     const params = { page, limit: 20 };
-    if (statusTab) params.status = statusTab;
-    if (search)    params.search = search;
+    if (statusTab)         params.status    = statusTab;
+    if (search)            params.search    = search;
+    if (typeTab === 'b2b') params.orderType = 'b2b';
+    if (typeTab === 'b2c') params.orderType = 'b2c';
     dispatch(fetchOrders(params));
-  }, [dispatch, page, statusTab, search]);
+  }, [dispatch, page, statusTab, search, typeTab]);
 
   return (
     <div className="space-y-5">
@@ -202,8 +286,12 @@ const OrderListPage = () => {
             ))}
           </div>
 
-          <button className="btn-primary flex items-center gap-2 text-sm py-2 px-4">
-            <Download size={14} /> Export
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="btn-primary flex items-center gap-2 text-sm py-2 px-4 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Download size={14} /> {exporting ? 'Exporting...' : 'Export'}
           </button>
         </div>
       </div>
@@ -253,8 +341,12 @@ const OrderListPage = () => {
               type="text"
               placeholder="Search Order ID, Dealer name..."
               className="input pl-9 text-sm py-1.5"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value);
+                if (e.target.value === '') { setSearch(''); setPage(1); }
+              }}
+              onKeyDown={handleSearchKeyDown}
             />
           </div>
 
@@ -281,7 +373,89 @@ const OrderListPage = () => {
           <div className="flex items-center justify-center h-48">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
           </div>
+        ) : typeTab === 'b2c' ? (
+          /* ── Retail (B2C) table ── */
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  {['ORDER ID','TYPE','CUSTOMER','DATE & TIME','ITEMS','AMOUNT','PAYMENT','STATUS','ACTIONS'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {list.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-14 text-center text-slate-400">No orders found</td>
+                  </tr>
+                ) : list.map((order) => (
+                  <tr key={order._id} className="hover:bg-slate-50 transition-colors">
+
+                    {/* Order ID */}
+                    <td className="px-4 py-3.5">
+                      <button
+                        onClick={() => navigate(`/orders/${order._id}`)}
+                        className="font-semibold text-slate-800 hover:text-primary-600 transition-colors"
+                      >
+                        Order #{order.orderNumber || order._id?.slice(-4)}
+                      </button>
+                    </td>
+
+                    {/* Type badge */}
+                    <td className="px-4 py-3.5">
+                      <TypeBadge type={order.orderType || 'b2c'} />
+                    </td>
+
+                    {/* Customer */}
+                    <td className="px-4 py-3.5 font-medium text-slate-700">
+                      {order.customerId?.name || order.customerName || order.dealerId?.businessName || '—'}
+                    </td>
+
+                    {/* Date & Time */}
+                    <td className="px-4 py-3.5">
+                      <p className="text-slate-700 leading-snug">
+                        {format(new Date(order.createdAt), 'yyyy-MM-dd')}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {format(new Date(order.createdAt), 'hh:mm a')}
+                      </p>
+                    </td>
+
+                    {/* Items */}
+                    <td className="px-4 py-3.5 text-slate-600">
+                      {order.items?.length ?? 0} Items
+                    </td>
+
+                    {/* Amount */}
+                    <td className="px-4 py-3.5 font-semibold text-slate-800">
+                      ₹{(order.netAmount || 0).toLocaleString('en-IN')}
+                    </td>
+
+                    {/* Payment */}
+                    <td className="px-4 py-3.5 text-slate-600 capitalize">
+                      {order.paymentMethod || order.pricingTier || '—'}
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-4 py-3.5">
+                      <StatusCell order={order} onView={(id) => navigate(`/orders/${id}`)} />
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-3.5">
+                      <RowActions row={order} onView={(id) => navigate(`/orders/${id}`)} />
+                    </td>
+
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
+          /* ── Dealer (B2B) / All table ── */
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead>

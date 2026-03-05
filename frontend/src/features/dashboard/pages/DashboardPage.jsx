@@ -315,7 +315,7 @@ const DashboardPage = () => {
             <div className="p-4 space-y-3">
               {/* Review KYC */}
               <button
-                onClick={() => navigate('/dealers')}
+                onClick={() => navigate('/onboarding')}
                 className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/40 transition-all text-left group"
               >
                 <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200 transition-colors">

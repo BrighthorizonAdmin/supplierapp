@@ -114,7 +114,9 @@ const ReturnListPage = () => {
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Return ID</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Type</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Dealer</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                    {typeFilter === 'retails' ? 'Customer' : 'Dealer'}
+                  </th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Date</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Items</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Amount</th>
@@ -135,12 +137,20 @@ const ReturnListPage = () => {
                         {row.rmaNumber || '—'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700 uppercase tracking-wide">
-                          Dealer
-                        </span>
+                        {typeFilter === 'retails' ? (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded bg-pink-100 text-pink-700 uppercase tracking-wide">
+                            Retail
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700 uppercase tracking-wide">
+                            Dealer
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700">
-                        {row.dealerId?.businessName || '—'}
+                        {typeFilter === 'retails'
+                          ? (row.customerId?.name || row.customerName || '—')
+                          : (row.dealerId?.businessName || '—')}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600">
                         {row.createdAt ? format(new Date(row.createdAt), 'yyyy-MM-dd') : '—'}

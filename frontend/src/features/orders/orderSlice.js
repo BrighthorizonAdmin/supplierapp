@@ -63,7 +63,9 @@ const orderSlice = createSlice({
         state.pagination = action.payload.pagination;
       })
       .addCase(fetchOrders.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
-      .addCase(fetchOrderById.fulfilled, (state, action) => { state.selected = action.payload; })
+      .addCase(fetchOrderById.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(fetchOrderById.fulfilled, (state, action) => { state.loading = false; state.selected = action.payload; })
+      .addCase(fetchOrderById.rejected, (state, action) => { state.loading = false; state.error = action.payload; toast.error(action.payload || 'Failed to load order'); })
       .addCase(confirmOrder.fulfilled, (state, action) => {
         const idx = state.list.findIndex((o) => o._id === action.payload._id);
         if (idx !== -1) state.list[idx] = action.payload;

@@ -45,7 +45,7 @@ const NotificationPage = () => {
     gracePeriod:         '3',
     // Tab 2
     minOrderValue:          '10000',
-    maxOrderValue:          'nolimit',
+    paymentMethods:         ['cash', 'card', 'upi'],
     allowPartialOrders:     false,
     allowBackorders:        '6',
     maxBackorderDays:       '3',
@@ -253,18 +253,32 @@ const NotificationPage = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <label className="text-sm text-slate-600">Maximum Order Value</label>
-                  <select
-                    value={settings.maxOrderValue}
-                    onChange={(e) => set('maxOrderValue', e.target.value)}
-                    className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
-                  >
-                    <option value="nolimit">No Limit</option>
-                    <option value="50000">₹ 50,000</option>
-                    <option value="100000">₹ 1,00,000</option>
-                    <option value="500000">₹ 5,00,000</option>
-                  </select>
+                <div className="flex items-start justify-between">
+                  <label className="text-sm text-slate-600 pt-0.5">Payment Methods</label>
+                  <div className="flex flex-col gap-2">
+                    {[
+                      { value: 'cash',          label: 'Cash' },
+                      { value: 'card',          label: 'Card' },
+                      { value: 'upi',           label: 'UPI' },
+                      { value: 'bank-transfer', label: 'Bank Transfer' },
+                      { value: 'credit',        label: 'Credit' },
+                    ].map(({ value, label }) => (
+                      <label key={value} className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.paymentMethods.includes(value)}
+                          onChange={(e) => {
+                            const updated = e.target.checked
+                              ? [...settings.paymentMethods, value]
+                              : settings.paymentMethods.filter((m) => m !== value);
+                            set('paymentMethods', updated);
+                          }}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between">
