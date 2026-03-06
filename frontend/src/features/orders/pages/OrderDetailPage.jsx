@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchOrderById, confirmOrder, cancelOrder } from '../orderSlice';
+import { fetchOrderById, confirmOrder, cancelOrder, clearSelected } from '../orderSlice';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
@@ -10,15 +10,20 @@ const OrderDetailPage = () => {
   const { id } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { selected: order, loading, error } = useSelector((s) => s.order);
-
-  useEffect(() => { dispatch(fetchOrderById(id)); }, [dispatch, id]);
+  const { selected: order, loading } = useSelector((s) => s.order);
+  const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
-    if (!loading && error) navigate('/orders');
-  }, [loading, error, navigate]);
+    dispatch(clearSelected());
+    dispatch(fetchOrderById(id)).then(() => setAttempted(true));
+  }, [dispatch, id]);
 
-  if (loading || !order) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>;
+  useEffect(() => {
+    if (attempted && !loading && !order) navigate('/orders');
+  }, [attempted, loading, order, navigate]);
+
+  if (loading || !attempted) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>;
+  if (!order) return null;
 
   return (
     <div className="space-y-6">
