@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchDealerById, fetchDealerStats } from '../dealerSlice';
+import { fetchDealerById, fetchDealerStats, clearSelected } from '../dealerSlice';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { format } from 'date-fns';
-import { ArrowLeft, Building2, MapPin, CreditCard, Phone, Mail } from 'lucide-react';
+import { ArrowLeft, Building2, MapPin, CreditCard, Phone, Mail, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
+import api from '../../../services/api';
 
 const TABS = ['Overview', 'Documents', 'Orders', 'Payments'];
 
@@ -14,11 +15,42 @@ const DealerDetailPage = () => {
   const navigate = useNavigate();
   const { selected: dealer, stats } = useSelector((s) => s.dealer);
   const [activeTab, setActiveTab] = useState('Overview');
+  const [documents, setDocuments] = useState([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [payments, setPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
 
   useEffect(() => {
+    dispatch(clearSelected());
     dispatch(fetchDealerById(id));
     dispatch(fetchDealerStats(id));
   }, [dispatch, id]);
+
+  useEffect(() => {
+    if (activeTab === 'Documents') {
+      setDocsLoading(true);
+      api.get(`/documents/dealer/${id}`)
+        .then((res) => setDocuments(res.data.data || []))
+        .catch(() => setDocuments([]))
+        .finally(() => setDocsLoading(false));
+    }
+    if (activeTab === 'Orders') {
+      setOrdersLoading(true);
+      api.get('/orders', { params: { dealerId: id, limit: 10 } })
+        .then((res) => setOrders(res.data.data || []))
+        .catch(() => setOrders([]))
+        .finally(() => setOrdersLoading(false));
+    }
+    if (activeTab === 'Payments') {
+      setPaymentsLoading(true);
+      api.get('/payments', { params: { dealerId: id, limit: 10 } })
+        .then((res) => setPayments(res.data.data || []))
+        .catch(() => setPayments([]))
+        .finally(() => setPaymentsLoading(false));
+    }
+  }, [activeTab, id]);
 
   if (!dealer) {
     return (
@@ -148,20 +180,100 @@ const DealerDetailPage = () => {
       )}
 
       {activeTab === 'Documents' && (
-        <div className="card p-6 text-center text-slate-400">
-          <p>Document management — link to /api/documents/dealer/{id}</p>
+        <div className="card">
+          {docsLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
+            </div>
+          ) : documents.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-sm">No documents uploaded</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-5">
+              {documents.map((doc) => (
+                <a
+                  key={doc._id}
+                  href={doc.fileUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-2 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-center"
+                >
+                  <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                    <FileText size={20} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-slate-700">{doc.documentType || doc.name || 'Document'}</p>
+                    <p className="text-xs text-slate-400 capitalize">{doc.verificationStatus || 'pending'}</p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === 'Orders' && (
-        <div className="card p-6 text-center text-slate-400">
-          <p>Dealer orders — use Orders page with dealer filter</p>
+        <div className="card overflow-hidden">
+          {ordersLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-sm">No orders found for this dealer</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['Order #', 'Date', 'Items', 'Amount', 'Status'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {orders.map((o) => (
+                  <tr key={o._id} className="hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/orders/${o._id}`)}>
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-primary-600">{o.orderNumber || o._id?.slice(-6)}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{o.createdAt ? format(new Date(o.createdAt), 'dd MMM yyyy') : '—'}</td>
+                    <td className="px-4 py-3 text-slate-600">{o.items?.length ?? 0} items</td>
+                    <td className="px-4 py-3 font-semibold text-slate-800">₹{(o.netAmount || 0).toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
       {activeTab === 'Payments' && (
-        <div className="card p-6 text-center text-slate-400">
-          <p>Dealer payments — use Payments page with dealer filter</p>
+        <div className="card overflow-hidden">
+          {paymentsLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
+            </div>
+          ) : payments.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-sm">No payments found for this dealer</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['Payment #', 'Date', 'Method', 'Amount', 'Status'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {payments.map((p) => (
+                  <tr key={p._id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700">{p.paymentNumber || '—'}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{p.createdAt ? format(new Date(p.createdAt), 'dd MMM yyyy') : '—'}</td>
+                    <td className="px-4 py-3 text-slate-600 capitalize">{p.method || '—'}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-800">₹{(p.amount || 0).toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </div>

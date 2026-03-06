@@ -36,11 +36,19 @@ const ReturnListPage = () => {
     });
   };
 
-  const filtered = list.filter((r) =>
-    !search ||
-    r.rmaNumber?.toLowerCase().includes(search.toLowerCase()) ||
-    r.dealerId?.businessName?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = list.filter((r) => {
+    // Filter by type: dealers have dealerId, retails have customerId/customerName
+    if (typeFilter === 'dealers' && !r.dealerId) return false;
+    if (typeFilter === 'retails' && r.dealerId && !r.customerId && !r.customerName) return false;
+
+    if (!search) return true;
+    return (
+      r.rmaNumber?.toLowerCase().includes(search.toLowerCase()) ||
+      r.dealerId?.businessName?.toLowerCase().includes(search.toLowerCase()) ||
+      r.customerId?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      r.customerName?.toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   return (
     <div className="space-y-4">

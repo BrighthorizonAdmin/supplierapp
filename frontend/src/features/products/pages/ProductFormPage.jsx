@@ -85,6 +85,14 @@ const ProductFormPage = () => {
           </div>
         </div>
 
+        <div className="card p-5">
+          <h2 className="font-semibold text-slate-900 mb-4">Availability</h2>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500" {...register('isActive')} />
+            <span className="text-sm text-slate-700">Product is active (visible in marketplace)</span>
+          </label>
+        </div>
+
         <div className="flex gap-3 justify-end">
           <button type="button" onClick={() => navigate('/products')} className="btn-secondary">Cancel</button>
           <button type="submit" disabled={loading} className="btn-primary">

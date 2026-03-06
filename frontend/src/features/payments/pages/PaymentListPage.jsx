@@ -4,7 +4,13 @@ import { fetchPayments, confirmPayment } from '../paymentSlice';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import Pagination from '../../../components/ui/Pagination';
 import { format } from 'date-fns';
-import { Search, SlidersHorizontal, Download } from 'lucide-react';
+import { Search, Download } from 'lucide-react';
+import api from '../../../services/api';
+
+const METHOD_LABELS_FOR_EXPORT = {
+  'bank-transfer': 'Bank Transfer', upi: 'UPI', cash: 'Cash',
+  cheque: 'Cheque', neft: 'NEFT', rtgs: 'RTGS',
+};
 
 const METHOD_LABELS = {
   'bank-transfer': 'Bank Transfer',
@@ -20,14 +26,36 @@ const PaymentListPage = () => {
   const { list, pagination, loading } = useSelector((s) => s.payment);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [exporting, setExporting] = useState(false);
 
-  useEffect(() => { dispatch(fetchPayments({ page, limit: 50 })); }, [dispatch, page]);
+  useEffect(() => {
+    dispatch(fetchPayments({ page, limit: 20, search }));
+  }, [dispatch, page, search]);
 
-  const filtered = list.filter((p) =>
-    !search ||
-    p.paymentNumber?.toLowerCase().includes(search.toLowerCase()) ||
-    p.dealerId?.businessName?.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get('/payments', { params: { limit: 10000 } });
+      const rows = (res.data.data || []).map((p) => [
+        p.paymentNumber || '',
+        p.dealerId?.businessName || '',
+        p.invoiceId?.invoiceNumber || '',
+        p.createdAt ? format(new Date(p.createdAt), 'yyyy-MM-dd') : '',
+        METHOD_LABELS_FOR_EXPORT[p.method] || p.method || '',
+        p.amount || 0,
+        p.status || '',
+      ]);
+      const headers = ['Payment ID', 'Dealer', 'Invoice', 'Date', 'Method', 'Amount', 'Status'];
+      const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+      const csv = [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `payments-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { console.error('Export failed', err); }
+    finally { setExporting(false); }
+  };
 
   return (
     <div className="space-y-4">
@@ -47,13 +75,13 @@ const PaymentListPage = () => {
             />
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-              <SlidersHorizontal size={14} />
-              Filters
-            </button>
-            <button className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+            >
               <Download size={14} />
-              Export
+              {exporting ? 'Exporting...' : 'Export'}
             </button>
           </div>
         </div>
@@ -79,14 +107,14 @@ const PaymentListPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.length === 0 ? (
+                {list.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
                       No payments found
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((row, idx) => (
+                  list.map((row, idx) => (
                     <tr key={row._id || idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap font-mono text-xs">
                         {row.paymentNumber || '—'}

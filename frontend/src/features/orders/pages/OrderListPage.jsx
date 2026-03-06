@@ -1,11 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchOrders } from '../orderSlice';
+import { fetchOrders, cancelOrder } from '../orderSlice';
 import Pagination from '../../../components/ui/Pagination';
 import {
   Search, Download, Eye, MoreVertical,
-  Clock, Truck, CheckCircle, XCircle, ShoppingBag,
+  Clock, Truck, CheckCircle, XCircle, ShoppingBag, Package,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../../services/api';
@@ -21,6 +21,7 @@ const TYPE_TABS = [
 const STATUS_TABS = [
   { id: '',           label: 'All'         },
   { id: 'draft',      label: 'New Orders'  },
+  { id: 'confirmed',  label: 'Confirmed'   },
   { id: 'processing', label: 'Processing'  },
   { id: 'shipped',    label: 'Shipped'     },
   { id: 'delivered',  label: 'Delivered'   },
@@ -61,7 +62,7 @@ const STATUS_CLS = {
   delivered:  'badge-solid-green',
   cancelled:  'badge-solid-red',
 };
-const StatusCell = ({ order, onView }) => {
+const StatusCell = ({ order, onView, onReject }) => {
   if (order.status === 'draft') {
     return (
       <div className="flex flex-col gap-0.5">
@@ -72,7 +73,7 @@ const StatusCell = ({ order, onView }) => {
           Accept Order
         </button>
         <button
-          onClick={() => onView(order._id)}
+          onClick={() => onReject(order._id)}
           className="text-xs font-semibold text-red-500 hover:underline text-left"
         >
           Reject Order
@@ -155,7 +156,7 @@ const OrderListPage = () => {
   const [statusTab,   setStatusTab]   = useState('');
   const [exporting,   setExporting]   = useState(false);
   const [counts,      setCounts]      = useState({
-    processing: 0, shipped: 0, delivered: 0, cancelled: 0,
+    confirmed: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0,
     total: 0, draft: 0,
   });
 
@@ -168,23 +169,9 @@ const OrderListPage = () => {
 
   // Fetch aggregate counts
   useEffect(() => {
-    Promise.all([
-      api.get('/orders', { params: { limit: 1, status: 'processing' } }),
-      api.get('/orders', { params: { limit: 1, status: 'shipped'     } }),
-      api.get('/orders', { params: { limit: 1, status: 'delivered'   } }),
-      api.get('/orders', { params: { limit: 1, status: 'cancelled'   } }),
-      api.get('/orders', { params: { limit: 1                        } }),
-      api.get('/orders', { params: { limit: 1, status: 'draft'       } }),
-    ]).then(([proc, ship, delv, canc, tot, drft]) => {
-      setCounts({
-        processing: proc.data.pagination?.total ?? 0,
-        shipped:    ship.data.pagination?.total ?? 0,
-        delivered:  delv.data.pagination?.total ?? 0,
-        cancelled:  canc.data.pagination?.total ?? 0,
-        total:      tot.data.pagination?.total  ?? 0,
-        draft:      drft.data.pagination?.total ?? 0,
-      });
-    }).catch(() => {});
+    api.get('/orders/stats')
+      .then((res) => setCounts(res.data.data))
+      .catch(console.error);
   }, []);
 
   // CSV export
@@ -297,7 +284,13 @@ const OrderListPage = () => {
       </div>
 
       {/* ── Stats row ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <StatCard
+          label="Confirmed" value={counts.confirmed} icon={Package}
+          cardCls="bg-indigo-50 border-indigo-100"
+          iconCls="bg-indigo-500 text-white"
+          valueCls="text-indigo-700" labelCls="text-indigo-600"
+        />
         <StatCard
           label="Processing" value={counts.processing} icon={Clock}
           cardCls="bg-blue-50 border-blue-100"
@@ -441,7 +434,7 @@ const OrderListPage = () => {
 
                     {/* Status */}
                     <td className="px-4 py-3.5">
-                      <StatusCell order={order} onView={(id) => navigate(`/orders/${id}`)} />
+                      <StatusCell order={order} onView={(id) => navigate(`/orders/${id}`)} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
                     </td>
 
                     {/* Actions */}
@@ -522,7 +515,7 @@ const OrderListPage = () => {
 
                     {/* Status */}
                     <td className="px-4 py-3.5">
-                      <StatusCell order={order} onView={(id) => navigate(`/orders/${id}`)} />
+                      <StatusCell order={order} onView={(id) => navigate(`/orders/${id}`)} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
                     </td>
 
                     {/* Actions */}

@@ -68,7 +68,7 @@ const dealerSlice = createSlice({
   },
   reducers: {
     setFilters: (state, action) => { state.filters = { ...state.filters, ...action.payload }; },
-    clearSelected: (state) => { state.selected = null; },
+    clearSelected: (state) => { state.selected = null; state.stats = null; },
   },
   extraReducers: (builder) => {
     builder

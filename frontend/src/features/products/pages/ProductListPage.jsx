@@ -132,7 +132,7 @@ const ProductListPage = () => {
                 key={product._id}
                 product={product}
                 onNavigate={(id) => navigate(`/products/${id}/edit`)}
-                onAdd={(p) => navigate(`/products/${p._id}/edit`)}
+                onAdd={() => navigate('/products/new')}
               />
             ))}
           </div>

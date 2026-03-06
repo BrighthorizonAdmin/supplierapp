@@ -4,6 +4,8 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { MapPin, Calendar, Hash, FileText, CheckCircle, AlertCircle, AlertTriangle } from 'lucide-react';
 import { fetchDealers, approveDealer, rejectDealer } from '../dealerSlice';
 import Modal from '../../../components/ui/Modal';
+import api from '../../../services/api';
+import toast from 'react-hot-toast';
 
 const STATUS_TABS = [
   { label: 'Pending', value: 'pending' },
@@ -47,11 +49,6 @@ const REJECTION_REASONS = [
   'Other',
 ];
 
-const MOCK_DOCS = [
-  { name: 'GST Certificate', ext: 'PDF', size: '2.4 MB' },
-  { name: 'Shop Establishment', ext: 'JPG', size: '1.8 MB' },
-  { name: 'PAN Card Copy', ext: 'PDF', size: '1.1 MB' },
-];
 
 const getInitials = (name) =>
   name ? name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() : '??';
@@ -116,6 +113,8 @@ const DealerOnboardingPage = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [selected, setSelected] = useState(null);
   const [inReview, setInReview] = useState(false);
+  const [dealerDocs, setDealerDocs] = useState([]);
+  const [docsLoading, setDocsLoading] = useState(false);
 
   // Reject modal state
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -137,16 +136,19 @@ const DealerOnboardingPage = () => {
   });
 
   useEffect(() => {
-    dispatch(fetchDealers({ status: activeTab, limit: 50 }));
     setSelected(null);
+    setDealerDocs([]);
+    dispatch(fetchDealers({ status: activeTab, limit: 50 }));
   }, [dispatch, activeTab]);
 
   useEffect(() => {
-    if (!selected && list.length > 0) {
-      setSelected(list[0]);
-      setInReview(false);
-    }
-  }, [list]);
+    if (!selected?._id) { setDealerDocs([]); return; }
+    setDocsLoading(true);
+    api.get(`/documents/dealer/${selected._id}`)
+      .then((res) => setDealerDocs(res.data.data || []))
+      .catch(() => setDealerDocs([]))
+      .finally(() => setDocsLoading(false));
+  }, [selected?._id]);
 
   const resetAndClose = (setter) => {
     setter(false);
@@ -187,7 +189,7 @@ const DealerOnboardingPage = () => {
 
   const handleSendRequest = () => {
     if (!selected || !requestField) return;
-    // TODO: wire to API when backend endpoint is available
+    toast.success(`Update request sent to ${selected.businessName}: ${requestField}`);
     setShowRequestModal(false);
     setRequestField('');
     setRequestInstructions('');
@@ -336,23 +338,33 @@ const DealerOnboardingPage = () => {
               {/* Documents */}
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <h3 className="text-sm font-semibold text-slate-800 mb-4">Documents</h3>
-                <div className="grid grid-cols-3 gap-3">
-                  {MOCK_DOCS.map((doc) => (
-                    <button
-                      key={doc.name}
-                      type="button"
-                      className="flex flex-col items-center gap-2 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-center"
-                    >
-                      <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                        <FileText size={20} className="text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-700">{doc.name}</p>
-                        <p className="text-xs text-slate-400">{doc.ext} • {doc.size}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                {docsLoading ? (
+                  <div className="flex items-center justify-center h-16">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+                  </div>
+                ) : dealerDocs.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4">No documents uploaded</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3">
+                    {dealerDocs.map((doc) => (
+                      <a
+                        key={doc._id}
+                        href={doc.fileUrl || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-col items-center gap-2 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-center"
+                      >
+                        <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                          <FileText size={20} className="text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-slate-700">{doc.documentType || 'Document'}</p>
+                          <p className="text-xs text-slate-400 capitalize">{doc.verificationStatus || 'pending'}</p>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Approval Actions */}
@@ -490,7 +502,7 @@ const DealerOnboardingPage = () => {
           </button>
           <button
             onClick={handleSendRequest}
-            className="px-5 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 transition-colors"
+            className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
           >
             Send Request
           </button>

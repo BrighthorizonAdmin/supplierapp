@@ -38,6 +38,9 @@ const FinancePage = () => {
   const [chartView,    setChartView]    = useState('month');
   const [transactions, setTransactions] = useState([]);
   const [txnLoading,   setTxnLoading]   = useState(false);
+  const [txnPage,      setTxnPage]      = useState(1);
+  const [txnTotal,     setTxnTotal]     = useState(0);
+  const TXN_LIMIT = 10;
 
   useEffect(() => {
     dispatch(fetchFinanceStats());
@@ -45,14 +48,17 @@ const FinancePage = () => {
     dispatch(fetchPaymentReport());
   }, [dispatch]);
 
-  // Fetch recent transactions (graceful fallback if endpoint absent)
+  // Fetch recent payments as transactions (payments endpoint is the source of truth)
   useEffect(() => {
     setTxnLoading(true);
-    api.get('/finance/transactions', { params: { limit: 10 } })
-      .then((res) => setTransactions(res.data.data || []))
+    api.get('/payments', { params: { limit: TXN_LIMIT, page: txnPage } })
+      .then((res) => {
+        setTransactions(res.data.data || []);
+        setTxnTotal(res.data.pagination?.total || 0);
+      })
       .catch(() => setTransactions([]))
       .finally(() => setTxnLoading(false));
-  }, []);
+  }, [txnPage]);
 
   // Derive payment status rows from available data
   const paidTotal   = paymentReport.reduce((a, r) => a + (r.total || 0), 0);
@@ -71,7 +77,7 @@ const FinancePage = () => {
     },
     {
       label: 'Pending',
-      count: Math.max(paidCount - 2, 0),
+      count: stats?.pendingPayments || 0,
       amount: outstanding,
       icon: Clock,
       rowCls:    'border-l-4 border-amber-400 bg-amber-50',
@@ -270,39 +276,34 @@ const FinancePage = () => {
                     </td>
                   </tr>
                 ) : transactions.map((txn) => {
-                  const typeKey   = (txn.type   || '').toLowerCase();
                   const statusKey = (txn.status || '').toLowerCase();
                   return (
-                    <tr key={txn._id || txn.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={txn._id} className="hover:bg-slate-50 transition-colors">
 
                       {/* Transaction ID */}
                       <td className="px-5 py-3.5">
                         <span className="font-mono text-xs font-semibold text-slate-700">
-                          #{txn.transactionId || txn._id?.slice(-8) || '—'}
+                          {txn.paymentNumber || `#${txn._id?.slice(-8)}`}
                         </span>
                       </td>
 
                       {/* Date */}
                       <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
-                        {txn.date ? format(new Date(txn.date), 'dd MMM yyyy') : '—'}
+                        {txn.createdAt ? format(new Date(txn.createdAt), 'dd MMM yyyy') : '—'}
                       </td>
 
                       {/* Description */}
                       <td className="px-5 py-3.5">
-                        <p className="font-medium text-slate-800">{txn.description || '—'}</p>
-                        {txn.customer && (
-                          <p className="text-xs text-slate-400 mt-0.5">Customer: {txn.customer}</p>
+                        <p className="font-medium text-slate-800">{txn.dealerId?.businessName || '—'}</p>
+                        {txn.invoiceId?.invoiceNumber && (
+                          <p className="text-xs text-slate-400 mt-0.5">Invoice: {txn.invoiceId.invoiceNumber}</p>
                         )}
                       </td>
 
-                      {/* Type */}
+                      {/* Type (method) */}
                       <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${
-                          typeKey === 'credit'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-red-100 text-red-600'
-                        }`}>
-                          {txn.type || '—'}
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize bg-blue-100 text-blue-700">
+                          {txn.method || 'payment'}
                         </span>
                       </td>
 
@@ -314,9 +315,9 @@ const FinancePage = () => {
                       {/* Status */}
                       <td className="px-5 py-3.5">
                         <span className={`text-xs font-semibold ${
-                          statusKey === 'completed' ? 'text-green-600' :
+                          statusKey === 'confirmed' ? 'text-green-600' :
                           statusKey === 'pending'   ? 'text-amber-600' :
-                          statusKey === 'failed'    ? 'text-red-500'   :
+                          statusKey === 'rejected'  ? 'text-red-500'   :
                           'text-slate-500'
                         }`}>
                           {txn.status
@@ -342,16 +343,24 @@ const FinancePage = () => {
         {/* Pagination footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
           <p className="text-xs text-slate-500">
-            1–{transactions.length} of {transactions.length} items
+            {transactions.length === 0 ? '0' : `${(txnPage - 1) * TXN_LIMIT + 1}–${Math.min(txnPage * TXN_LIMIT, txnTotal)}`} of {txnTotal} items
           </p>
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span>Go to Page</span>
-            <input
-              type="number"
-              defaultValue={1}
-              min={1}
-              className="w-12 border border-slate-200 rounded-md px-2 py-1 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
-            />
+            <button
+              onClick={() => setTxnPage((p) => Math.max(1, p - 1))}
+              disabled={txnPage === 1}
+              className="px-2 py-1 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40"
+            >
+              ‹
+            </button>
+            <span>Page {txnPage} of {Math.max(1, Math.ceil(txnTotal / TXN_LIMIT))}</span>
+            <button
+              onClick={() => setTxnPage((p) => p + 1)}
+              disabled={txnPage * TXN_LIMIT >= txnTotal}
+              className="px-2 py-1 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40"
+            >
+              ›
+            </button>
           </div>
         </div>
       </div>

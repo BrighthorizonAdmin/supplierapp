@@ -48,10 +48,10 @@ const DashboardPage = () => {
 
   const fmt = (v) =>
     v >= 1_000_000
-      ? `$${(v / 1_000_000).toFixed(1)}M`
+      ? `₹${(v / 1_000_000).toFixed(1)}M`
       : v >= 1_000
-      ? `$${(v / 1_000).toFixed(0)}K`
-      : `$${(v || 0).toLocaleString()}`;
+      ? `₹${(v / 1_000).toFixed(0)}K`
+      : `₹${(v || 0).toLocaleString()}`;
 
   return (
     <div className="space-y-6 pb-6">
@@ -214,13 +214,13 @@ const DashboardPage = () => {
                           #{order._id?.slice(-6).toUpperCase()}
                         </td>
                         <td className="px-4 py-3.5 text-slate-700 font-medium">
-                          {order.dealer?.businessName || order.dealer?.name || '—'}
+                          {order.dealerId?.businessName || order.dealer?.businessName || order.dealer?.name || '—'}
                         </td>
                         <td className="px-4 py-3.5 text-slate-400 text-xs">
                           {order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy') : '—'}
                         </td>
                         <td className="px-4 py-3.5 text-right font-semibold text-slate-700">
-                          ${(order.total || order.totalAmount || 0).toLocaleString()}
+                          ₹{(order.netAmount || order.total || order.totalAmount || 0).toLocaleString('en-IN')}
                         </td>
                         <td className="px-5 py-3.5 text-center">
                           <span className={ORDER_STATUS_CLASS[order.status?.toLowerCase()] || 'badge-solid-gray'}>
@@ -263,17 +263,8 @@ const DashboardPage = () => {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-3 px-5 py-3.5 bg-red-50/60">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-red-700 truncate">Brake Pads – Model X</p>
-                    <p className="text-xs text-red-400 mt-0.5">SKU: BP-X-2025 &bull; 3 Left</p>
-                  </div>
-                  <button
-                    onClick={() => navigate('/inventory')}
-                    className="text-xs font-bold text-red-600 hover:text-red-700 whitespace-nowrap underline underline-offset-2"
-                  >
-                    Restock
-                  </button>
+                <div className="flex items-center gap-3 px-5 py-3.5">
+                  <p className="text-sm text-slate-400">No low stock alerts</p>
                 </div>
               )}
 
@@ -378,7 +369,7 @@ const DashboardPage = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-700 truncate">{dealer.businessName}</p>
-                      <p className="text-xs text-slate-400">${(dealer.totalRevenue || 0).toLocaleString()}</p>
+                      <p className="text-xs text-slate-400">₹{(dealer.totalRevenue || 0).toLocaleString('en-IN')}</p>
                     </div>
                     <span className="badge-blue text-xs">{dealer.pricingTier}</span>
                   </div>

@@ -15,7 +15,7 @@ const fmtNum = (n) => {
   if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString('en-IN');
 };
-const fmtCurrency = (n) => (n != null ? `$${Number(n).toLocaleString('en-IN')}` : '—');
+const fmtCurrency = (n) => (n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—');
 
 // ─── Chart colours (green-500, amber-500, red-500) ────────────────────────────
 const DONUT_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
@@ -269,23 +269,6 @@ const InventoryPage = () => {
 
 </div>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
-          
-
-          {/* Status select */}
-          <div className="relative">
-            <select
-              value={stockTab}
-              onChange={(e) => switchTab(e.target.value)}
-              className="input w-32 py-2 text-sm appearance-none pr-7 cursor-pointer"
-            >
-              <option value="">Status</option>
-              <option value="low-stock">Low Stock</option>
-              <option value="high-stock">High Stock</option>
-              <option value="out-of-stock">Out of Stock</option>
-            </select>
-            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
-
           {/* Category select */}
           <div className="relative">
             <select
