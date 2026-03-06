@@ -13,7 +13,7 @@ const { emitToAll } = require('../../websocket/socket');
 const { ORDER_CONFIRMED, ORDER_CANCELLED } = require('../../websocket/events');
 const { addDays } = require('date-fns');
 
-const createOrder = async ({ dealerId, items, notes }, userId) => {
+const createOrder = async ({ dealerId, items, notes, orderType }, userId) => {
   const dealer = await Dealer.findById(dealerId).lean({ virtuals: true });
   if (!dealer) throw new AppError('Dealer not found', 404);
   if (dealer.status !== 'active') throw new AppError('Dealer account is not active', 400);
@@ -53,6 +53,7 @@ const createOrder = async ({ dealerId, items, notes }, userId) => {
 
   const order = await Order.create({
     dealerId,
+    orderType: orderType || 'b2b',
     pricingTier: dealer.pricingTier,
     subtotal,
     netAmount: subtotal,
@@ -221,12 +222,26 @@ const getOrders = async (query = {}) => {
   const { page, limit, skip } = getPagination(query);
   const match = {};
 
-  if (query.dealerId) match.dealerId = query.dealerId;
-  if (query.status) match.status = query.status;
+  if (query.dealerId)   match.dealerId   = query.dealerId;
+  if (query.status)     match.status     = query.status;
+  if (query.orderType)  match.orderType  = query.orderType;
   if (query.startDate || query.endDate) {
     match.createdAt = {};
     if (query.startDate) match.createdAt.$gte = new Date(query.startDate);
-    if (query.endDate) match.createdAt.$lte = new Date(query.endDate);
+    if (query.endDate)   match.createdAt.$lte = new Date(query.endDate);
+  }
+
+  // Search by orderNumber (prefix-match)
+  if (query.search) {
+    const re = new RegExp(query.search, 'i');
+    // Find dealers whose businessName matches
+    const Dealer = require('../dealer/model/Dealer.model');
+    const matchingDealers = await Dealer.find({ businessName: re }).select('_id').lean();
+    const dealerIds = matchingDealers.map((d) => d._id);
+    match.$or = [
+      { orderNumber: re },
+      ...(dealerIds.length ? [{ dealerId: { $in: dealerIds } }] : []),
+    ];
   }
 
   const [data, total] = await Promise.all([

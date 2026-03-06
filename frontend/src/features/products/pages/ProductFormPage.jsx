@@ -3,13 +3,19 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createProduct, updateProduct, fetchProductById } from '../productSlice';
 import { useEffect } from 'react';
+import toast from 'react-hot-toast';
 
 const ProductFormPage = () => {
   const { id } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { selected, loading } = useSelector((s) => s.product);
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isDirty },
+  } = useForm();
 
   const isEdit = !!id;
 
@@ -22,19 +28,34 @@ const ProductFormPage = () => {
   }, [selected, isEdit, reset]);
 
   const onSubmit = (data) => {
+    if (isEdit && !isDirty) {
+      toast('No changes to save.', { icon: 'ℹ️' });
+      return;
+    }
     const action = isEdit ? updateProduct({ id, ...data }) : createProduct(data);
-    dispatch(action).then((res) => { if (!res.error) navigate('/products'); });
+    dispatch(action).then((res) => {
+      if (!res.error) navigate('/products');
+      else if (res.payload) toast.error(res.payload);
+    });
   };
 
   const F = ({ label, name, type = 'text', required = false, options, step }) => (
     <div>
       <label className="label">{label}{required && <span className="text-red-500">*</span>}</label>
       {options ? (
-        <select className="input" {...register(name, { required: required && `Required` })}>
+        <select className="input" {...register(name, { required: required && 'Required' })}>
           {options.map((o) => <option key={o.value || o} value={o.value || o}>{o.label || o}</option>)}
         </select>
       ) : (
-        <input type={type} step={step} className="input" {...register(name, { required: required && `Required`, ...(type === 'number' ? { valueAsNumber: true } : {}) })} />
+        <input
+          type={type}
+          step={step}
+          className="input"
+          {...register(name, {
+            required: required && 'Required',
+            ...(type === 'number' ? { valueAsNumber: true } : {}),
+          })}
+        />
       )}
       {errors[name] && <p className="text-red-500 text-xs mt-1">{errors[name]?.message}</p>}
     </div>

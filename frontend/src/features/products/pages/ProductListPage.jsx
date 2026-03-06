@@ -3,25 +3,26 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchProducts, fetchCategories } from '../productSlice';
 import Pagination from '../../../components/ui/Pagination';
-import { Plus, Search, Upload, Package } from 'lucide-react';
+import { Plus, Search, Upload, Package, Pencil } from 'lucide-react';
 
-// ─── Product Card ────────────────────────────────────────────────────────────
-const ProductCard = ({ product, onAdd, onNavigate }) => (
-  <div
-    className="card overflow-hidden cursor-pointer group hover:shadow-md transition-shadow"
-    onClick={() => onNavigate(product._id)}
-  >
+// ─── Product Card ─────────────────────────────────────────────────────────────
+const ProductCard = ({ product, onEdit }) => (
+  <div className="card overflow-hidden group hover:shadow-md transition-shadow">
     {/* Image area */}
     <div className="relative bg-slate-100 h-44 flex items-center justify-center">
-      <span className="absolute top-3 right-3 text-[10px] font-bold bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide">
-        {product.isActive ? 'IN STOCK' : 'INACTIVE'}
+      <span className="absolute top-3 left-3 text-[10px] font-bold bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide">
+        {product.isActive ? 'ACTIVE' : 'INACTIVE'}
       </span>
+      {/* Edit button — top right */}
+      <button
+        onClick={() => onEdit(product._id)}
+        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-300 transition-colors"
+        title="Edit product"
+      >
+        <Pencil size={13} />
+      </button>
       {product.imageUrl ? (
-        <img
-          src={product.imageUrl}
-          alt={product.name}
-          className="h-28 w-28 object-contain"
-        />
+        <img src={product.imageUrl} alt={product.name} className="h-28 w-28 object-contain" />
       ) : (
         <Package size={52} strokeWidth={1.2} className="text-slate-300" />
       )}
@@ -50,10 +51,10 @@ const ProductCard = ({ product, onAdd, onNavigate }) => (
           </p>
         </div>
         <button
-          onClick={(e) => { e.stopPropagation(); onAdd(product); }}
-          className="w-7 h-7 rounded-full bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center transition-colors flex-shrink-0 shadow-sm"
+          onClick={() => onEdit(product._id)}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium transition-colors shadow-sm"
         >
-          <Plus size={14} />
+          <Pencil size={11} /> Edit
         </button>
       </div>
     </div>
@@ -71,7 +72,7 @@ const ProductListPage = () => {
 
   useEffect(() => { dispatch(fetchCategories()); }, [dispatch]);
   useEffect(() => {
-    dispatch(fetchProducts({ page, limit: 20, search, category, isActive: 'true' }));
+    dispatch(fetchProducts({ page, limit: 20, search, category }));
   }, [dispatch, page, search, category]);
 
   return (
@@ -79,7 +80,7 @@ const ProductListPage = () => {
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Product Market Place</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Product Catalog</h1>
         <div className="flex items-center gap-2">
           <button className="btn-secondary flex items-center gap-2 text-sm py-2 px-4">
             <Upload size={14} /> Bulk Upload
@@ -88,7 +89,7 @@ const ProductListPage = () => {
             onClick={() => navigate('/products/new')}
             className="btn-primary flex items-center gap-2 text-sm py-2 px-4"
           >
-            Add Single Product
+            <Plus size={14} /> Add Product
           </button>
         </div>
       </div>

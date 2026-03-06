@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchReturns, processReturn } from '../returnSlice';
+import { fetchReturns, fetchReturnById, processReturn, updateReturnStatus } from '../returnSlice';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
-import { Search, Filter } from 'lucide-react';
+import { Search, Filter, X } from 'lucide-react';
 
 const STATUS_TABS = [
   { label: 'All Requests', value: '' },
-  { label: 'Pending',      value: 'pending' },
+  { label: 'Requested',    value: 'requested' },
   { label: 'Approved',     value: 'approved' },
   { label: 'Rejected',     value: 'rejected' },
   { label: 'Refunded',     value: 'refunded' },
@@ -18,12 +18,13 @@ const STATUS_TABS = [
 
 const ReturnListPage = () => {
   const dispatch = useDispatch();
-  const { list, pagination, loading } = useSelector((s) => s.return);
+  const { list, pagination, loading, selected } = useSelector((s) => s.return);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('dealers');
   const [search, setSearch] = useState('');
   const [processModal, setProcessModal] = useState(null);
+  const [detailsModal, setDetailsModal] = useState(null);
   const { register, handleSubmit, reset } = useForm();
 
   useEffect(() => {
@@ -98,15 +99,17 @@ const ReturnListPage = () => {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search Product Name, Dealer, SKU..."
+                placeholder="Search Return ID, Dealer..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-72"
               />
             </div>
-            <button className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-500 transition-colors">
-              <Filter size={14} />
-            </button>
+            {search && (
+              <button onClick={() => setSearch('')} className="p-2 text-slate-400 hover:text-slate-600">
+                <X size={14} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -176,13 +179,13 @@ const ReturnListPage = () => {
                         {row.status === 'requested' ? (
                           <div className="flex flex-col gap-0.5">
                             <button
-                              onClick={() => dispatch(processReturn({ id: row._id, status: 'approved' }))}
+                              onClick={() => dispatch(updateReturnStatus({ id: row._id, status: 'approved' }))}
                               className="text-xs text-blue-600 hover:underline font-medium text-left"
                             >
                               Accept Return
                             </button>
                             <button
-                              onClick={() => dispatch(processReturn({ id: row._id, status: 'rejected' }))}
+                              onClick={() => dispatch(updateReturnStatus({ id: row._id, status: 'rejected' }))}
                               className="text-xs text-red-500 hover:underline font-medium text-left"
                             >
                               Reject Return
@@ -193,17 +196,18 @@ const ReturnListPage = () => {
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {row.status === 'requested' ? (
-                          <span className="text-slate-400 text-sm select-none">—</span>
-                        ) : row.status === 'pending' ? (
+                        {row.status === 'approved' ? (
                           <button
                             onClick={() => setProcessModal(row)}
                             className="text-xs text-blue-600 font-medium border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-50 transition-colors"
                           >
-                            Review
+                            Process Refund
                           </button>
                         ) : (
-                          <button className="text-xs text-blue-600 font-medium border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-50 transition-colors">
+                          <button
+                            onClick={() => handleViewDetails(row)}
+                            className="text-xs text-blue-600 font-medium border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-50 transition-colors"
+                          >
                             Details
                           </button>
                         )}
@@ -219,6 +223,7 @@ const ReturnListPage = () => {
         <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
 
+      {/* Process Refund Modal */}
       <Modal isOpen={!!processModal} onClose={() => { setProcessModal(null); reset(); }} title={`Process Return — ${processModal?.rmaNumber}`}>
         <form onSubmit={handleSubmit(onProcess)} className="space-y-4">
           <div>
@@ -238,6 +243,62 @@ const ReturnListPage = () => {
             <button type="submit" className="btn-primary">Process Refund</button>
           </div>
         </form>
+      </Modal>
+
+      {/* Details Modal */}
+      <Modal isOpen={!!detailsModal} onClose={() => setDetailsModal(null)} title={`Return Details — ${detailsModal?.rmaNumber}`}>
+        {detailData && (
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                ['RMA Number', detailData.rmaNumber],
+                ['Status', detailData.status],
+                ['Dealer', detailData.dealerId?.businessName || '—'],
+                ['Order', detailData.orderId?.orderNumber || '—'],
+                ['Reason', detailData.reason],
+                ['Refund Amount', detailData.refundAmount ? `₹${detailData.refundAmount.toLocaleString('en-IN')}` : '—'],
+                ['Refund Method', detailData.refundMethod || '—'],
+                ['Date', detailData.createdAt ? format(new Date(detailData.createdAt), 'dd MMM yyyy') : '—'],
+              ].map(([k, v]) => (
+                <div key={k}>
+                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">{k}</p>
+                  <p className="text-slate-800 mt-0.5">{v || '—'}</p>
+                </div>
+              ))}
+            </div>
+            {detailData.items?.length > 0 && (
+              <div>
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-2">Items</p>
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600">Product</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600">Qty</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600">Condition</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {detailData.items.map((item, i) => (
+                        <tr key={i}>
+                          <td className="px-3 py-2">{item.productName || '—'}</td>
+                          <td className="px-3 py-2">{item.quantity}</td>
+                          <td className="px-3 py-2 capitalize">{item.condition}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {detailData.rejectionReason && (
+              <div>
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Rejection Reason</p>
+                <p className="text-slate-800 mt-0.5">{detailData.rejectionReason}</p>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );
