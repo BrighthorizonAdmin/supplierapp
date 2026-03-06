@@ -12,6 +12,11 @@ const orderSchema = new mongoose.Schema(
       ref: 'Dealer',
       required: [true, 'Dealer is required'],
     },
+    orderType: {
+      type: String,
+      enum: { values: ['b2b', 'b2c'], message: '{VALUE} is not a valid order type' },
+      default: 'b2b',
+    },
     status: {
       type: String,
       enum: {
@@ -99,6 +104,7 @@ orderSchema.pre('save', async function (next) {
 
 orderSchema.index({ dealerId: 1 });
 orderSchema.index({ status: 1 });
+orderSchema.index({ orderType: 1 });
 orderSchema.index({ orderNumber: 1 }, { unique: true });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ dealerId: 1, status: 1 });

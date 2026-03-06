@@ -32,6 +32,14 @@ export const processReturn = createAsyncThunk('return/process', async ({ id, ...
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
+export const updateReturnStatus = createAsyncThunk('return/updateStatus', async ({ id, status, reason }, { rejectWithValue }) => {
+  try {
+    const { data } = await api.patch(`/returns/${id}/status`, { status, reason });
+    toast.success(`Return ${status}`);
+    return data.data;
+  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+});
+
 const returnSlice = createSlice({
   name: 'return',
   initialState: { list: [], selected: null, pagination: null, loading: false, error: null },
@@ -50,6 +58,14 @@ const returnSlice = createSlice({
         const idx = state.list.findIndex((r) => r._id === action.payload._id);
         if (idx !== -1) state.list[idx] = action.payload;
         if (state.selected?._id === action.payload._id) state.selected = action.payload;
+      })
+      .addCase(updateReturnStatus.fulfilled, (state, action) => {
+        const idx = state.list.findIndex((r) => r._id === action.payload._id);
+        if (idx !== -1) state.list[idx] = action.payload;
+        if (state.selected?._id === action.payload._id) state.selected = action.payload;
+      })
+      .addCase(updateReturnStatus.rejected, (state, action) => {
+        toast.error(action.payload || 'Failed to update return status');
       });
   },
 });

@@ -30,6 +30,7 @@ const financeRoutes = require('./modules/finance/finance.routes');
 const auditRoutes = require('./modules/audit/audit.routes');
 const notificationRoutes = require('./modules/notifications/notification.routes');
 const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
+const settingsRoutes = require('./modules/settings/settings.routes');
 
 const app = express();
 
@@ -102,6 +103,7 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // 404 handler
 app.use((req, res) => {

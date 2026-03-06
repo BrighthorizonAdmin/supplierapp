@@ -62,10 +62,26 @@ const productSlice = createSlice({
       })
       .addCase(fetchProducts.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
       .addCase(fetchProductById.fulfilled, (state, action) => { state.selected = action.payload; })
-      .addCase(createProduct.fulfilled, (state, action) => { state.list.unshift(action.payload); })
+      .addCase(createProduct.pending,   (state) => { state.loading = true; state.error = null; })
+      .addCase(createProduct.fulfilled, (state, action) => {
+        state.loading = false;
+        if (action.payload) state.list.unshift(action.payload);
+      })
+      .addCase(createProduct.rejected,  (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        toast.error(action.payload || 'Failed to create product');
+      })
+      .addCase(updateProduct.pending,   (state) => { state.loading = true; state.error = null; })
       .addCase(updateProduct.fulfilled, (state, action) => {
+        state.loading = false;
         const idx = state.list.findIndex((p) => p._id === action.payload._id);
         if (idx !== -1) state.list[idx] = action.payload;
+      })
+      .addCase(updateProduct.rejected,  (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        toast.error(action.payload || 'Failed to update product');
       })
       .addCase(fetchCategories.fulfilled, (state, action) => { state.categories = action.payload; });
   },
