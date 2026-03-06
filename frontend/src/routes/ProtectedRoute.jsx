@@ -4,17 +4,14 @@ import { useSelector } from 'react-redux';
 const ProtectedRoute = ({ children, permission }) => {
   const { isAuthenticated, user } = useSelector((s) => s.auth);
   const location = useLocation();
+  const { hasPermission } = usePermission();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Permission check (basic role check)
-  if (permission && user?.role !== 'super-admin') {
-    const { hasPermission } = usePermission();
-    if (!hasPermission(user.role, permission)) {
-      return <Navigate to="/unauthorized" replace />;
-    }
+  if (permission && !hasPermission(user?.role, permission)) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return children;

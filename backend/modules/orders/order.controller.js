@@ -2,6 +2,11 @@ const orderService = require('./order.service');
 const asyncHandler = require('../../utils/asyncHandler');
 const { success, paginated } = require('../../utils/response');
 
+const getOrderStats = asyncHandler(async (req, res) => {
+  const stats = await orderService.getOrderStats();
+  return success(res, stats, 'Order stats fetched');
+});
+
 const createOrder = asyncHandler(async (req, res) => {
   const order = await orderService.createOrder(req.body, req.user.id);
   return success(res, order, 'Order created', 201);
@@ -32,4 +37,4 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   return success(res, order, 'Order status updated');
 });
 
-module.exports = { createOrder, getOrders, getOrderById, confirmOrder, cancelOrder, updateOrderStatus };
+module.exports = { createOrder, getOrders, getOrderStats, getOrderById, confirmOrder, cancelOrder, updateOrderStatus };

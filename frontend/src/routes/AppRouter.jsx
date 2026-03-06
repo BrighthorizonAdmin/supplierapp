@@ -51,7 +51,6 @@ const AppRouter = () => {
           <Route path="invoices" element={<InvoiceListPage />} />
           <Route path="returns" element={<ReturnListPage />} />
           <Route path="finance" element={<FinancePage />} />
-          <Route path="finance-reports" element={<FinancePage />} />
           <Route path="audit" element={<AuditPage />} />
           <Route path="notifications" element={<NotificationPage />} />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />

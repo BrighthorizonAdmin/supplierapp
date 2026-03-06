@@ -140,17 +140,16 @@ const AuditPage = () => {
   const retailChannelTotal = retailChannels.reduce((s, c) => s + c.amount, 0);
 
   // Merge dealer sales chart with retail trend by date
-  const retailTrendMap = Object.fromEntries(
-    (retailAnalytics?.trend || []).map((t) => [t.date, t.retail])
-  );
-  const retailChartData = useMemo(() =>
-    (analyticsSalesChart || []).map((item) => ({
+  const retailChartData = useMemo(() => {
+    const retailTrendMap = Object.fromEntries(
+      (retailAnalytics?.trend || []).map((t) => [t.date, t.retail])
+    );
+    return (analyticsSalesChart || []).map((item) => ({
       month:  toMonthLabel(item.date),
       dealer: item.revenue,
       retail: retailTrendMap[item.date] || 0,
-    })),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [analyticsSalesChart, retailAnalytics]);
+    }));
+  }, [analyticsSalesChart, retailAnalytics]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -160,7 +159,7 @@ const AuditPage = () => {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Analytics & Reports</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Review pending returns and manage refund approvals.</p>
+          <p className="text-sm text-slate-500 mt-0.5">Monitor sales performance, inventory levels, and delivery metrics.</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Dealer / Retail Sales toggle */}

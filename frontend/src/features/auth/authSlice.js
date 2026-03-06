@@ -57,7 +57,6 @@ const authSlice = createSlice({
       .addCase(login.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        toast.error(action.payload);
       })
       .addCase(getMe.fulfilled, (state, action) => {
         state.user = action.payload;

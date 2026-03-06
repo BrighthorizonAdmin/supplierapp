@@ -11,6 +11,7 @@ import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { useForm } from 'react-hook-form';
 import api from '../../../services/api';
+import { format } from 'date-fns';
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 const TABS = [
@@ -192,6 +193,32 @@ const DealerListPage = () => {
 
   const fmt = (v) => `₹${(v || 0).toLocaleString('en-IN')}`;
 
+  const handleExport = async () => {
+    try {
+      const res = await api.get('/dealers', { params: { limit: 10000 } });
+      const dealers = res.data.data || [];
+      const headers = ['Dealer Code', 'Business Name', 'Owner', 'Email', 'Phone', 'City', 'State', 'Credit Limit', 'Status'];
+      const rows = dealers.map((d) => [
+        d.dealerCode || '',
+        d.businessName || '',
+        d.ownerName || '',
+        d.email || '',
+        d.phone || '',
+        d.address?.city || '',
+        d.address?.state || '',
+        d.creditLimit || 0,
+        d.status || '',
+      ]);
+      const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+      const csv = [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `dealers-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { console.error('Export failed', err); }
+  };
+
   return (
     <div className="space-y-5">
 
@@ -279,7 +306,8 @@ const DealerListPage = () => {
           <div className="flex-1" />
 
           <button
-            title="Export"
+            title="Export dealers to CSV"
+            onClick={handleExport}
             className="p-2 border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 transition-colors"
           >
             <Download size={14} />

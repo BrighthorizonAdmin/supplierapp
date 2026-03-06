@@ -37,18 +37,19 @@ const ReturnListPage = () => {
     });
   };
 
-  const handleViewDetails = (row) => {
-    setDetailsModal(row);
-    dispatch(fetchReturnById(row._id));
-  };
+  const filtered = list.filter((r) => {
+    // Filter by type: dealers have dealerId, retails have customerId/customerName
+    if (typeFilter === 'dealers' && !r.dealerId) return false;
+    if (typeFilter === 'retails' && r.dealerId && !r.customerId && !r.customerName) return false;
 
-  const detailData = selected && selected._id === detailsModal?._id ? selected : detailsModal;
-
-  const filtered = list.filter((r) =>
-    !search ||
-    r.rmaNumber?.toLowerCase().includes(search.toLowerCase()) ||
-    r.dealerId?.businessName?.toLowerCase().includes(search.toLowerCase())
-  );
+    if (!search) return true;
+    return (
+      r.rmaNumber?.toLowerCase().includes(search.toLowerCase()) ||
+      r.dealerId?.businessName?.toLowerCase().includes(search.toLowerCase()) ||
+      r.customerId?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      r.customerName?.toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   return (
     <div className="space-y-4">

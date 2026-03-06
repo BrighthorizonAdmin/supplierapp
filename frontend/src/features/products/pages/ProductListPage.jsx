@@ -132,7 +132,8 @@ const ProductListPage = () => {
               <ProductCard
                 key={product._id}
                 product={product}
-                onEdit={(id) => navigate(`/products/${id}/edit`)}
+                onNavigate={(id) => navigate(`/products/${id}/edit`)}
+                onAdd={() => navigate('/products/new')}
               />
             ))}
           </div>

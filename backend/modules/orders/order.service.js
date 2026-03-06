@@ -206,6 +206,18 @@ const cancelOrder = async (orderId, reason, userId) => {
   });
 };
 
+const getOrderStats = async () => {
+  const results = await Order.aggregate([
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+  ]);
+  const counts = { draft: 0, confirmed: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0, total: 0 };
+  for (const { _id, count } of results) {
+    if (_id in counts) counts[_id] = count;
+    counts.total += count;
+  }
+  return counts;
+};
+
 const getOrders = async (query = {}) => {
   const { page, limit, skip } = getPagination(query);
   const match = {};
@@ -282,4 +294,4 @@ const updateOrderStatus = async (orderId, status, userId) => {
   return order;
 };
 
-module.exports = { createOrder, confirmOrder, cancelOrder, getOrders, getOrderById, updateOrderStatus };
+module.exports = { createOrder, confirmOrder, cancelOrder, getOrders, getOrderStats, getOrderById, updateOrderStatus };

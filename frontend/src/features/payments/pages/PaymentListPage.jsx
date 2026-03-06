@@ -5,7 +5,13 @@ import StatusBadge from '../../../components/ui/StatusBadge';
 import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { format } from 'date-fns';
-import { Search, SlidersHorizontal, Download, X } from 'lucide-react';
+import { Search, Download } from 'lucide-react';
+import api from '../../../services/api';
+
+const METHOD_LABELS_FOR_EXPORT = {
+  'bank-transfer': 'Bank Transfer', upi: 'UPI', cash: 'Cash',
+  cheque: 'Cheque', neft: 'NEFT', rtgs: 'RTGS',
+};
 
 const METHOD_LABELS = {
   'bank-transfer': 'Bank Transfer',
@@ -21,43 +27,36 @@ const PaymentListPage = () => {
   const { list, pagination, loading } = useSelector((s) => s.payment);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [viewModal, setViewModal] = useState(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterMethod, setFilterMethod] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchPayments({ page, limit: 50, status: filterStatus || undefined, method: filterMethod || undefined }));
-  }, [dispatch, page, filterStatus, filterMethod]);
+    dispatch(fetchPayments({ page, limit: 20, search }));
+  }, [dispatch, page, search]);
 
-  const filtered = list.filter((p) =>
-    !search ||
-    p.paymentNumber?.toLowerCase().includes(search.toLowerCase()) ||
-    p.dealerId?.businessName?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const handleExport = () => {
-    const headers = ['Payment ID', 'Distributor', 'Invoice', 'Date', 'Method', 'Amount', 'Status'];
-    const rows = filtered.map((p) => [
-      p.paymentNumber || '',
-      p.dealerId?.businessName || '',
-      p.invoiceId?.invoiceNumber || '',
-      p.createdAt ? format(new Date(p.createdAt), 'yyyy-MM-dd') : '',
-      METHOD_LABELS[p.method] || p.method || '',
-      p.amount || 0,
-      p.status || '',
-    ]);
-    const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `payments-${format(new Date(), 'yyyyMMdd')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get('/payments', { params: { limit: 10000 } });
+      const rows = (res.data.data || []).map((p) => [
+        p.paymentNumber || '',
+        p.dealerId?.businessName || '',
+        p.invoiceId?.invoiceNumber || '',
+        p.createdAt ? format(new Date(p.createdAt), 'yyyy-MM-dd') : '',
+        METHOD_LABELS_FOR_EXPORT[p.method] || p.method || '',
+        p.amount || 0,
+        p.status || '',
+      ]);
+      const headers = ['Payment ID', 'Dealer', 'Invoice', 'Date', 'Method', 'Amount', 'Status'];
+      const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+      const csv = [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `payments-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { console.error('Export failed', err); }
+    finally { setExporting(false); }
   };
-
-  const hasFilters = filterStatus || filterMethod;
 
   return (
     <div className="space-y-4">
@@ -78,22 +77,12 @@ const PaymentListPage = () => {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setFiltersOpen((o) => !o)}
-              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                hasFilters
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <SlidersHorizontal size={14} />
-              Filters{hasFilters ? ' •' : ''}
-            </button>
-            <button
               onClick={handleExport}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={exporting}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
             >
               <Download size={14} />
-              Export
+              {exporting ? 'Exporting...' : 'Export'}
             </button>
           </div>
         </div>
@@ -159,14 +148,14 @@ const PaymentListPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.length === 0 ? (
+                {list.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
                       No payments found
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((row, idx) => (
+                  list.map((row, idx) => (
                     <tr key={row._id || idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap font-mono text-xs">
                         {row.paymentNumber || '—'}
