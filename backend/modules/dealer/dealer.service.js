@@ -1,7 +1,6 @@
 const Dealer = require('./model/Dealer.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
-const { withTransaction } = require('../../utils/transaction');
 const auditService = require('../audit/audit.service');
 const notificationService = require('../notifications/notification.service');
 const { emitToRole, emitToAll } = require('../../websocket/socket');
@@ -55,32 +54,30 @@ const getDealerById = async (id) => {
 };
 
 const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => {
-  return withTransaction(async (session) => {
-    const dealer = await Dealer.findById(dealerId).session(session);
-    if (!dealer) throw new AppError('Dealer not found', 404);
-    if (dealer.status !== 'pending') throw new AppError(`Dealer is already ${dealer.status}`, 400);
+  const dealer = await Dealer.findById(dealerId);
+  if (!dealer) throw new AppError('Dealer not found', 404);
+  if (dealer.status !== 'pending') throw new AppError(`Dealer is already ${dealer.status}`, 400);
 
-    const before = { status: dealer.status, creditLimit: dealer.creditLimit, pricingTier: dealer.pricingTier };
+  const before = { status: dealer.status, creditLimit: dealer.creditLimit, pricingTier: dealer.pricingTier };
 
-    dealer.status = 'active';
-    dealer.kycStatus = 'verified';
-    dealer.creditLimit = creditLimit || 0;
-    dealer.pricingTier = pricingTier || 'standard';
-    dealer.approvedBy = userId;
-    dealer.approvedAt = new Date();
+  dealer.status = 'active';
+  dealer.kycStatus = 'verified';
+  dealer.creditLimit = creditLimit || 0;
+  dealer.pricingTier = pricingTier || 'standard';
+  dealer.approvedBy = userId;
+  dealer.approvedAt = new Date();
 
-    await dealer.save({ session });
+  await dealer.save();
 
-    await auditService.log('dealer', dealerId, 'approve', userId, {
-      before,
-      after: { status: dealer.status, creditLimit: dealer.creditLimit, pricingTier: dealer.pricingTier },
-    });
-
-    emitToRole('admin', DEALER_APPROVED, { dealerId, dealerCode: dealer.dealerCode, businessName: dealer.businessName });
-    emitToAll(DEALER_APPROVED, { dealerId, businessName: dealer.businessName });
-
-    return dealer;
+  await auditService.log('dealer', dealerId, 'approve', userId, {
+    before,
+    after: { status: dealer.status, creditLimit: dealer.creditLimit, pricingTier: dealer.pricingTier },
   });
+
+  emitToRole('admin', DEALER_APPROVED, { dealerId, dealerCode: dealer.dealerCode, businessName: dealer.businessName });
+  emitToAll(DEALER_APPROVED, { dealerId, businessName: dealer.businessName });
+
+  return dealer;
 };
 
 const rejectDealer = async (dealerId, reason, userId) => {

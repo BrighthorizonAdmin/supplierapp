@@ -3,10 +3,12 @@ import { useDispatch, useSelector } from 'react-redux';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Search, Filter, Download, AlertTriangle,
-  TrendingUp, TrendingDown, Package, BarChart2, ChevronDown,
+  TrendingUp, TrendingDown, Package, BarChart2, ChevronDown, Plus, X,
 } from 'lucide-react';
-import { fetchInventory, fetchInventoryStats, fetchWarehouses } from '../inventorySlice';
+import { fetchInventory, fetchInventoryStats, fetchWarehouses, adjustStock } from '../inventorySlice';
+import { fetchProducts } from '../../products/productSlice';
 import Pagination from '../../../components/ui/Pagination';
+import { format } from 'date-fns';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtNum = (n) => {
@@ -73,6 +75,96 @@ const DonutTooltip = ({ active, payload }) => {
   );
 };
 
+// ─── Add Stock Modal ──────────────────────────────────────────────────────────
+const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
+  const { list: products } = useSelector((s) => s.product);
+  const [productSearch, setProductSearch] = useState('');
+  const [form, setForm] = useState({ productId: '', warehouseId: '', quantity: '', type: 'add' });
+  const [touched, setTouched] = useState(false);
+
+  const filtered = products.filter((p) =>
+    !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.sku || '').toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setTouched(true);
+    if (!form.productId || !form.warehouseId || !form.quantity) return;
+    onSubmit(form);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-slate-900">Adjust Stock</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">Product</label>
+            <input
+              type="text"
+              placeholder="Search by name or SKU..."
+              value={productSearch}
+              onChange={(e) => { setProductSearch(e.target.value); setF('productId', ''); }}
+              className="input mb-1"
+            />
+            {productSearch && !form.productId && (
+              <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto">
+                {filtered.length === 0 ? (
+                  <p className="text-sm text-slate-400 px-3 py-2">No products found</p>
+                ) : filtered.slice(0, 8).map((p) => (
+                  <button key={p._id} type="button"
+                    onClick={() => { setF('productId', p._id); setProductSearch(p.name); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                    <span className="font-medium text-slate-800">{p.name}</span>
+                    {p.sku && <span className="text-slate-400 ml-2 text-xs">{p.sku}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            {touched && !form.productId && <p className="text-red-500 text-xs mt-1">Product is required</p>}
+          </div>
+          <div>
+            <label className="label">Warehouse</label>
+            <select className="input" value={form.warehouseId} onChange={(e) => setF('warehouseId', e.target.value)}>
+              <option value="">Select warehouse...</option>
+              {warehouses.map((w) => <option key={w._id} value={w._id}>{w.name} {w.code ? `(${w.code})` : ''}</option>)}
+            </select>
+            {touched && !form.warehouseId && <p className="text-red-500 text-xs mt-1">Warehouse is required</p>}
+          </div>
+          <div>
+            <label className="label">Quantity</label>
+            <input type="number" min="1" className="input" value={form.quantity}
+              onChange={(e) => setF('quantity', e.target.value)} placeholder="Enter quantity" />
+            {touched && !form.quantity && <p className="text-red-500 text-xs mt-1">Quantity is required</p>}
+          </div>
+          <div>
+            <label className="label">Operation</label>
+            <div className="flex gap-3">
+              {[{v:'add',l:'Add Stock'},{v:'remove',l:'Remove Stock'}].map(({v,l}) => (
+                <label key={v} className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                  <input type="radio" name="type" value={v} checked={form.type === v} onChange={() => setF('type', v)} className="text-blue-600" />
+                  {l}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-3 justify-end pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? 'Saving...' : 'Adjust Stock'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const InventoryPage = () => {
   const dispatch = useDispatch();
@@ -83,11 +175,14 @@ const InventoryPage = () => {
   const [stockTab,    setStockTab]    = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [category,    setCategory]    = useState('');
+  const [showModal,   setShowModal]   = useState(false);
+  const [adjusting,   setAdjusting]   = useState(false);
 
-  // Fetch stats & warehouses once
+  // Fetch stats, warehouses, products once
   useEffect(() => {
     dispatch(fetchInventoryStats());
     dispatch(fetchWarehouses());
+    dispatch(fetchProducts({ limit: 200 }));
   }, [dispatch]);
 
   // Fetch list on filter change
@@ -119,8 +214,67 @@ const InventoryPage = () => {
 
   const switchTab = (id) => { setStockTab(id); setPage(1); };
 
+  const handleAdjustStock = async (form) => {
+    setAdjusting(true);
+    const res = await dispatch(adjustStock({ productId: form.productId, warehouseId: form.warehouseId, quantity: Number(form.quantity), type: form.type }));
+    setAdjusting(false);
+    if (!res.error) {
+      setShowModal(false);
+      dispatch(fetchInventoryStats());
+      const params = { page, limit: 20 };
+      if (stockTab) params.status = stockTab;
+      if (search)   params.search = search;
+      if (category) params.category = category;
+      dispatch(fetchInventory(params));
+    }
+  };
+
+  const handleExport = () => {
+    if (!list.length) return;
+    const headers = ['Product','SKU','Category','Warehouse','Available','Allocated','Total','Unit Price','Status'];
+    const rows = list.map((item) => {
+      const prod = item.productId || {};
+      const wh   = item.warehouseId || {};
+      const status = !item.quantityOnHand ? 'Out of Stock' : item.isLowStock ? 'Low Stock' : 'In Stock';
+      return [
+        prod.name || '—', prod.productCode || '—', prod.category || '—',
+        wh.name || '—',
+        item.quantityAvailable ?? 0, item.quantityAllocated ?? 0, item.quantityOnHand ?? 0,
+        prod.basePrice ?? 0, status,
+      ];
+    });
+    const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `inventory-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-5">
+      {showModal && (
+        <AddStockModal
+          warehouses={warehouses}
+          onClose={() => setShowModal(false)}
+          onSubmit={handleAdjustStock}
+          saving={adjusting}
+        />
+      )}
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
+        <button
+          onClick={() => setShowModal(true)}
+          className="btn-primary flex items-center gap-2 text-sm py-2 px-4"
+        >
+          <Plus size={14} /> Add Stock
+        </button>
+      </div>
 
       {/* ── Top section ── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
@@ -304,7 +458,10 @@ const InventoryPage = () => {
           <button className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">
             <Filter size={13} /> Saved Filters
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+          >
             <Download size={13} /> Export
           </button>
         </div>
