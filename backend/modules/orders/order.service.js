@@ -222,36 +222,50 @@ const getOrders = async (query = {}) => {
   const { page, limit, skip } = getPagination(query);
   const match = {};
 
-  if (query.dealerId)   match.dealerId   = query.dealerId;
-  if (query.status)     match.status     = query.status;
-  if (query.orderType)  match.orderType  = query.orderType;
+  if (query.status) match.status = query.status;
+  if (query.orderType) match.orderType = query.orderType;
+
+  // Date filter
   if (query.startDate || query.endDate) {
     match.createdAt = {};
     if (query.startDate) match.createdAt.$gte = new Date(query.startDate);
-    if (query.endDate)   match.createdAt.$lte = new Date(query.endDate);
+    if (query.endDate) match.createdAt.$lte = new Date(query.endDate);
   }
 
-  // Search by orderNumber (prefix-match)
+  // Search functionality
   if (query.search) {
-    const re = new RegExp(query.search, 'i');
-    // Find dealers whose businessName matches
-    const Dealer = require('../dealer/model/Dealer.model');
-    const matchingDealers = await Dealer.find({ businessName: re }).select('_id').lean();
-    const dealerIds = matchingDealers.map((d) => d._id);
+    const re = new RegExp(query.search, "i");
+
+    const Dealer = require("../dealer/model/Dealer.model");
+
+    const dealers = await Dealer.find({
+      $or: [
+        { businessName: re },
+        { dealerCode: re },
+        { phone: re }
+      ]
+    })
+      .select("_id")
+      .lean();
+
+    const dealerIds = dealers.map(d => d._id);
+
     match.$or = [
-      { orderNumber: re },
-      ...(dealerIds.length ? [{ dealerId: { $in: dealerIds } }] : []),
+      { orderId: re },
+      // { invoiceId: re },
+      ...(dealerIds.length ? [{ dealerId: { $in: dealerIds } }] : [])
     ];
   }
 
   const [data, total] = await Promise.all([
     Order.find(match)
-      .populate('dealerId', 'businessName dealerCode')
-      .populate('confirmedBy', 'name')
+      .populate("dealerId") // full dealer info
+      .populate("confirmedBy", "name")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean(),
+
     Order.countDocuments(match),
   ]);
 
@@ -260,9 +274,9 @@ const getOrders = async (query = {}) => {
 
 const getOrderById = async (id) => {
   const order = await Order.findById(id)
-    .populate('dealerId', 'businessName dealerCode email pricingTier')
+    .populate('dealerId')
     .populate('confirmedBy', 'name email')
-    .populate('invoiceId')
+    // .populate('invoiceId')
     .lean();
   if (!order) throw new AppError('Order not found', 404);
 

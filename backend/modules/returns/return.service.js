@@ -130,7 +130,7 @@ const getReturns = async (query = {}) => {
 
   const [data, total] = await Promise.all([
     Return.find(match)
-      .populate('dealerId', 'businessName dealerCode')
+      .populate('dealerId', 'name')
       .populate('orderId', 'orderNumber')
       .populate('processedBy', 'name')
       .sort({ createdAt: -1 })
@@ -145,7 +145,7 @@ const getReturns = async (query = {}) => {
 
 const getReturnById = async (id) => {
   const ret = await Return.findById(id)
-    .populate('dealerId', 'businessName dealerCode email')
+    .populate('dealerId', 'name')
     .populate('orderId', 'orderNumber netAmount')
     .populate('processedBy', 'name email')
     .lean();

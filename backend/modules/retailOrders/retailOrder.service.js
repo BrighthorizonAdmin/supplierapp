@@ -52,7 +52,7 @@ const getRetailOrders = async (query = {}) => {
 
   const [data, total] = await Promise.all([
     RetailOrder.find(match)
-      .populate('dealerId', 'businessName dealerCode')
+      .populate('dealerId', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -65,7 +65,7 @@ const getRetailOrders = async (query = {}) => {
 
 const getRetailOrderById = async (id) => {
   const order = await RetailOrder.findById(id)
-    .populate('dealerId', 'businessName dealerCode')
+    .populate('dealerId', 'name')
     .populate('processedBy', 'name')
     .lean();
   if (!order) throw new AppError('Retail order not found', 404);

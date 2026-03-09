@@ -142,17 +142,19 @@ const getDealerStats = async (dealerId) => {
   const Payment = require('../payments/model/Payment.model');
   const Return = require('../returns/model/Return.model');
 
-  const [dealer, orderCount, paymentTotal, returnCount] = await Promise.all([
-    Dealer.findById(dealerId).lean({ virtuals: true }),
+  // fetch dealer first so we can reference its _id safely
+  const dealer = await Dealer.findById(dealerId).lean({ virtuals: true });
+  if (!dealer) throw new AppError('Dealer not found', 404);
+
+  // other counts/aggregates can run in parallel now that we have dealer
+  const [orderCount, paymentTotal, returnCount] = await Promise.all([
     Order.countDocuments({ dealerId, status: { $nin: ['draft', 'cancelled'] } }),
     Payment.aggregate([
-      { $match: { dealerId: dealer?._id, status: 'confirmed' } },
+      { $match: { dealerId: dealer._id, status: 'confirmed' } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
     Return.countDocuments({ dealerId }),
   ]);
-
-  if (!dealer) throw new AppError('Dealer not found', 404);
 
   return {
     dealer,

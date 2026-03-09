@@ -94,7 +94,7 @@ const getPayments = async (query = {}) => {
 
   const [data, total] = await Promise.all([
     Payment.find(match)
-      .populate('dealerId', 'businessName dealerCode')
+      .populate('dealerId', 'name')
       .populate('receivedBy', 'name')
       .populate('confirmedBy', 'name')
       .sort({ createdAt: -1 })
