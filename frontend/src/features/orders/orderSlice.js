@@ -2,6 +2,14 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
+// Normalize order status to lowercase
+const normalizeOrder = (order) => ({
+  ...order,
+  status: order.status?.toLowerCase() || 'draft',
+});
+
+const normalizeOrders = (orders) => Array.isArray(orders) ? orders.map(normalizeOrder) : [];
+
 export const fetchOrders = createAsyncThunk('order/fetchAll', async (params, { rejectWithValue }) => {
   try {
     const { data } = await api.get('/orders', { params });
@@ -10,6 +18,11 @@ export const fetchOrders = createAsyncThunk('order/fetchAll', async (params, { r
 });
 
 export const fetchOrderById = createAsyncThunk('order/fetchById', async (id, { rejectWithValue }) => {
+  // front-end validation to avoid hitting server with malformed ids
+  if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+    return rejectWithValue('Invalid order id');
+  }
+
   try {
     const { data } = await api.get(`/orders/${id}`);
     return data.data;
@@ -59,22 +72,24 @@ const orderSlice = createSlice({
       .addCase(fetchOrders.pending, (state) => { state.loading = true; state.error = null; })
       .addCase(fetchOrders.fulfilled, (state, action) => {
         state.loading = false;
-        state.list = action.payload.data;
+        state.list = normalizeOrders(action.payload.data);
         state.pagination = action.payload.pagination;
       })
       .addCase(fetchOrders.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
       .addCase(fetchOrderById.pending, (state) => { state.loading = true; state.error = null; })
-      .addCase(fetchOrderById.fulfilled, (state, action) => { state.loading = false; state.selected = action.payload; })
+      .addCase(fetchOrderById.fulfilled, (state, action) => { state.loading = false; state.selected = normalizeOrder(action.payload); })
       .addCase(fetchOrderById.rejected, (state, action) => { state.loading = false; state.error = action.payload; toast.error(action.payload || 'Failed to load order'); })
       .addCase(confirmOrder.fulfilled, (state, action) => {
-        const idx = state.list.findIndex((o) => o._id === action.payload._id);
-        if (idx !== -1) state.list[idx] = action.payload;
-        if (state.selected?._id === action.payload._id) state.selected = action.payload;
+        const normalized = normalizeOrder(action.payload);
+        const idx = state.list.findIndex((o) => o._id === normalized._id);
+        if (idx !== -1) state.list[idx] = normalized;
+        if (state.selected?._id === normalized._id) state.selected = normalized;
       })
       .addCase(cancelOrder.fulfilled, (state, action) => {
-        const idx = state.list.findIndex((o) => o._id === action.payload._id);
-        if (idx !== -1) state.list[idx] = action.payload;
-        if (state.selected?._id === action.payload._id) state.selected = action.payload;
+        const normalized = normalizeOrder(action.payload);
+        const idx = state.list.findIndex((o) => o._id === normalized._id);
+        if (idx !== -1) state.list[idx] = normalized;
+        if (state.selected?._id === normalized._id) state.selected = normalized;
       });
   },
 });

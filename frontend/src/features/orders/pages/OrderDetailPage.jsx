@@ -53,7 +53,7 @@ const OrderDetailPage = () => {
       {/* Order Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          ['Dealer', order.dealerId?.businessName],
+          ['Dealer', order.dealerId?.name],
           ['Pricing Tier', order.pricingTier],
           ['Subtotal', `₹${(order.subtotal || 0).toLocaleString('en-IN')}`],
           ['Tax', `₹${(order.taxAmount || 0).toLocaleString('en-IN')}`],

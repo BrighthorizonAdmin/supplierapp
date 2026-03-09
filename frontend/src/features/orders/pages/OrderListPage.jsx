@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchOrders, cancelOrder } from '../orderSlice';
+import toast from 'react-hot-toast';
+import { fetchOrders, cancelOrder, fetchOrderById } from '../orderSlice';
 import Pagination from '../../../components/ui/Pagination';
 import {
   Search, Download, Eye, MoreVertical,
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../../services/api';
+import { useMemo } from 'react';
 
 // ─── Type tabs ────────────────────────────────────────────────────────────────
 const TYPE_TABS = [
@@ -19,15 +21,14 @@ const TYPE_TABS = [
 
 // ─── Status filter tabs ───────────────────────────────────────────────────────
 const STATUS_TABS = [
-  { id: '',           label: 'All'         },
-  { id: 'draft',      label: 'New Orders'  },
-  { id: 'confirmed',  label: 'Confirmed'   },
-  { id: 'processing', label: 'Processing'  },
-  { id: 'shipped',    label: 'Shipped'     },
-  { id: 'delivered',  label: 'Delivered'   },
-  { id: 'cancelled',  label: 'Cancelled'   },
+  { id: '', label: 'All' },
+  { id: 'DRAFT', label: 'New Orders' },
+  { id: 'CONFIRMED', label: 'Confirmed' },
+  { id: 'PROCESSING', label: 'Processing' },
+  { id: 'SHIPPED', label: 'Shipped' },
+  { id: 'DELIVERED', label: 'Delivered' },
+  { id: 'CANCELLED', label: 'Cancelled' },
 ];
-
 // ─── Type badge ───────────────────────────────────────────────────────────────
 const TypeBadge = ({ type }) => {
   const isRetail = type === 'b2c';
@@ -103,7 +104,8 @@ const RowActions = ({ row, onView }) => {
   return (
     <div className="flex items-center gap-1" ref={ref}>
       <button
-        onClick={() => onView(row._id)}
+        // always pass just the id so consumers can navigate directly
+        onClick={() => onView(row)}
         className="p-1.5 rounded-lg hover:bg-primary-50 text-slate-400 hover:text-primary-600 transition-colors"
       >
         <Eye size={15} />
@@ -118,7 +120,7 @@ const RowActions = ({ row, onView }) => {
         {open && (
           <div className="absolute right-0 top-8 w-36 bg-white rounded-xl shadow-lg border border-slate-200 z-20 overflow-hidden py-1">
             <button
-              onClick={() => { setOpen(false); onView(row._id); }}
+              onClick={() => { setOpen(false); onView(row); }}
               className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
             >
               View Details
@@ -132,26 +134,40 @@ const RowActions = ({ row, onView }) => {
 
 // ─── Stats card ───────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, icon: Icon, cardCls, iconCls, valueCls, labelCls }) => (
-  <div className={`card p-4 flex items-center justify-between ${cardCls}`}>
-    <div>
-      <p className={`text-sm font-medium leading-snug ${labelCls}`}>{label}</p>
-      <p className={`text-2xl font-bold mt-1 leading-tight ${valueCls}`}>{value ?? '—'}</p>
+  <div
+    className={`flex items-center justify-between p-3 rounded-lg border ${cardCls}`}
+  >
+    <div className="flex flex-col">
+      <p className={`text-xs font-medium ${labelCls}`}>{label}</p>
+      <p className={`text-lg font-semibold ${valueCls}`}>{value ?? "—"}</p>
     </div>
-    <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${iconCls}`}>
-      <Icon size={20} />
+
+    <div
+      className={`w-8 h-8 rounded-lg flex items-center justify-center ml-3 ${iconCls}`}
+    >
+      <Icon size={16} />
     </div>
   </div>
 );
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 const OrderListPage = () => {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const { list, pagination, loading } = useSelector((s) => s.order);
 
+  const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
+  const goToOrder = (id) => {
+    if (!isValidObjectId(id._id)) {
+      toast.error('Cannot open order details – invalid ID.');
+      return;
+    }
+    navigate(`/orders/${id._id}`);
+  };
+console.log(list)
   const [page,        setPage]        = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search,      setSearch]      = useState('');
+  // only pass one argument here; default to showing all orders
   const [typeTab,     setTypeTab]     = useState('all');
   const [statusTab,   setStatusTab]   = useState('');
   const [exporting,   setExporting]   = useState(false);
@@ -174,7 +190,56 @@ const OrderListPage = () => {
       .catch(console.error);
   }, []);
 
-  // CSV export
+  useEffect(() => {
+  if (!list) return;
+
+  // filter orders according to active type tab so stats match the table
+  let arr = list;
+  if (typeTab === 'b2b') arr = arr.filter(o => o.orderType === 'b2b');
+  else if (typeTab === 'b2c') arr = arr.filter(o => o.orderType === 'b2c');
+
+  const newCounts = {
+    confirmed: 0,
+    processing: 0,
+    shipped: 0,
+    delivered: 0,
+    cancelled: 0,
+    draft: 0,
+    total: arr.length,
+  };
+
+  arr.forEach((order) => {
+    const status = order.status?.toLowerCase();
+
+    if (newCounts.hasOwnProperty(status)) {
+      newCounts[status] += 1;
+    }
+  });
+
+  setCounts(newCounts);
+}, [list, typeTab]);
+
+const filteredOrders = useMemo(() => {
+  if (!list) return [];
+
+  let result = list;
+
+  // type filter
+  if (typeTab === "b2b") {
+    result = result.filter(o => o.orderType?.toLowerCase() === "b2b");
+  } else if (typeTab === "b2c") {
+    result = result.filter(o => o.orderType?.toLowerCase() === "b2c");
+  }
+
+  // status filter
+  if (statusTab) {
+    result = result.filter(
+      order => order.status?.toLowerCase() === statusTab.toLowerCase()
+    );
+  }
+
+  return result;
+}, [list, statusTab, typeTab]);
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -261,7 +326,7 @@ const OrderListPage = () => {
             {TYPE_TABS.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setTypeTab(t.id)}
+                onClick={() => { setTypeTab(t.id); setPage(1); }}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                   typeTab === t.id
                     ? 'bg-primary-600 text-white shadow-sm'
@@ -380,11 +445,11 @@ const OrderListPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {list.length === 0 ? (
+                {filteredOrders.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-14 text-center text-slate-400">No orders found</td>
                   </tr>
-                ) : list.map((order) => (
+                ) : filteredOrders.map((order) => (
                   <tr key={order._id} className="hover:bg-slate-50 transition-colors">
 
                     {/* Order ID */}
@@ -434,12 +499,12 @@ const OrderListPage = () => {
 
                     {/* Status */}
                     <td className="px-4 py-3.5">
-                      <StatusCell order={order} onView={(id) => navigate(`/orders/${id}`)} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
+                      <StatusCell order={order} onView={goToOrder} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
                     </td>
 
                     {/* Actions */}
                     <td className="px-4 py-3.5">
-                      <RowActions row={order} onView={(id) => navigate(`/orders/${id}`)} />
+                      <RowActions row={order} onView={goToOrder} />
                     </td>
 
                   </tr>
@@ -461,11 +526,11 @@ const OrderListPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {list.length === 0 ? (
+                {filteredOrders.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-14 text-center text-slate-400">No orders found</td>
                   </tr>
-                ) : list.map((order) => (
+                ) : filteredOrders.map((order) => (
                   <tr key={order._id} className="hover:bg-slate-50 transition-colors">
 
                     {/* Order ID */}
@@ -474,13 +539,13 @@ const OrderListPage = () => {
                         onClick={() => navigate(`/orders/${order._id}`)}
                         className="font-semibold text-slate-800 hover:text-primary-600 transition-colors"
                       >
-                        Order #{order.orderNumber || order._id?.slice(-4)}
+                        Order #{order.orderId?.slice(-4)}
                       </button>
                     </td>
 
                     {/* Dealer */}
                     <td className="px-4 py-3.5 font-medium text-slate-700">
-                      {order.dealerId?.businessName || '—'}
+                      {order.dealerId?.name || '—'}
                     </td>
 
                     {/* Date & Time */}
@@ -505,7 +570,7 @@ const OrderListPage = () => {
 
                     {/* Payment */}
                     <td className="px-4 py-3.5 text-slate-600 capitalize">
-                      {order.pricingTier || '—'}
+                      {order.paymentMethod || '—'}
                     </td>
 
                     {/* Priority */}
@@ -515,12 +580,12 @@ const OrderListPage = () => {
 
                     {/* Status */}
                     <td className="px-4 py-3.5">
-                      <StatusCell order={order} onView={(id) => navigate(`/orders/${id}`)} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
+                      <StatusCell order={order} onView={goToOrder} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
                     </td>
 
                     {/* Actions */}
                     <td className="px-4 py-3.5">
-                      <RowActions row={order} onView={(id) => navigate(`/orders/${id}`)} />
+                      <RowActions row={order} onView={goToOrder} />
                     </td>
 
                   </tr>

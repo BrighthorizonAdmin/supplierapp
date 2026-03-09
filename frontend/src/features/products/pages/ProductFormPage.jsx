@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { createProduct, updateProduct, fetchProductById } from '../productSlice';
 import { useEffect } from 'react';
 import toast from 'react-hot-toast';
+import Modal from '../../../components/ui/Modal';
 
 const ProductFormPage = () => {
   const { id } = useParams();
@@ -62,66 +63,95 @@ const ProductFormPage = () => {
   );
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">{isEdit ? 'Edit Product' : 'New Product'}</h1>
+    <Modal
+      isOpen={true}
+      onClose={() => navigate('/products')}
+      title={isEdit ? 'Edit Product' : 'Add New Product'}
+      size="lg"
+    >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="card p-5">
-          <h2 className="font-semibold text-slate-900 mb-4">Product Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* left side */}
+          <div className="space-y-4">
             <F label="Product Name" name="name" required />
-            <F label="Category" name="category" required />
-            <F label="Sub-Category" name="subCategory" />
-            <F label="Brand" name="brand" />
-            <F label="SKU" name="sku" />
-            <F label="Unit" name="unit" options={[
-              { value: 'piece', label: 'Piece' }, { value: 'kg', label: 'KG' },
-              { value: 'litre', label: 'Litre' }, { value: 'box', label: 'Box' },
-              { value: 'dozen', label: 'Dozen' }, { value: 'metre', label: 'Metre' },
-            ]} />
+            <F label="Category" name="category" />
+            <F label="MRP" name="mrp" type="number" step="0.01" />
+            <F label="Tax" name="taxRate" type="number" />
+            <F label="Base Price" name="basePrice" type="number" step="0.01" />
+            <div className="mt-4">
+              <button
+                type="button"
+                className="w-full py-2 bg-pink-100 text-pink-700 rounded-lg font-medium"
+              >
+                +Bulk upload
+              </button>
+              <p className="text-xs text-slate-500 mt-1">
+                Bulk upload new products via CSV / PDF file
+              </p>
+            </div>
           </div>
-          <div className="mt-4">
-            <label className="label">Description</label>
-            <textarea className="input" rows={3} {...register('description')} />
-          </div>
-        </div>
 
-        <div className="card p-5">
-          <h2 className="font-semibold text-slate-900 mb-4">Pricing</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <F label="Base Price (₹)" name="basePrice" type="number" step="0.01" required />
-            <F label="MRP (₹)" name="mrp" type="number" step="0.01" />
-            <F label="GST Rate (%)" name="taxRate" type="number" />
-            <F label="HSN Code" name="hsn" />
-          </div>
-          <div className="mt-4">
-            <p className="label mb-3">Tier Pricing (₹)</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {['standard', 'silver', 'gold', 'platinum'].map((tier) => (
-                <div key={tier}>
-                  <label className="label capitalize">{tier}</label>
-                  <input type="number" step="0.01" className="input" {...register(`pricingTiers.${tier}`, { valueAsNumber: true })} />
-                </div>
-              ))}
+          {/* right side */}
+          <div className="space-y-4">
+            <F label="SKU Code" name="sku" />
+            <F label="Production Lead Time" name="leadTime" />
+            <div>
+              <label className="label">Initial Stock</label>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  className="input"
+                  {...register('stockDate')}
+                />
+                <input
+                  type="number"
+                  placeholder="Quantity"
+                  className="input"
+                  {...register('stockQty', { valueAsNumber: true })}
+                />
+              </div>
+            </div>
+            <div>
+              <p className="label">Specification</p>
+              <div className="space-y-2">
+                <select className="input" {...register('specWeight')}>
+                  <option value="">Weight</option>
+                  <option value="kg">kg</option>
+                  <option value="g">g</option>
+                </select>
+                <select className="input" {...register('specDimensions')}>
+                  <option value="">Dimensions</option>
+                  <option value="cm">cm</option>
+                  <option value="inch">inch</option>
+                </select>
+                <select className="input" {...register('specColor')}>
+                  <option value="">Color/Variant</option>
+                  <option value="red">Red</option>
+                  <option value="blue">Blue</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="card p-5">
-          <h2 className="font-semibold text-slate-900 mb-4">Availability</h2>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500" {...register('isActive')} />
-            <span className="text-sm text-slate-700">Product is active (visible in marketplace)</span>
-          </label>
-        </div>
-
-        <div className="flex gap-3 justify-end">
-          <button type="button" onClick={() => navigate('/products')} className="btn-secondary">Cancel</button>
-          <button type="submit" disabled={loading} className="btn-primary">
-            {loading ? 'Saving...' : isEdit ? 'Update Product' : 'Create Product'}
+        <div className="flex justify-end gap-3 mt-4">
+          <button
+            type="button"
+            onClick={() => navigate('/products')}
+            className="btn-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn-primary"
+          >
+            {loading ? 'Saving...' : isEdit ? 'Update Product' : 'Add Product'}
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 };
 

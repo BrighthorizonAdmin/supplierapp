@@ -25,6 +25,7 @@ const ReturnListPage = () => {
   const [search, setSearch] = useState('');
   const [processModal, setProcessModal] = useState(null);
   const [detailsModal, setDetailsModal] = useState(null);
+  const [detailData, setDetailData] = useState(null); // store payload for details modal
   const { register, handleSubmit, reset } = useForm();
 
   useEffect(() => {
@@ -34,6 +35,16 @@ const ReturnListPage = () => {
   const onProcess = (data) => {
     dispatch(processReturn({ id: processModal._id, ...data })).then((res) => {
       if (!res.error) { setProcessModal(null); reset(); }
+    });
+  };
+
+  // open details; fetch full return info then show modal
+  const handleViewDetails = (row) => {
+    dispatch(fetchReturnById(row._id)).then((res) => {
+      if (!res.error) {
+        setDetailData(res.payload);
+      }
+      setDetailsModal(row);
     });
   };
 
@@ -145,7 +156,7 @@ const ReturnListPage = () => {
                   filtered.map((row, idx) => (
                     <tr key={row._id || idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-xs font-semibold text-slate-700">
-                        {row.rmaNumber || '—'}
+                        {row.returnId || '—'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {typeFilter === 'retails' ? (
@@ -161,7 +172,7 @@ const ReturnListPage = () => {
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700">
                         {typeFilter === 'retails'
                           ? (row.customerId?.name || row.customerName || '—')
-                          : (row.dealerId?.businessName || '—')}
+                          : (row.dealerId?.name || '—')}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600">
                         {row.createdAt ? format(new Date(row.createdAt), 'yyyy-MM-dd') : '—'}
@@ -170,7 +181,7 @@ const ReturnListPage = () => {
                         {row.items?.length ? `${row.items.length} Items` : '—'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">
-                        {row.refundAmount ? `₹${row.refundAmount.toLocaleString('en-IN')}` : '—'}
+                        {row.totalRefundAmount ? `₹${row.totalRefundAmount.toLocaleString('en-IN')}` : '—'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600">
                         {row.refundMethod || 'Credit'}
@@ -246,7 +257,11 @@ const ReturnListPage = () => {
       </Modal>
 
       {/* Details Modal */}
-      <Modal isOpen={!!detailsModal} onClose={() => setDetailsModal(null)} title={`Return Details — ${detailsModal?.rmaNumber}`}>
+      <Modal
+        isOpen={!!detailsModal}
+        onClose={() => { setDetailsModal(null); setDetailData(null); }}
+        title={`Return Details — ${detailsModal?.rmaNumber}`}
+      >
         {detailData && (
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-3">
@@ -300,6 +315,11 @@ const ReturnListPage = () => {
           </div>
         )}
       </Modal>
+
+       {/* Footer note */}
+      <p className="text-center text-xs text-slate-400 pt-2">
+        Role-based access &bull; Supplier&apos;s View
+      </p>
     </div>
   );
 };

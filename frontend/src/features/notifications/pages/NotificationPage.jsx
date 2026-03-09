@@ -250,12 +250,17 @@ const NotificationPage = () => {
         </div>
 
         <div className="border-t border-slate-100 px-6 py-4 flex justify-end gap-3">
-          <button onClick={handleCancel} disabled={saving} className="btn-secondary">Cancel</button>
+          {/* <button onClick={handleCancel} disabled={saving} className="btn-secondary">Cancel</button> */}
           <button onClick={handleSave} disabled={saving} className="btn-primary">
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
         </div>
       </div>
+
+       {/* Footer note */}
+      <p className="text-center text-xs text-slate-400 pt-2">
+        Role-based access &bull; Supplier&apos;s View
+      </p>
     </div>
   );
 };

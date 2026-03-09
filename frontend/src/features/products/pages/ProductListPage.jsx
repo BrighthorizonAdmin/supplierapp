@@ -11,16 +11,9 @@ const ProductCard = ({ product, onEdit }) => (
     {/* Image area */}
     <div className="relative bg-slate-100 h-44 flex items-center justify-center">
       <span className="absolute top-3 left-3 text-[10px] font-bold bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide">
-        {product.isActive ? 'ACTIVE' : 'INACTIVE'}
+        {product.isActive ? 'Instock' : 'outofstock'}
       </span>
-      {/* Edit button — top right */}
-      <button
-        onClick={() => onEdit(product._id)}
-        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-300 transition-colors"
-        title="Edit product"
-      >
-        <Pencil size={13} />
-      </button>
+     
       {product.imageUrl ? (
         <img src={product.imageUrl} alt={product.name} className="h-28 w-28 object-contain" />
       ) : (
@@ -66,6 +59,8 @@ const ProductListPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { list, categories, pagination, loading } = useSelector((s) => s.product);
+  console.log(list);
+  
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
@@ -132,14 +127,18 @@ const ProductListPage = () => {
               <ProductCard
                 key={product._id}
                 product={product}
-                onNavigate={(id) => navigate(`/products/${id}/edit`)}
-                onAdd={() => navigate('/products/new')}
+                onEdit={(id) => navigate(`/products/${id}/edit`)}
               />
             ))}
           </div>
           <Pagination pagination={pagination} onPageChange={setPage} />
         </>
       )}
+
+       {/* Footer note */}
+      <p className="text-center text-xs text-slate-400 pt-2">
+        Role-based access &bull; Supplier&apos;s View
+      </p>
     </div>
   );
 };

@@ -386,17 +386,17 @@ const DealerListPage = () => {
                       No dealers found
                     </td>
                   </tr>
-                ) : list.map((dealer) => (
+                ) : list.map((d) => (
                   <tr
-                    key={dealer._id}
-                    className={`transition-colors hover:bg-slate-50 ${selected.has(dealer._id) ? 'bg-primary-50/60' : ''}`}
+                    key={d._id}
+                    className={`transition-colors hover:bg-slate-50 ${selected.has(d._id) ? 'bg-primary-50/60' : ''}`}
                   >
                     {/* Checkbox */}
                     <td className="px-4 py-3.5">
                       <input
                         type="checkbox"
-                        checked={selected.has(dealer._id)}
-                        onChange={() => toggleRow(dealer._id)}
+                        checked={selected.has(d._id)}
+                        onChange={() => toggleRow(d._id)}
                         className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
                       />
                     </td>
@@ -404,14 +404,14 @@ const DealerListPage = () => {
                     {/* Dealer ID */}
                     <td className="px-4 py-3.5">
                       <span className="font-mono text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
-                        {dealer.dealerCode || '—'}
+                        {d.dealerId || '—'}
                       </span>
                     </td>
 
                     {/* Dealer Name */}
                     <td className="px-4 py-3.5">
                       <button
-                        onClick={() => navigate(`/dealers/${dealer._id}`)}
+                        onClick={() => navigate(`/dealers/${d._id}`)}
                         className="flex items-start gap-2.5 text-left group"
                       >
                         <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -419,10 +419,16 @@ const DealerListPage = () => {
                         </div>
                         <div>
                           <p className="font-semibold text-primary-600 group-hover:underline leading-snug">
-                            {dealer.businessName}
+                            {d.name}
                           </p>
                           <p className="text-xs text-slate-400 mt-0.5 leading-snug">
-                            {dealer.address?.street || dealer.ownerName || '—'}
+                            {d.address ||'—'}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5 leading-snug">
+                            {d.city || '—'}
+                          </p>
+                           <p className="text-xs text-slate-400 mt-0.5 leading-snug">
+                            {d.state || '—'}
                           </p>
                         </div>
                       </button>
@@ -434,10 +440,10 @@ const DealerListPage = () => {
                         <MapPin size={13} className="text-slate-400 mt-0.5 flex-shrink-0" />
                         <div>
                           <p className="text-slate-700 leading-snug">
-                            {[dealer.address?.city, dealer.address?.state].filter(Boolean).join(', ') || '—'}
+                            {[d.address, d.address?.city].filter(Boolean).join(', ') || '—'}
                           </p>
-                          {dealer.address?.pincode && (
-                            <p className="text-xs text-slate-400 mt-0.5">{dealer.address.pincode}</p>
+                          {d.address?.pincode && (
+                            <p className="text-xs text-slate-400 mt-0.5">{d.address.pincode}</p>
                           )}
                         </div>
                       </div>
@@ -445,28 +451,28 @@ const DealerListPage = () => {
 
                     {/* Contact */}
                     <td className="px-4 py-3.5">
-                      <p className="text-slate-700 leading-snug">{dealer.email || '—'}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{dealer.phone || ''}</p>
+                      <p className="text-slate-700 leading-snug">{d.email || '—'}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{d.phone || ''}</p>
                     </td>
 
                     {/* Credit Limit */}
                     <td className="px-4 py-3.5 font-semibold text-slate-800">
-                      {fmt(dealer.creditLimit)}
+                      {fmt(d.creditLimit)}
                     </td>
 
                     {/* Status */}
                     <td className="px-4 py-3.5">
-                      <StatusChip status={dealer.status} />
+                      <StatusChip status={d.status} />
                     </td>
 
                     {/* Actions */}
                     <td className="px-4 py-3.5">
                       <RowActions
-                        row={dealer}
-                        onView={(d) => navigate(`/dealers/${d._id}`)}
-                        onApprove={(d) => setApprovalModal(d)}
-                        onReject={(d) => setRejectModal(d)}
-                        onSuspend={(d) => dispatch(suspendDealer({ id: d._id, reason: 'Administrative action' }))}
+                        row={d}
+                        onView={(d2) => navigate(`/dealers/${d2._id}`)}
+                        onApprove={(d2) => setApprovalModal(d2)}
+                        onReject={(d2) => setRejectModal(d2)}
+                        onSuspend={(d2) => dispatch(suspendDealer({ id: d2._id, reason: 'Administrative action' }))}
                       />
                     </td>
                   </tr>
@@ -524,6 +530,11 @@ const DealerListPage = () => {
           </div>
         </form>
       </Modal>
+
+       {/* Footer note */}
+      <p className="text-center text-xs text-slate-400 pt-2">
+        Role-based access &bull; Supplier&apos;s View
+      </p>
     </div>
   );
 };

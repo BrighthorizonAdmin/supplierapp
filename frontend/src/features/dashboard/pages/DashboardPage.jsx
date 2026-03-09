@@ -76,7 +76,8 @@ const DashboardPage = () => {
         />
         <KPICard
           title="Total Orders"
-          value={(kpis?.activeOrders ?? 0).toLocaleString()}
+          // value={(kpis?.activeOrders ?? 0).toLocaleString()}
+          value={(recentOrders.length ?? 0).toLocaleString()}
           icon={ShoppingCart}
           color="blue"
           trend={12}
@@ -214,7 +215,7 @@ const DashboardPage = () => {
                           #{order._id?.slice(-6).toUpperCase()}
                         </td>
                         <td className="px-4 py-3.5 text-slate-700 font-medium">
-                          {order.dealerId?.businessName || order.dealer?.businessName || order.dealer?.name || '—'}
+                          {order.dealerId?.name || '—'}
                         </td>
                         <td className="px-4 py-3.5 text-slate-400 text-xs">
                           {order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy') : '—'}

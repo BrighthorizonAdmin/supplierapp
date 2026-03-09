@@ -364,6 +364,10 @@ const FinancePage = () => {
           </div>
         </div>
       </div>
+       {/* Footer note */}
+      <p className="text-center text-xs text-slate-400 pt-2">
+        Role-based access &bull; Supplier&apos;s View
+      </p>
     </div>
   );
 };

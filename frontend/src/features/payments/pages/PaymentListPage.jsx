@@ -5,7 +5,7 @@ import StatusBadge from '../../../components/ui/StatusBadge';
 import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { format } from 'date-fns';
-import { Search, Download } from 'lucide-react';
+import { Search, Download, X, Filter } from 'lucide-react';
 import api from '../../../services/api';
 
 const METHOD_LABELS_FOR_EXPORT = {
@@ -29,9 +29,18 @@ const PaymentListPage = () => {
   const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState(false);
 
+  // filter panel state
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterMethod, setFilterMethod] = useState('');
+  const hasFilters = filterStatus || filterMethod;
+
+  // view modal for payment details
+  const [viewModal, setViewModal] = useState(null);
+
   useEffect(() => {
-    dispatch(fetchPayments({ page, limit: 20, search }));
-  }, [dispatch, page, search]);
+    dispatch(fetchPayments({ page, limit: 20, search, status: filterStatus, method: filterMethod }));
+  }, [dispatch, page, search, filterStatus, filterMethod]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -76,6 +85,12 @@ const PaymentListPage = () => {
             />
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFiltersOpen((o) => !o)}
+              className="p-2 text-slate-500 hover:text-slate-700"
+            >
+              <Filter size={16} />
+            </button>
             <button
               onClick={handleExport}
               disabled={exporting}
@@ -158,10 +173,10 @@ const PaymentListPage = () => {
                   list.map((row, idx) => (
                     <tr key={row._id || idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap font-mono text-xs">
-                        {row.paymentNumber || '—'}
+                        {row.paymentId || '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
-                        {row.dealerId?.businessName || '—'}
+                        {row.dealerId?.name || '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
                         {row.invoiceId?.invoiceNumber || '—'}
@@ -236,6 +251,11 @@ const PaymentListPage = () => {
           </div>
         )}
       </Modal>
+
+       {/* Footer note */}
+      <p className="text-center text-xs text-slate-400 pt-2">
+        Role-based access &bull; Supplier&apos;s View
+      </p>
     </div>
   );
 };
