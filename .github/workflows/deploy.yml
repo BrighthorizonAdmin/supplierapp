@@ -1,0 +1,50 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to GCP Instance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.GCP_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to GCP
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.GCP_USERNAME }}@${{ secrets.GCP_HOST }} << 'EOF'
+            set -e
+
+            echo "==> Navigating to project directory"
+            cd ~/supplierapp
+
+            echo "==> Pulling latest changes from main"
+            git pull origin main
+
+            echo "==> Installing backend dependencies"
+            cd backend
+            npm install --production
+
+            echo "==> Installing frontend dependencies and building"
+            cd ../frontend
+            npm install
+            npm run build
+
+            echo "==> Restarting server with PM2"
+            cd ../backend
+            pm2 restart server || pm2 start server.js --name server
+
+            echo "==> Deployment complete!"
+          EOF
