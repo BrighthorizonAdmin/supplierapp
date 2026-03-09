@@ -35,7 +35,9 @@ const settingsRoutes = require('./modules/settings/settings.routes');
 const app = express();
 
 // Security headers
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP to allow frontend assets to load
+}));
 
 // CORS
 app.use(
@@ -82,6 +84,9 @@ if (env.isDev) {
 // Static file serving for uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Serve frontend static files
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), env: env.NODE_ENV });
@@ -105,7 +110,13 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 
-// 404 handler
+// Frontend routing - serve index.html for all non-API routes (React Router support)
+app.get('*', (req, res, next) => {
+  if (req.originalUrl.startsWith('/api')) return next();
+  res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
+});
+
+// 404 handler (only for unmatched API routes)
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });
 });
