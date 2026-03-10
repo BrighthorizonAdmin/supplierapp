@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import Footer from './Footer';
 import { useSocketEvents } from '../../hooks/useSocketEvents';
 
 const MainLayout = () => {
@@ -16,6 +17,7 @@ const MainLayout = () => {
         <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
+        <Footer />
       </div>
     </div>
   );

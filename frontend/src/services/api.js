@@ -2,7 +2,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 
 const api = axios.create({
-  baseURL: 'http://34.131.27.112:3001/api',
+  baseURL: 'http://localhost:3001/api',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -24,7 +24,9 @@ api.interceptors.response.use(
     const message = error.response?.data?.message || 'Something went wrong';
     const status = error.response?.status;
 
-    if (status === 401) {
+    const isLoginRequest = error.config?.url?.includes('/auth/login');
+
+    if (status === 401 && !isLoginRequest) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

@@ -11,6 +11,7 @@ const ProductFormPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { selected, loading } = useSelector((s) => s.product);
+
   const {
     register,
     handleSubmit,
@@ -25,19 +26,46 @@ const ProductFormPage = () => {
   }, [dispatch, id, isEdit]);
 
   useEffect(() => {
-    if (isEdit && selected) reset(selected);
+    if (isEdit && selected) {
+      reset({
+        ...selected,
+        // Map DB field names back to form field names
+        stockDate:      selected.openingStockDate
+                          ? new Date(selected.openingStockDate).toISOString().split('T')[0]
+                          : '',
+        stockQty:       selected.openingStockQty  || 0,
+        specWeight:     selected.specifications?.weight     || '',
+        specDimensions: selected.specifications?.dimensions || '',
+        specColor:      selected.specifications?.color      || '',
+      });
+    }
   }, [selected, isEdit, reset]);
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
     if (isEdit && !isDirty) {
       toast('No changes to save.', { icon: 'ℹ️' });
       return;
     }
-    const action = isEdit ? updateProduct({ id, ...data }) : createProduct(data);
-    dispatch(action).then((res) => {
-      if (!res.error) navigate('/products');
-      else if (res.payload) toast.error(res.payload);
-    });
+
+    // Map form field names to Product schema field names
+    const { stockDate, stockQty, specWeight, specDimensions, specColor, ...productData } = data;
+
+    productData.openingStockDate = stockDate || undefined;
+    productData.openingStockQty  = Number(stockQty) || 0;
+    productData.specifications   = {
+      weight:     specWeight     || '',
+      dimensions: specDimensions || '',
+      color:      specColor      || '',
+    };
+
+    const action = isEdit ? updateProduct({ id, ...productData }) : createProduct(productData);
+    const res = await dispatch(action);
+
+    if (!res.error) {
+      navigate('/products');
+    } else if (res.payload) {
+      toast.error(res.payload);
+    }
   };
 
   const F = ({ label, name, type = 'text', required = false, options, step }) => (
@@ -74,20 +102,18 @@ const ProductFormPage = () => {
           {/* left side */}
           <div className="space-y-4">
             <F label="Product Name" name="name" required />
-            <F label="Category" name="category" />
+            <F label="Category" name="category" required />
             <F label="MRP" name="mrp" type="number" step="0.01" />
             <F label="Tax" name="taxRate" type="number" />
-            <F label="Base Price" name="basePrice" type="number" step="0.01" />
-            <div className="mt-4">
-              <button
-                type="button"
-                className="w-full py-2 bg-pink-100 text-pink-700 rounded-lg font-medium"
-              >
-                +Bulk upload
-              </button>
-              <p className="text-xs text-slate-500 mt-1">
-                Bulk upload new products via CSV / PDF file
-              </p>
+            <F label="Base Price" name="basePrice" type="number" step="0.01" required />
+            <div>
+              <label className="label">Description</label>
+              <textarea
+                rows={4}
+                className="input resize-none"
+                placeholder="Enter product description..."
+                {...register('description')}
+              />
             </div>
           </div>
 
