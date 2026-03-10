@@ -25,8 +25,12 @@ const getDealers = async (query = {}) => {
       { businessName: { $regex: query.search, $options: 'i' } },
       { ownerName: { $regex: query.search, $options: 'i' } },
       { email: { $regex: query.search, $options: 'i' } },
+      { phone: { $regex: query.search, $options: 'i' } },
       { dealerCode: { $regex: query.search, $options: 'i' } },
       { gstNumber: { $regex: query.search, $options: 'i' } },
+      { 'address.city': { $regex: query.search, $options: 'i' } },
+      { 'address.state': { $regex: query.search, $options: 'i' } },
+      { 'address.pincode': { $regex: query.search, $options: 'i' } },
     ];
   }
 

@@ -80,6 +80,23 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    leadTime: {
+      type: String,
+      trim: true,
+    },
+    openingStockQty: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    openingStockDate: {
+      type: Date,
+    },
+    specifications: {
+      weight:     { type: String, trim: true },
+      dimensions: { type: String, trim: true },
+      color:      { type: String, trim: true },
+    },
     images: [imageSchema],
     tags: [{ type: String, trim: true, lowercase: true }],
     isActive: {

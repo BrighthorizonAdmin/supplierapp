@@ -195,8 +195,13 @@ const DealerListPage = () => {
 
   const handleExport = async () => {
     try {
-      const res = await api.get('/dealers', { params: { limit: 10000 } });
-      const dealers = res.data.data || [];
+      let dealers;
+      if (selected.size > 0) {
+        dealers = list.filter((d) => selected.has(d._id));
+      } else {
+        const res = await api.get('/dealers', { params: { limit: 10000 } });
+        dealers = res.data.data || [];
+      }
       const headers = ['Dealer Code', 'Business Name', 'Owner', 'Email', 'Phone', 'City', 'State', 'Credit Limit', 'Status'];
       const rows = dealers.map((d) => [
         d.dealerCode || '',
@@ -214,7 +219,8 @@ const DealerListPage = () => {
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `dealers-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
+      const suffix = selected.size > 0 ? `selected-${selected.size}` : 'all';
+      a.href = url; a.download = `dealers-${suffix}-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
       URL.revokeObjectURL(url);
     } catch (err) { console.error('Export failed', err); }
   };
