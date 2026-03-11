@@ -549,12 +549,7 @@ const InventoryPage = () => {
 
         <Pagination pagination={pagination} onPageChange={setPage} />
 
-        {/* Footer links */}
-        <div className="px-4 py-3 border-t border-slate-100 flex items-center gap-3">
-          <button className="text-xs text-primary-600 hover:underline">Role - based access</button>
-          <span className="text-slate-300">·</span>
-          <button className="text-xs text-primary-600 hover:underline">Supplier's View</button>
-        </div>
+ 
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import {
   TrendingUp, CheckCircle, Clock, AlertTriangle,
   MapPin, ChevronDown, Store, X,
 } from 'lucide-react';
-import { fetchDealers, approveDealer, rejectDealer, suspendDealer } from '../dealerSlice';
+import { fetchDealers, approveDealer, rejectDealer, suspendDealer, updateDealer } from '../dealerSlice';
 import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { useForm } from 'react-hook-form';
@@ -54,7 +54,7 @@ const StatsCard = ({ label, value, icon: Icon, cardCls, iconCls, valueCls }) => 
 );
 
 // ─── Per-row action menu ───────────────────────────────────────────────────────
-const RowActions = ({ row, onView, onApprove, onReject, onSuspend }) => {
+const RowActions = ({ row, onView, onEdit, onApprove, onReject, onSuspend }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -83,10 +83,10 @@ const RowActions = ({ row, onView, onApprove, onReject, onSuspend }) => {
         {open && (
           <div className="absolute right-0 top-8 w-44 bg-white rounded-xl shadow-lg border border-slate-200 z-20 overflow-hidden py-1">
             <button
-              onClick={() => { setOpen(false); onView(row); }}
+              onClick={() => { setOpen(false); onEdit(row); }}
               className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
             >
-              View Details
+              Edit Details
             </button>
             {row.status === 'pending' && <>
               <button
@@ -131,6 +131,8 @@ const DealerListPage = () => {
   const [selected,     setSelected]     = useState(new Set());
   const [approvalModal,setApprovalModal]= useState(null);
   const [rejectModal,  setRejectModal]  = useState(null);
+  const [editModal,    setEditModal]    = useState(null);
+  const [editCreditLimit, setEditCreditLimit] = useState(0);
   const [counts, setCounts] = useState({ total: 0, active: 0, pending: 0, suspended: 0 });
 
   const { register, handleSubmit, reset } = useForm();
@@ -168,6 +170,13 @@ const DealerListPage = () => {
     dispatch(approveDealer({ id: approvalModal._id, ...data })).then(() => {
       setApprovalModal(null);
       reset();
+    });
+  };
+
+  // Edit (credit limit) handler
+  const handleEdit = () => {
+    dispatch(updateDealer({ id: editModal._id, creditLimit: Number(editCreditLimit) })).then(() => {
+      setEditModal(null);
     });
   };
 
@@ -410,7 +419,7 @@ const DealerListPage = () => {
                     {/* Dealer ID */}
                     <td className="px-4 py-3.5">
                       <span className="font-mono text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
-                        {d.dealerId || '—'}
+                        {d.dealerCode || '—'}
                       </span>
                     </td>
 
@@ -425,16 +434,10 @@ const DealerListPage = () => {
                         </div>
                         <div>
                           <p className="font-semibold text-primary-600 group-hover:underline leading-snug">
-                            {d.name}
+                            {d.businessName || '—'}
                           </p>
                           <p className="text-xs text-slate-400 mt-0.5 leading-snug">
-                            {d.address ||'—'}
-                          </p>
-                          <p className="text-xs text-slate-400 mt-0.5 leading-snug">
-                            {d.city || '—'}
-                          </p>
-                           <p className="text-xs text-slate-400 mt-0.5 leading-snug">
-                            {d.state || '—'}
+                            {d.ownerName || '—'}
                           </p>
                         </div>
                       </button>
@@ -446,10 +449,10 @@ const DealerListPage = () => {
                         <MapPin size={13} className="text-slate-400 mt-0.5 flex-shrink-0" />
                         <div>
                           <p className="text-slate-700 leading-snug">
-                            {[d.address, d.address?.city].filter(Boolean).join(', ') || '—'}
+                            {[d.address?.street, d.address?.city].filter(Boolean).join(', ') || '—'}
                           </p>
-                          {d.address?.pincode && (
-                            <p className="text-xs text-slate-400 mt-0.5">{d.address.pincode}</p>
+                          {d.address?.state && (
+                            <p className="text-xs text-slate-400 mt-0.5">{d.address.state}{d.address?.pincode ? ` - ${d.address.pincode}` : ''}</p>
                           )}
                         </div>
                       </div>
@@ -476,6 +479,7 @@ const DealerListPage = () => {
                       <RowActions
                         row={d}
                         onView={(d2) => navigate(`/dealers/${d2._id}`)}
+                        onEdit={(d2) => { setEditCreditLimit(d2.creditLimit ?? 0); setEditModal(d2); }}
                         onApprove={(d2) => setApprovalModal(d2)}
                         onReject={(d2) => setRejectModal(d2)}
                         onSuspend={(d2) => dispatch(suspendDealer({ id: d2._id, reason: 'Administrative action' }))}
@@ -490,6 +494,30 @@ const DealerListPage = () => {
 
         <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
+
+      {/* ── Edit modal (credit limit only) ── */}
+      <Modal
+        isOpen={!!editModal}
+        onClose={() => setEditModal(null)}
+        title={`Edit ${editModal?.businessName}`}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="label">Credit Limit (₹)</label>
+            <input
+              type="number"
+              className="input"
+              min={0}
+              value={editCreditLimit}
+              onChange={(e) => setEditCreditLimit(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-3 justify-end pt-1">
+            <button type="button" onClick={() => setEditModal(null)} className="btn-secondary">Cancel</button>
+            <button type="button" onClick={handleEdit} className="btn-primary">Save Changes</button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Approve modal ── */}
       <Modal
@@ -537,10 +565,7 @@ const DealerListPage = () => {
         </form>
       </Modal>
 
-       {/* Footer note */}
-      <p className="text-center text-xs text-slate-400 pt-2">
-        Role-based access &bull; Supplier&apos;s View
-      </p>
+
     </div>
   );
 };

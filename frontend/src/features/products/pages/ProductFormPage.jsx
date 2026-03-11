@@ -144,6 +144,7 @@ const ProductFormPage = () => {
                   <option value="">Weight</option>
                   <option value="kg">kg</option>
                   <option value="g">g</option>
+                  <option value="g">Units</option>
                 </select>
                 <select className="input" {...register('specDimensions')}>
                   <option value="">Dimensions</option>

@@ -139,7 +139,7 @@ const getInventory = async (query = {}) => {
           basePrice: '$basePrice',
         },
         warehouseId: { $arrayElemAt: ['$whArr', 0] },
-        quantityOnHand:    { $ifNull: ['$invRecords.quantityOnHand',    0] },
+        quantityOnHand:    { $ifNull: ['$invRecords.quantityOnHand',    '$openingStockQty'] },
         quantityAllocated: { $ifNull: ['$invRecords.quantityAllocated', 0] },
         reorderLevel:      { $ifNull: ['$invRecords.reorderLevel',      10] },
         lastRestockedAt:   '$invRecords.lastRestockedAt',

@@ -48,6 +48,14 @@ export const suspendDealer = createAsyncThunk('dealer/suspend', async ({ id, rea
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
+export const updateDealer = createAsyncThunk('dealer/update', async ({ id, ...body }, { rejectWithValue }) => {
+  try {
+    const { data } = await api.put(`/dealers/${id}`, body);
+    toast.success('Dealer updated successfully');
+    return data.data;
+  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+});
+
 export const fetchDealerStats = createAsyncThunk('dealer/stats', async (id, { rejectWithValue }) => {
   try {
     const { data } = await api.get(`/dealers/${id}/stats`);
@@ -96,6 +104,11 @@ const dealerSlice = createSlice({
       .addCase(suspendDealer.fulfilled, (state, action) => {
         const idx = state.list.findIndex((d) => d._id === action.payload._id);
         if (idx !== -1) state.list[idx] = action.payload;
+      })
+      .addCase(updateDealer.fulfilled, (state, action) => {
+        const idx = state.list.findIndex((d) => d._id === action.payload._id);
+        if (idx !== -1) state.list[idx] = action.payload;
+        if (state.selected?._id === action.payload._id) state.selected = action.payload;
       });
   },
 });
