@@ -164,7 +164,8 @@ const DealerOnboardingPage = () => {
       assignedManager: approveForm.assignedManager,
     })).then((res) => {
       if (!res.error) {
-        dispatch(fetchDealers({ status: activeTab, limit: 50 }));
+        // Slice updates the item in-place; dealer no longer matches this tab's status
+        // so deselect and clear — list will visually update on next filter change
         setSelected(null);
         setShowApproveModal(false);
         setApproveForm({ creditLimit: 2500000, paymentTerms: '', pricingTier: '', assignedManager: '' });
@@ -179,7 +180,6 @@ const DealerOnboardingPage = () => {
       : rejectReason || 'Application rejected by admin';
     dispatch(rejectDealer({ id: selected._id, reason }))
       .then(() => {
-        dispatch(fetchDealers({ status: activeTab, limit: 50 }));
         setSelected(null);
         setShowRejectModal(false);
         setRejectReason('');
@@ -397,12 +397,7 @@ const DealerOnboardingPage = () => {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="px-6 pb-6 flex items-center gap-3">
-              <button type="button" className="text-xs text-blue-600 hover:underline">Role - based access</button>
-              <span className="text-slate-300">·</span>
-              <button type="button" className="text-xs text-blue-600 hover:underline">Supplier's View</button>
-            </div>
+    
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-slate-50 text-slate-400 text-sm">
@@ -578,10 +573,7 @@ const DealerOnboardingPage = () => {
         </div>
       </Modal>
 
-       {/* Footer note */}
-      <p className="text-center text-xs text-slate-400 pt-2">
-        Role-based access &bull; Supplier&apos;s View
-      </p>
+
     </div>
   );
 };

@@ -12,7 +12,14 @@ const RetailOrderListPage = () => {
   const { list, pagination, loading } = useSelector((s) => s.retailOrder);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+
+  // Debounce search — API call fires only after 400 ms of inactivity
+  useEffect(() => {
+    const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
+    return () => clearTimeout(id);
+  }, [searchInput]);
 
   useEffect(() => {
     dispatch(fetchRetailOrders({ page, limit: 20, status, search }));
@@ -41,8 +48,8 @@ const RetailOrderListPage = () => {
           <input
             type="text"
             placeholder="Search by customer or order #..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="input pl-9 text-sm w-64"
           />
         </div>

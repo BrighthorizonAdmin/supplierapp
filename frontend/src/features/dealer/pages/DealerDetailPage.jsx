@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchDealerById, fetchDealerStats, clearSelected } from '../dealerSlice';
@@ -21,29 +21,35 @@ const DealerDetailPage = () => {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [payments, setPayments] = useState([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
+  // Track which tabs have already been fetched to avoid refetching on switch-back
+  const fetchedTabs = useRef(new Set());
 
   useEffect(() => {
     dispatch(clearSelected());
     dispatch(fetchDealerById(id));
     dispatch(fetchDealerStats(id));
+    fetchedTabs.current = new Set(); // reset cache when dealer id changes
   }, [dispatch, id]);
 
   useEffect(() => {
-    if (activeTab === 'Documents') {
+    if (activeTab === 'Documents' && !fetchedTabs.current.has('Documents')) {
+      fetchedTabs.current.add('Documents');
       setDocsLoading(true);
       api.get(`/documents/dealer/${id}`)
         .then((res) => setDocuments(res.data.data || []))
         .catch(() => setDocuments([]))
         .finally(() => setDocsLoading(false));
     }
-    if (activeTab === 'Orders') {
+    if (activeTab === 'Orders' && !fetchedTabs.current.has('Orders')) {
+      fetchedTabs.current.add('Orders');
       setOrdersLoading(true);
       api.get('/orders', { params: { dealerId: id, limit: 10 } })
         .then((res) => setOrders(res.data.data || []))
         .catch(() => setOrders([]))
         .finally(() => setOrdersLoading(false));
     }
-    if (activeTab === 'Payments') {
+    if (activeTab === 'Payments' && !fetchedTabs.current.has('Payments')) {
+      fetchedTabs.current.add('Payments');
       setPaymentsLoading(true);
       api.get('/payments', { params: { dealerId: id, limit: 10 } })
         .then((res) => setPayments(res.data.data || []))

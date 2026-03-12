@@ -59,13 +59,21 @@ const ProductListPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { list, categories, pagination, loading } = useSelector((s) => s.product);
-  console.log(list);
+ 
   
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
 
   useEffect(() => { dispatch(fetchCategories()); }, [dispatch]);
+
+  // Debounce search — API call fires only after 400 ms of inactivity
+  useEffect(() => {
+    const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
+    return () => clearTimeout(id);
+  }, [searchInput]);
+
   useEffect(() => {
     dispatch(fetchProducts({ page, limit: 20, search, category }));
   }, [dispatch, page, search, category]);
@@ -97,8 +105,8 @@ const ProductListPage = () => {
             type="text"
             placeholder="Search products..."
             className="input pl-9 text-sm"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
         <select
@@ -135,10 +143,7 @@ const ProductListPage = () => {
         </>
       )}
 
-       {/* Footer note */}
-      <p className="text-center text-xs text-slate-400 pt-2">
-        Role-based access &bull; Supplier&apos;s View
-      </p>
+
     </div>
   );
 };

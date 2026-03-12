@@ -66,6 +66,12 @@ const inventorySlice = createSlice({
       .addCase(fetchInventoryStats.pending,  (state) => { state.statsLoading = true; })
       .addCase(fetchInventoryStats.fulfilled, (state, action) => { state.statsLoading = false; state.stats = action.payload; })
       .addCase(fetchInventoryStats.rejected,  (state) => { state.statsLoading = false; })
+      .addCase(adjustStock.fulfilled, (state, action) => {
+        const updated = action.payload;
+        if (!updated?._id) return;
+        const idx = state.list.findIndex((i) => i._id === updated._id);
+        if (idx !== -1) state.list[idx] = updated;
+      })
       .addCase(fetchWarehouses.fulfilled,    (state, action) => { state.warehouses = action.payload; })
       .addCase(createWarehouse.fulfilled,    (state, action) => { state.warehouses.push(action.payload); });
   },
