@@ -59,7 +59,7 @@ const ProductListPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { list, categories, pagination, loading } = useSelector((s) => s.product);
-  console.log(list);
+ 
   
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -135,10 +135,7 @@ const ProductListPage = () => {
         </>
       )}
 
-       {/* Footer note */}
-      <p className="text-center text-xs text-slate-400 pt-2">
-        Role-based access &bull; Supplier&apos;s View
-      </p>
+
     </div>
   );
 };

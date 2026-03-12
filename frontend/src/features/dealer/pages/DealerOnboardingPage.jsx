@@ -397,12 +397,7 @@ const DealerOnboardingPage = () => {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="px-6 pb-6 flex items-center gap-3">
-              <button type="button" className="text-xs text-blue-600 hover:underline">Role - based access</button>
-              <span className="text-slate-300">·</span>
-              <button type="button" className="text-xs text-blue-600 hover:underline">Supplier's View</button>
-            </div>
+    
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-slate-50 text-slate-400 text-sm">
@@ -578,10 +573,7 @@ const DealerOnboardingPage = () => {
         </div>
       </Modal>
 
-       {/* Footer note */}
-      <p className="text-center text-xs text-slate-400 pt-2">
-        Role-based access &bull; Supplier&apos;s View
-      </p>
+
     </div>
   );
 };
