@@ -169,14 +169,22 @@ const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
 const InventoryPage = () => {
   const dispatch = useDispatch();
   const { list, warehouses, stats, pagination, loading } = useSelector((s) => s.inventory);
+  const { list: products } = useSelector((s) => s.product);
 
   const [page,        setPage]        = useState(1);
+  const [searchInput, setSearchInput] = useState('');
   const [search,      setSearch]      = useState('');
   const [stockTab,    setStockTab]    = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [category,    setCategory]    = useState('');
   const [showModal,   setShowModal]   = useState(false);
   const [adjusting,   setAdjusting]   = useState(false);
+
+  // Debounce search — API call fires only after 400 ms of inactivity
+  useEffect(() => {
+    const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
+    return () => clearTimeout(id);
+  }, [searchInput]);
 
   // Fetch stats, warehouses, products once
   useEffect(() => {
@@ -195,10 +203,10 @@ const InventoryPage = () => {
     dispatch(fetchInventory(params));
   }, [dispatch, page, stockTab, warehouseId, search, category]);
 
-  // Distinct categories from current list
+  // Distinct categories from all products (independent of table filters/pagination)
   const categories = useMemo(
-    () => [...new Set(list.map((i) => i.productId?.category).filter(Boolean))],
-    [list]
+    () => [...new Set(products?.map((p) => p?.category)?.filter(Boolean))]?.sort(),
+    [products]
   );
 
   // Donut data
@@ -220,12 +228,8 @@ const InventoryPage = () => {
     setAdjusting(false);
     if (!res.error) {
       setShowModal(false);
+      // List item is updated in-place by the slice; only stats aggregates need a refresh
       dispatch(fetchInventoryStats());
-      const params = { page, limit: 20 };
-      if (stockTab) params.status = stockTab;
-      if (search)   params.search = search;
-      if (category) params.category = category;
-      dispatch(fetchInventory(params));
     }
   };
 
@@ -395,11 +399,8 @@ const InventoryPage = () => {
     <input
       type="text"
       placeholder="Search Product Name, Dealer, SKU..."
-      value={search}
-      onChange={(e) => {
-        setSearch(e.target.value);
-        setPage(1);
-      }}
+      value={searchInput}
+      onChange={(e) => setSearchInput(e.target.value)}
       className="input pl-8 py-2 text-sm w-full"
     />
   </div>

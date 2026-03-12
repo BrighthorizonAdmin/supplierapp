@@ -31,7 +31,7 @@ const adjustStock = async (productId, warehouseId, quantity, type = 'add', userI
       $inc: { quantityOnHand: delta },
       ...(type === 'add' ? { lastRestockedAt: new Date(), lastRestockedBy: userId } : {}),
     },
-    { new: true, upsert: type === 'add', ...opts }
+    { new: true, upsert: type === 'add', setDefaultsOnInsert: true, ...opts }
   );
 
   if (!inv) throw new AppError('Insufficient stock for this operation', 400);
@@ -85,13 +85,7 @@ const getInventory = async (query = {}) => {
 
   // ── Product-level filters ──────────────────────────────────────────────────
   const productMatch = {};
-  if (query.search) {
-    const re = new RegExp(query.search, 'i');
-    productMatch.$or = [
-      { name: re }, { productCode: re }, { sku: re }, { category: re }, { brand: re },
-    ];
-  }
-  if (query.category) productMatch.category = query.category;
+  if (query.category)  productMatch.category = query.category;
   if (query.productId) productMatch._id = new mongoose.Types.ObjectId(query.productId);
 
   // ── Aggregation pipeline (product-centric left join) ──────────────────────
@@ -160,11 +154,56 @@ const getInventory = async (query = {}) => {
       },
     },
 
+    // ── Full-column search (runs after all joins + virtual fields) ────────────
+    ...(query.search ? (() => {
+      const re  = new RegExp(query.search, 'i');
+      const sl  = query.search.trim().toLowerCase();
+      const num = parseFloat(query.search.trim());
+      const isNumeric = !isNaN(num) && query.search.trim() !== '';
+
+      const orClauses = [
+        // Product / SKU column
+        { 'productId.name':        re },
+        { 'productId.productCode': re },
+        { 'productId.category':    re },
+        // Location column
+        { 'warehouseId.name':             re },
+        { 'warehouseId.code':             re },
+        { 'warehouseId.address.city':     re },
+        { 'warehouseId.address.state':    re },
+      ];
+
+      // Numeric columns (Available, Allocated, Total, Unit Price)
+      if (isNumeric) {
+        orClauses.push(
+          { quantityAvailable: num },
+          { quantityAllocated: num },
+          { quantityOnHand:    num },
+          { 'productId.basePrice': num },
+        );
+      }
+
+      // Stock Status column — match against the derived label strings
+      if ('out of stock'.includes(sl))              orClauses.push({ quantityOnHand: { $lte: 0 } });
+      if ('low stock'.includes(sl))                 orClauses.push({ isLowStock: true,  quantityOnHand: { $gt: 0 } });
+      if ('in stock'.includes(sl) || 'in-stock'.includes(sl))
+                                                    orClauses.push({ isLowStock: false, quantityOnHand: { $gt: 0 } });
+
+      // Forecast & Demand column — match against the derived label strings
+      if ('replenishment'.includes(sl))             orClauses.push({ quantityOnHand: { $lte: 0 } });
+      if ('projected'.includes(sl) || 'spike'.includes(sl))
+                                                    orClauses.push({ isLowStock: true,  quantityOnHand: { $gt: 0 } });
+      if ('stable'.includes(sl) || 'demand'.includes(sl))
+                                                    orClauses.push({ isLowStock: false, quantityOnHand: { $gt: 0 } });
+
+      return [{ $match: { $or: orClauses } }];
+    })() : []),
+
     // Stock status filter (runs after virtual fields are computed)
     ...(query.status === 'low-stock' || query.lowStock === 'true'
       ? [{ $match: { quantityOnHand: { $gt: 0 }, isLowStock: true } }]
       : query.status === 'out-of-stock'
-      ? [{ $match: { quantityOnHand: 0 } }]
+      ? [{ $match: { quantityOnHand: { $not: { $gt: 0 } } } }]
       : query.status === 'high-stock'
       ? [{ $match: { $expr: { $gt: ['$quantityAvailable', { $multiply: ['$reorderLevel', 2] }] } } }]
       : []),
@@ -183,43 +222,66 @@ const getInventoryStats = async () => {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const ninetyDaysAgo  = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
-  const lowStockExpr  = { $lte: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] };
-  const highStockExpr = { $gt:  [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] };
+  // Distribution aggregate: same Product-centric left-join logic as the list endpoint
+  // so pie chart matches what the table shows (uses openingStockQty as fallback)
+  const distributionAgg = Product.aggregate([
+    { $match: { isActive: true } },
+    {
+      $lookup: {
+        from: 'inventories',
+        localField: '_id',
+        foreignField: 'productId',
+        as: 'invRecords',
+      },
+    },
+    { $unwind: { path: '$invRecords', preserveNullAndEmptyArrays: true } },
+    {
+      $addFields: {
+        _qoh:    { $ifNull: ['$invRecords.quantityOnHand',    { $ifNull: ['$openingStockQty', 0] }] },
+        _qalloc: { $ifNull: ['$invRecords.quantityAllocated', 0] },
+        _rl:     { $ifNull: ['$invRecords.reorderLevel',      10] },
+      },
+    },
+    {
+      $addFields: {
+        _qavail: { $subtract: ['$_qoh', '$_qalloc'] },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        inStock:    { $sum: { $cond: [{ $and: [{ $gt: ['$_qoh', 0] }, { $gt:  ['$_qavail', '$_rl'] }] }, 1, 0] } },
+        lowStock:   { $sum: { $cond: [{ $and: [{ $gt: ['$_qoh', 0] }, { $lte: ['$_qavail', '$_rl'] }] }, 1, 0] } },
+        outOfStock: { $sum: { $cond: [{ $lte: ['$_qoh', 0] }, 1, 0] } },
+      },
+    },
+  ]);
 
   const [
-    totalAgg, totalCatalogSKUs, stockedProductIds,
-    lowStockCount, outOfStockRecords, inStockCount,
+    totalAgg, totalCatalogSKUs, distResult,
     fastMovingCount, slowMovingCount,
   ] = await Promise.all([
     Inventory.aggregate([{ $group: { _id: null, totalOnHand: { $sum: '$quantityOnHand' }, totalAllocated: { $sum: '$quantityAllocated' } } }]),
-    // Total SKUs = all active products in catalog (not just those with inventory records)
     Product.countDocuments({ isActive: true }),
-    // Products that have at least one inventory record
-    Inventory.distinct('productId').then((ids) => ids.length),
-    Inventory.countDocuments({ quantityOnHand: { $gt: 0 }, $expr: lowStockExpr }),
-    Inventory.countDocuments({ quantityOnHand: 0 }),
-    Inventory.countDocuments({ quantityOnHand: { $gt: 0 }, $expr: highStockExpr }),
+    distributionAgg,
     Inventory.countDocuments({ lastRestockedAt: { $gte: thirtyDaysAgo } }),
     Inventory.countDocuments({ $or: [{ lastRestockedAt: { $lt: ninetyDaysAgo } }, { lastRestockedAt: null }] }),
   ]);
 
   const totalOnHand    = totalAgg[0]?.totalOnHand    || 0;
   const totalAllocated = totalAgg[0]?.totalAllocated || 0;
-
-  // Products with no inventory record are effectively out of stock
-  const unstockedProducts = Math.max(0, totalCatalogSKUs - stockedProductIds);
-  const outOfStockCount   = outOfStockRecords + unstockedProducts;
+  const dist           = distResult[0] || { inStock: 0, lowStock: 0, outOfStock: 0 };
 
   return {
     totalOnHand,
     totalAllocated,
     totalSKUs:      totalCatalogSKUs,
-    lowStockCount,
-    outOfStockCount,
-    inStockCount,
+    lowStockCount:  dist.lowStock,
+    outOfStockCount: dist.outOfStock,
+    inStockCount:   dist.inStock,
     fastMovingCount,
     slowMovingCount,
-    distribution: { inStock: inStockCount, lowStock: lowStockCount, outOfStock: outOfStockCount },
+    distribution: { inStock: dist.inStock, lowStock: dist.lowStock, outOfStock: dist.outOfStock },
   };
 };
 

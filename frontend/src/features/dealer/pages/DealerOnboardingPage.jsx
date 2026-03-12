@@ -164,7 +164,8 @@ const DealerOnboardingPage = () => {
       assignedManager: approveForm.assignedManager,
     })).then((res) => {
       if (!res.error) {
-        dispatch(fetchDealers({ status: activeTab, limit: 50 }));
+        // Slice updates the item in-place; dealer no longer matches this tab's status
+        // so deselect and clear — list will visually update on next filter change
         setSelected(null);
         setShowApproveModal(false);
         setApproveForm({ creditLimit: 2500000, paymentTerms: '', pricingTier: '', assignedManager: '' });
@@ -179,7 +180,6 @@ const DealerOnboardingPage = () => {
       : rejectReason || 'Application rejected by admin';
     dispatch(rejectDealer({ id: selected._id, reason }))
       .then(() => {
-        dispatch(fetchDealers({ status: activeTab, limit: 50 }));
         setSelected(null);
         setShowRejectModal(false);
         setRejectReason('');

@@ -80,9 +80,9 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    leadTime: {
-      type: String,
-      trim: true,
+    moq: {
+      type: Number,
+      min: [0, 'MOQ cannot be negative'],
     },
     openingStockQty: {
       type: Number,
