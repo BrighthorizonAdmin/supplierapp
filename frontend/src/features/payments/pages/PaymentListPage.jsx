@@ -26,6 +26,7 @@ const PaymentListPage = () => {
   const dispatch = useDispatch();
   const { list, pagination, loading } = useSelector((s) => s.payment);
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState(false);
 
@@ -37,6 +38,12 @@ const PaymentListPage = () => {
 
   // view modal for payment details
   const [viewModal, setViewModal] = useState(null);
+
+  // Debounce search — API call fires only after 400 ms of inactivity
+  useEffect(() => {
+    const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
+    return () => clearTimeout(id);
+  }, [searchInput]);
 
   useEffect(() => {
     dispatch(fetchPayments({ page, limit: 20, search, status: filterStatus, method: filterMethod }));
@@ -79,8 +86,8 @@ const PaymentListPage = () => {
             <input
               type="text"
               placeholder="Search payment ID or dealer..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
             />
           </div>

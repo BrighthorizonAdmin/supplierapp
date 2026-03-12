@@ -6,7 +6,7 @@ import {
   TrendingUp, CheckCircle, Clock, AlertTriangle,
   MapPin, ChevronDown, Store, X,
 } from 'lucide-react';
-import { fetchDealers, approveDealer, rejectDealer, suspendDealer, updateDealer } from '../dealerSlice';
+import { fetchDealers, fetchDealerCounts, approveDealer, rejectDealer, suspendDealer, updateDealer } from '../dealerSlice';
 import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { useForm } from 'react-hook-form';
@@ -121,10 +121,11 @@ const RowActions = ({ row, onView, onEdit, onApprove, onReject, onSuspend }) => 
 const DealerListPage = () => {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
-  const { list, pagination, loading } = useSelector((s) => s.dealer);
+  const { list, pagination, loading, counts, countsFetched } = useSelector((s) => s.dealer);
 
   const [activeTab,    setActiveTab]    = useState('all');
   const [page,         setPage]         = useState(1);
+  const [searchInput,  setSearchInput]  = useState('');
   const [search,       setSearch]       = useState('');
   const [showFilters,  setShowFilters]  = useState(false);
   const [bizType,      setBizType]      = useState('');
@@ -133,37 +134,31 @@ const DealerListPage = () => {
   const [rejectModal,  setRejectModal]  = useState(null);
   const [editModal,    setEditModal]    = useState(null);
   const [editCreditLimit, setEditCreditLimit] = useState(0);
-  const [counts, setCounts] = useState({ total: 0, active: 0, pending: 0, suspended: 0 });
 
   const { register, handleSubmit, reset } = useForm();
   const tabStatus = TABS.find((t) => t.id === activeTab)?.status ?? '';
 
-  // Fetch list
+  // Debounce search input — only fires API call after 400 ms of inactivity
+  useEffect(() => {
+    const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
+    return () => clearTimeout(id);
+  }, [searchInput]);
+
+  // Fetch list — abort the previous in-flight request on every filter change
   useEffect(() => {
     const params = { page, limit: 20 };
     if (tabStatus)  params.status       = tabStatus;
     if (search)     params.search       = search;
     if (bizType)    params.businessType = bizType;
-    dispatch(fetchDealers(params));
+    const promise = dispatch(fetchDealers(params));
     setSelected(new Set());
+    return () => promise.abort();
   }, [dispatch, activeTab, page, search, bizType]);
 
-  // Fetch aggregate counts (limit:1 → just reads pagination.total)
+  // Fetch aggregate counts once per session; Redux caches them across remounts
   useEffect(() => {
-    Promise.all([
-      api.get('/dealers', { params: { limit: 1 } }),
-      api.get('/dealers', { params: { limit: 1, status: 'active' } }),
-      api.get('/dealers', { params: { limit: 1, status: 'pending' } }),
-      api.get('/dealers', { params: { limit: 1, status: 'suspended' } }),
-    ]).then(([tot, act, pnd, sus]) => {
-      setCounts({
-        total:     tot.data.pagination?.total ?? 0,
-        active:    act.data.pagination?.total ?? 0,
-        pending:   pnd.data.pagination?.total ?? 0,
-        suspended: sus.data.pagination?.total ?? 0,
-      });
-    }).catch(() => {});
-  }, []);
+    if (!countsFetched) dispatch(fetchDealerCounts());
+  }, [dispatch, countsFetched]);
 
   // Approve handler
   const handleApprove = (data) => {
@@ -284,7 +279,7 @@ const DealerListPage = () => {
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setPage(1); setSearch(''); setBizType(''); }}
+              onClick={() => { setActiveTab(tab.id); setPage(1); setSearchInput(''); setSearch(''); setBizType(''); }}
               className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-primary-600 text-primary-600'
@@ -312,8 +307,8 @@ const DealerListPage = () => {
             <input
               type="text"
               placeholder="Search by name, ID or contact..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="input pl-8 py-1.5 text-sm"
             />
           </div>

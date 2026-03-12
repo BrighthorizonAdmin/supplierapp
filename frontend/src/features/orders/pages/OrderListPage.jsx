@@ -1,11 +1,11 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { fetchOrders, cancelOrder, fetchOrderById } from '../orderSlice';
 import Pagination from '../../../components/ui/Pagination';
 import {
-  Search, Download, Eye, MoreVertical,
+  Search, Download, Eye,
   Clock, Truck, CheckCircle, XCircle, ShoppingBag, Package,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -91,46 +91,14 @@ const StatusCell = ({ order, onView, onReject }) => {
 };
 
 // ─── Row action menu ──────────────────────────────────────────────────────────
-const RowActions = ({ row, onView }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
-
-  return (
-    <div className="flex items-center gap-1" ref={ref}>
-      <button
-        // always pass just the id so consumers can navigate directly
-        onClick={() => onView(row)}
-        className="p-1.5 rounded-lg hover:bg-primary-50 text-slate-400 hover:text-primary-600 transition-colors"
-      >
-        <Eye size={15} />
-      </button>
-      <div className="relative">
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-        >
-          <MoreVertical size={15} />
-        </button>
-        {open && (
-          <div className="absolute right-0 top-8 w-36 bg-white rounded-xl shadow-lg border border-slate-200 z-20 overflow-hidden py-1">
-            <button
-              onClick={() => { setOpen(false); onView(row); }}
-              className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              View Details
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+const RowActions = ({ row, onView }) => (
+  <button
+    onClick={() => onView(row)}
+    className="p-1.5 rounded-lg hover:bg-primary-50 text-slate-400 hover:text-primary-600 transition-colors"
+  >
+    <Eye size={15} />
+  </button>
+);
 
 // ─── Stats card ───────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, icon: Icon, cardCls, iconCls, valueCls, labelCls }) => (
@@ -163,7 +131,6 @@ const OrderListPage = () => {
     }
     navigate(`/orders/${id._id}`);
   };
-console.log(list)
   const [page,        setPage]        = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search,      setSearch]      = useState('');
@@ -183,13 +150,7 @@ console.log(list)
     }
   };
 
-  // Fetch aggregate counts
-  useEffect(() => {
-    api.get('/orders/stats')
-      .then((res) => setCounts(res.data.data))
-      .catch(console.error);
-  }, []);
-
+  // Derive counts from the current list (no extra API call needed)
   useEffect(() => {
   if (!list) return;
 
@@ -253,33 +214,40 @@ const filteredOrders = useMemo(() => {
       const orders = res.data.orders || res.data.data || [];
 
       const isRetail = typeTab === 'b2c';
+
+      // Headers mirror exactly the visible table columns (excluding Actions)
       const headers = isRetail
         ? ['Order ID', 'Type', 'Customer', 'Date', 'Time', 'Items', 'Amount', 'Payment', 'Status']
         : ['Order ID', 'Dealer', 'Date', 'Time', 'Items', 'Amount', 'Payment', 'Priority', 'Status'];
 
       const rows = orders.map((o) => {
-        const date = format(new Date(o.createdAt), 'yyyy-MM-dd');
-        const time = format(new Date(o.createdAt), 'hh:mm a');
-        const orderId = `Order #${o.orderNumber || o._id?.slice(-4)}`;
-        const amount = (o.netAmount || 0).toLocaleString('en-IN');
-        const items = `${o.items?.length ?? 0} Items`;
+        const date   = format(new Date(o.createdAt), 'yyyy-MM-dd');
+        const time   = format(new Date(o.createdAt), 'hh:mm a');
+        // Match table: orderNumber first, then orderId suffix, then _id suffix
+        const orderId = `Order #${o.orderNumber || o.orderId?.slice(-4) || o._id?.slice(-4)}`;
+        const amount  = (o.netAmount || 0).toLocaleString('en-IN');
+        const items   = `${o.items?.length ?? 0} Items`;
+
         if (isRetail) {
+          // Mirrors B2C table columns: ORDER ID, TYPE, CUSTOMER, DATE & TIME, ITEMS, AMOUNT, PAYMENT, STATUS
           return [
             orderId,
             o.orderType || 'b2c',
-            o.customerId?.name || o.customerName || o.dealerId?.businessName || '',
+            o.customerId?.name || o.customerName || o.dealerId?.businessName || o.dealerId?.name || '—',
             date, time, items, amount,
-            o.paymentMethod || o.pricingTier || '',
-            o.status || '',
+            o.paymentMethod || o.pricingTier || '—',
+            o.status || '—',
           ];
         }
+
+        // Mirrors B2B / All table columns: ORDER ID, DEALER, DATE & TIME, ITEMS, AMOUNT, PAYMENT, PRIORITY, STATUS
         return [
           orderId,
-          o.dealerId?.businessName || '',
+          o.dealerId?.name || o.dealerId?.businessName || '—',
           date, time, items, amount,
-          o.pricingTier || '',
+          o.paymentMethod || o.pricingTier || '—',
           o.priority || 'Normal',
-          o.status || '',
+          o.status || '—',
         ];
       });
 
