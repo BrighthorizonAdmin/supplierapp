@@ -215,7 +215,7 @@ const DashboardPage = () => {
                           #{order._id?.slice(-6).toUpperCase()}
                         </td>
                         <td className="px-4 py-3.5 text-slate-700 font-medium">
-                          {order.dealerId?.name || '—'}
+                          {order.dealerId?.businessName || order.dealerId?.name || '—'}
                         </td>
                         <td className="px-4 py-3.5 text-slate-400 text-xs">
                           {order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy') : '—'}

@@ -130,7 +130,7 @@ const DealerDetailPage = () => {
                 <Building2 size={16} className="text-slate-400" />
                 <div>
                   <p className="text-slate-500">Owner</p>
-                  <p className="font-medium">{dealer.ownerName}</p>
+                  <p className="font-medium">{dealer.ownerName || dealer.name}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 text-sm">

@@ -1,5 +1,37 @@
 const mongoose = require('mongoose');
 
+// Embedded items schema — used by DealerApp-created orders
+const embeddedItemSchema = new mongoose.Schema(
+  {
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+    sku: { type: String },
+    name: { type: String },
+    image: { type: String },
+    unitPrice: { type: Number, min: 0 },
+    quantity: { type: Number, min: 1 },
+    moq: { type: Number },
+    lineTotal: { type: Number },
+    // SupplierApp-style fields (may be present)
+    warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse' },
+    productName: { type: String },
+    productCode: { type: String },
+    discount: { type: Number, default: 0 },
+    taxRate: { type: Number },
+    taxAmount: { type: Number },
+  },
+  { _id: false }
+);
+
+const timelineEventSchema = new mongoose.Schema(
+  {
+    status: { type: String },
+    timestamp: { type: Date, default: Date.now },
+    description: { type: String },
+    location: { type: String },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     orderNumber: {
@@ -20,7 +52,7 @@ const orderSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['draft', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'],
+        values: ['draft', 'pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'returned'],
         message: '{VALUE} is not a valid order status',
       },
       default: 'draft',
@@ -87,6 +119,22 @@ const orderSchema = new mongoose.Schema(
     deliveredAt: {
       type: Date,
     },
+    // Embedded items — present on DealerApp-created orders
+    items: [embeddedItemSchema],
+    // DealerApp order fields
+    shippingCost: { type: Number, default: 0, min: 0 },
+    paymentMethod: { type: String },
+    paymentStatus: { type: String },
+    deliveryAddress: {
+      label: { type: String },
+      fullAddress: { type: String },
+      city: { type: String },
+      postalCode: { type: String },
+      country: { type: String },
+    },
+    trackingId: { type: String },
+    carrier: { type: String },
+    timeline: [timelineEventSchema],
   },
   {
     timestamps: true,

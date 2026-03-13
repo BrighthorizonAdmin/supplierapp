@@ -251,8 +251,7 @@ const getOrders = async (query = {}) => {
     const dealerIds = dealers.map(d => d._id);
 
     match.$or = [
-      { orderId: re },
-      // { invoiceId: re },
+      { orderNumber: re },
       ...(dealerIds.length ? [{ dealerId: { $in: dealerIds } }] : [])
     ];
   }
@@ -280,10 +279,13 @@ const getOrderById = async (id) => {
     .lean();
   if (!order) throw new AppError('Order not found', 404);
 
-  const items = await OrderItem.find({ orderId: id })
-    .populate('productId', 'name productCode unit')
-    .populate('warehouseId', 'name code')
-    .lean();
+  // DealerApp orders embed items directly; SupplierApp orders use separate OrderItem collection
+  const items = order.items?.length
+    ? order.items
+    : await OrderItem.find({ orderId: id })
+        .populate('productId', 'name productCode unit')
+        .populate('warehouseId', 'name code')
+        .lean();
 
   return { ...order, items };
 };

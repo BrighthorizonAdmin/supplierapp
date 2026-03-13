@@ -22,12 +22,12 @@ const TYPE_TABS = [
 // ─── Status filter tabs ───────────────────────────────────────────────────────
 const STATUS_TABS = [
   { id: '', label: 'All' },
-  { id: 'DRAFT', label: 'New Orders' },
-  { id: 'CONFIRMED', label: 'Confirmed' },
-  { id: 'PROCESSING', label: 'Processing' },
-  { id: 'SHIPPED', label: 'Shipped' },
-  { id: 'DELIVERED', label: 'Delivered' },
-  { id: 'CANCELLED', label: 'Cancelled' },
+  { id: 'draft', label: 'New Orders' },
+  { id: 'confirmed', label: 'Confirmed' },
+  { id: 'processing', label: 'Processing' },
+  { id: 'shipped', label: 'Shipped' },
+  { id: 'delivered', label: 'Delivered' },
+  { id: 'cancelled', label: 'Cancelled' },
 ];
 // ─── Type badge ───────────────────────────────────────────────────────────────
 const TypeBadge = ({ type }) => {
@@ -243,7 +243,7 @@ const filteredOrders = useMemo(() => {
         // Mirrors B2B / All table columns: ORDER ID, DEALER, DATE & TIME, ITEMS, AMOUNT, PAYMENT, PRIORITY, STATUS
         return [
           orderId,
-          o.dealerId?.name || o.dealerId?.businessName || '—',
+          o.dealerId?.businessName || o.dealerId?.name || '—',
           date, time, items, amount,
           o.paymentMethod || o.pricingTier || '—',
           o.priority || 'Normal',
@@ -507,13 +507,13 @@ const filteredOrders = useMemo(() => {
                         onClick={() => navigate(`/orders/${order._id}`)}
                         className="font-semibold text-slate-800 hover:text-primary-600 transition-colors"
                       >
-                        Order #{order.orderId?.slice(-4)}
+                        Order #{order.orderNumber?.slice(-4) || order._id?.slice(-4)}
                       </button>
                     </td>
 
                     {/* Dealer */}
                     <td className="px-4 py-3.5 font-medium text-slate-700">
-                      {order.dealerId?.name || '—'}
+                      {order.dealerId?.businessName || order.dealerId?.name || '—'}
                     </td>
 
                     {/* Date & Time */}
