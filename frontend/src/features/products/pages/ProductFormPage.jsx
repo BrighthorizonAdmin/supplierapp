@@ -63,8 +63,6 @@ const ProductFormPage = () => {
 
     if (!res.error) {
       navigate('/products');
-    } else if (res.payload) {
-      toast.error(res.payload);
     }
   };
 

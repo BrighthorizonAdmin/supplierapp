@@ -70,7 +70,10 @@ const productSlice = createSlice({
       .addCase(createProduct.rejected,  (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        toast.error(action.payload || 'Failed to create product');
+        const msg = action.payload?.toLowerCase().includes('sku')
+          ? `SKU already exists. Please use a different SKU code.`
+          : action.payload || 'Failed to create product';
+        toast.error(msg);
       })
       .addCase(updateProduct.pending,   (state) => { state.loading = true; state.error = null; })
       .addCase(updateProduct.fulfilled, (state, action) => {

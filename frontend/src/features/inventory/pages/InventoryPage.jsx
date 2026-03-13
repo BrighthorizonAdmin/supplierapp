@@ -455,7 +455,7 @@ const InventoryPage = () => {
         {/* Table header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
           <p className="text-sm font-semibold text-slate-800">Stock Details</p>
-          <button className="text-xs text-primary-600 font-medium hover:underline">View All</button>
+          
         </div>
 
         {/* Table */}

@@ -210,7 +210,7 @@ const DealerListPage = () => {
       const rows = dealers.map((d) => [
         d.dealerCode || '',
         d.businessName || '',
-        d.ownerName || '',
+        d.ownerName || d.name || '',
         d.email || '',
         d.phone || '',
         d.address?.city || '',
@@ -432,7 +432,7 @@ const DealerListPage = () => {
                             {d.businessName || '—'}
                           </p>
                           <p className="text-xs text-slate-400 mt-0.5 leading-snug">
-                            {d.ownerName || '—'}
+                            {d.ownerName || d.name || '—'}
                           </p>
                         </div>
                       </button>

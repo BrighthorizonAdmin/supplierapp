@@ -180,10 +180,10 @@ const PaymentListPage = () => {
                   list.map((row, idx) => (
                     <tr key={row._id || idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap font-mono text-xs">
-                        {row.paymentId || '—'}
+                        {row.paymentNumber || '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
-                        {row.dealerId?.name || '—'}
+                        {row.dealerId?.businessName || row.dealerId?.name || '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
                         {row.invoiceId?.invoiceNumber || '—'}
