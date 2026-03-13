@@ -34,7 +34,7 @@ const OrderDetailPage = () => {
             <h1 className="text-2xl font-bold font-mono">{order.orderNumber}</h1>
             <StatusBadge status={order.status} />
           </div>
-          <p className="text-slate-500 text-sm">{order.dealerId?.businessName} · {format(new Date(order.createdAt), 'dd MMM yyyy, hh:mm a')}</p>
+          <p className="text-slate-500 text-sm">{order.dealerId?.businessName || order.dealerId?.name} · {format(new Date(order.createdAt), 'dd MMM yyyy, hh:mm a')}</p>
         </div>
         <div className="flex gap-2">
           {order.status === 'draft' && (
@@ -53,7 +53,7 @@ const OrderDetailPage = () => {
       {/* Order Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          ['Dealer', order.dealerId?.name],
+          ['Dealer', order.dealerId?.businessName || order.dealerId?.name],
           ['Pricing Tier', order.pricingTier],
           ['Subtotal', `₹${(order.subtotal || 0).toLocaleString('en-IN')}`],
           ['Tax', `₹${(order.taxAmount || 0).toLocaleString('en-IN')}`],

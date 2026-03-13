@@ -36,7 +36,7 @@ const paymentSchema = new mongoose.Schema(
     method: {
       type: String,
       enum: {
-        values: ['bank-transfer', 'cheque', 'cash', 'upi', 'neft', 'rtgs'],
+        values: ['bank-transfer', 'cheque', 'cash', 'upi', 'neft', 'rtgs', 'card', 'wire-transfer', 'net-30', 'cod'],
         message: '{VALUE} is not a valid payment method',
       },
       required: [true, 'Payment method is required'],
@@ -44,7 +44,7 @@ const paymentSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['pending', 'confirmed', 'failed'],
+        values: ['pending', 'processing', 'confirmed', 'failed', 'refunded'],
         message: '{VALUE} is not a valid payment status',
       },
       default: 'pending',
@@ -53,6 +53,12 @@ const paymentSchema = new mongoose.Schema(
     reference: { type: String, trim: true },
     chequeNumber: { type: String, trim: true },
     transactionId: { type: String, trim: true },
+    // DealerApp payment fields
+    gatewayTransactionId: { type: String, trim: true },
+    gatewayResponse: { type: mongoose.Schema.Types.Mixed },
+    idempotencyKey: { type: String, trim: true },
+    failureReason: { type: String, trim: true },
+    processedAt: { type: Date },
     receivedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
