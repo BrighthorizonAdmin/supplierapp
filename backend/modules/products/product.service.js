@@ -4,7 +4,12 @@ const { getPagination, buildMeta } = require('../../utils/pagination');
 const auditService = require('../audit/audit.service');
 
 const createProduct = async (data, userId) => {
-  const product = await Product.create({ ...data, createdBy: userId });
+  // Seed currentStockQty from openingStockQty so live stock starts at the opening value
+  const payload = { ...data, createdBy: userId };
+  if (payload.currentStockQty === undefined) {
+    payload.currentStockQty = payload.openingStockQty ?? 0;
+  }
+  const product = await Product.create(payload);
   await auditService.log('product', product._id, 'create', userId, { after: { name: product.name, productCode: product.productCode } });
   return product;
 };
@@ -46,10 +51,13 @@ const updateProduct = async (id, updates, userId) => {
   if (!product) throw new AppError('Product not found', 404);
 
   const before = { name: product.name, basePrice: product.basePrice, isActive: product.isActive };
-  Object.assign(product, updates);
+
+  // openingStockQty is immutable after creation — strip it from any update payload
+  const { openingStockQty: _ignored, ...safeUpdates } = updates;
+  Object.assign(product, safeUpdates);
   await product.save();
 
-  await auditService.log('product', id, 'update', userId, { before, after: updates });
+  await auditService.log('product', id, 'update', userId, { before, after: safeUpdates });
   return product;
 };
 

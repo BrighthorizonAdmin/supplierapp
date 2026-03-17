@@ -89,6 +89,11 @@ const productSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    currentStockQty: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     openingStockDate: {
       type: Date,
     },
@@ -114,12 +119,21 @@ const productSchema = new mongoose.Schema(
   }
 );
 
+// Guard: openingStockQty is immutable after creation
+productSchema.pre('save', function () {
+  if (!this.isNew && this.isModified('openingStockQty')) {
+    const err = new Error('openingStockQty cannot be changed after creation');
+    err.statusCode = 400;
+    err.isOperational = true;
+    throw err;
+  }
+});
+
 // Auto-generate productCode
-productSchema.pre('save', async function (next) {
-  if (this.productCode) return next();
+productSchema.pre('save', async function () {
+  if (this.productCode) return;
   const { generateCode } = require('../../../utils/autoCode');
   this.productCode = await generateCode(this.constructor, 'PRD', 'productCode', 'yyyyMM');
-  next();
 });
 
 // Helper: get price for a tier

@@ -132,23 +132,24 @@ const getInventory = async (query = {}) => {
           unit: '$unit',
           basePrice: '$basePrice',
         },
-        warehouseId: { $arrayElemAt: ['$whArr', 0] },
+        warehouseId:       { $arrayElemAt: ['$whArr', 0] },
         quantityOnHand:    { $ifNull: ['$invRecords.quantityOnHand',    '$openingStockQty'] },
         quantityAllocated: { $ifNull: ['$invRecords.quantityAllocated', 0] },
         reorderLevel:      { $ifNull: ['$invRecords.reorderLevel',      10] },
         lastRestockedAt:   '$invRecords.lastRestockedAt',
         updatedAt:         { $ifNull: ['$invRecords.updatedAt', '$updatedAt'] },
+        openingStockQty:   '$openingStockQty',
+        currentStockQty:   '$currentStockQty',
       },
     },
 
-    // Add virtual fields (mirrors Inventory model virtuals)
+    // Compute isLowStock from product-level stock fields
     {
       $addFields: {
-        quantityAvailable: { $subtract: ['$quantityOnHand', '$quantityAllocated'] },
         isLowStock: {
           $and: [
-            { $gt: ['$quantityOnHand', 0] },
-            { $lte: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] },
+            { $gt: ['$currentStockQty', 0] },
+            { $lt: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.2] }] },
           ],
         },
       },
@@ -176,7 +177,7 @@ const getInventory = async (query = {}) => {
       // Numeric columns (Available, Allocated, Total, Unit Price)
       if (isNumeric) {
         orClauses.push(
-          { quantityAvailable: num },
+          { currentStockQty: num },
           { quantityAllocated: num },
           { quantityOnHand:    num },
           { 'productId.basePrice': num },
@@ -205,7 +206,7 @@ const getInventory = async (query = {}) => {
       : query.status === 'out-of-stock'
       ? [{ $match: { quantityOnHand: { $not: { $gt: 0 } } } }]
       : query.status === 'high-stock'
-      ? [{ $match: { $expr: { $gt: ['$quantityAvailable', { $multiply: ['$reorderLevel', 2] }] } } }]
+      ? [{ $match: { isLowStock: false, currentStockQty: { $gt: 0 } } }]
       : []),
   ];
 
