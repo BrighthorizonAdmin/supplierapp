@@ -18,7 +18,7 @@ const TABS = [
   { id: 'all',       label: 'All Dealers',       status: '' },
   { id: 'active',    label: 'Active Dealers',     status: 'active' },
   { id: 'suspended', label: 'Suspended Dealers',  status: 'suspended' },
-  { id: 'new',       label: 'New Applications',   status: 'pending' },
+  // { id: 'new',       label: 'New Applications',   status: 'pending' },
 ];
 
 // ─── Status chip ───────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ const DealerListPage = () => {
           valueCls="text-green-700"
         />
         <StatsCard
-          label="Pending Applications"
+          label="Inactive Dealers"
           value={counts.pending}
           icon={Clock}
           cardCls="bg-amber-50 border-amber-100"

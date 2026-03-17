@@ -173,7 +173,7 @@ const DealerDetailPage = () => {
                 ['Onboarded By', dealer.onboardedBy?.name],
                 ['Approved By', dealer.approvedBy?.name],
                 ['Approved At', dealer.approvedAt ? format(new Date(dealer.approvedAt), 'dd MMM yyyy') : '—'],
-                ['Registered', format(new Date(dealer.createdAt), 'dd MMM yyyy')],
+                // ['Registered', format(new Date(dealer.createdAt), 'dd MMM yyyy')],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <span className="text-slate-500">{k}</span>

@@ -1,5 +1,6 @@
 const RetailOrder = require('./model/RetailOrder.model');
 const Dealer = require('../dealer/model/Dealer.model');
+const Product = require('../products/model/Product.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const auditService = require('../audit/audit.service');
@@ -29,6 +30,16 @@ const createRetailOrder = async (data, userId) => {
     totalAmount: subtotal + taxAmount,
     processedBy: userId,
   });
+
+  // Deduct currentStockQty for each product in the order
+  for (const item of order.items) {
+    if (item.productId) {
+      await Product.findByIdAndUpdate(
+        item.productId,
+        [{ $set: { currentStockQty: { $max: [0, { $add: ['$currentStockQty', -item.quantity] }] } } }]
+      );
+    }
+  }
 
   await auditService.log('retailOrder', order._id, 'create', userId, {
     after: { orderNumber: order.orderNumber, dealerId: data.dealerId },
@@ -73,12 +84,22 @@ const getRetailOrderById = async (id) => {
 };
 
 const updateRetailOrderStatus = async (orderId, status, userId) => {
-  const order = await RetailOrder.findByIdAndUpdate(
-    orderId,
-    { status },
-    { new: true, runValidators: true }
-  );
+  const order = await RetailOrder.findById(orderId);
   if (!order) throw new AppError('Retail order not found', 404);
+
+  const prevStatus = order.status;
+  order.status = status;
+  await order.save();
+
+  // Restore currentStockQty if order is being cancelled (and wasn't already cancelled)
+  if (status === 'cancelled' && prevStatus !== 'cancelled') {
+    for (const item of order.items) {
+      if (item.productId) {
+        await Product.findByIdAndUpdate(item.productId, { $inc: { currentStockQty: item.quantity } });
+      }
+    }
+  }
+
   await auditService.log('retailOrder', orderId, 'update', userId, { after: { status } });
   return order;
 };
