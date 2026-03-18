@@ -143,11 +143,10 @@ const orderSchema = new mongoose.Schema(
 );
 
 // Auto-generate orderNumber
-orderSchema.pre('save', async function (next) {
-  if (this.orderNumber) return next();
+orderSchema.pre('save', async function () {
+  if (this.orderNumber) return;
   const { generateCode } = require('../../../utils/autoCode');
   this.orderNumber = await generateCode(this.constructor, 'ORD', 'orderNumber', 'yyyyMMdd');
-  next();
 });
 
 orderSchema.index({ dealerId: 1 });

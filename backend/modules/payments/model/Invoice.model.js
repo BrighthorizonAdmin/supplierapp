@@ -60,11 +60,10 @@ const invoiceSchema = new mongoose.Schema(
 );
 
 // Auto-generate invoiceNumber
-invoiceSchema.pre('save', async function (next) {
-  if (this.invoiceNumber) return next();
+invoiceSchema.pre('save', async function () {
+  if (this.invoiceNumber) return;
   const { generateCode } = require('../../../utils/autoCode');
   this.invoiceNumber = await generateCode(this.constructor, 'INV', 'invoiceNumber', 'yyyyMMdd');
-  next();
 });
 
 // Pre-save: keep balance in sync

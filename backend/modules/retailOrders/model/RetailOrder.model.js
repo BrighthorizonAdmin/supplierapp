@@ -81,11 +81,10 @@ const retailOrderSchema = new mongoose.Schema(
 );
 
 // Auto-generate orderNumber
-retailOrderSchema.pre('save', async function (next) {
-  if (this.orderNumber) return next();
+retailOrderSchema.pre('save', async function () {
+  if (this.orderNumber) return;
   const { generateCode } = require('../../../utils/autoCode');
   this.orderNumber = await generateCode(this.constructor, 'RET', 'orderNumber', 'yyyyMMdd');
-  next();
 });
 
 retailOrderSchema.index({ dealerId: 1 });

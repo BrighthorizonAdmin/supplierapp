@@ -165,11 +165,10 @@ dealerSchema.virtual('availableCredit').get(function () {
 });
 
 // Auto-generate dealerCode before save
-dealerSchema.pre('save', async function (next) {
-  if (this.dealerCode) return next();
+dealerSchema.pre('save', async function () {
+  if (this.dealerCode) return;
   const { generateCode } = require('../../../utils/autoCode');
   this.dealerCode = await generateCode(this.constructor, 'DLR', 'dealerCode', 'yyyyMM');
-  next();
 });
 
 dealerSchema.index({ gstNumber: 1 }, { unique: true });

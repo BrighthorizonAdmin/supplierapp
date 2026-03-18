@@ -90,11 +90,10 @@ const returnSchema = new mongoose.Schema(
 );
 
 // Auto-generate rmaNumber
-returnSchema.pre('save', async function (next) {
-  if (this.rmaNumber) return next();
+returnSchema.pre('save', async function () {
+  if (this.rmaNumber) return;
   const { generateCode } = require('../../../utils/autoCode');
   this.rmaNumber = await generateCode(this.constructor, 'RMA', 'rmaNumber', 'yyyyMMdd');
-  next();
 });
 
 returnSchema.index({ dealerId: 1 });
