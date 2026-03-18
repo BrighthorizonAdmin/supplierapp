@@ -21,8 +21,13 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Cancellations are intentional (component unmount / re-fetch debounce) — never toast
+    if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+      return Promise.reject(error);
+    }
+
     const message = error.response?.data?.message || 'Something went wrong';
-    const status = error.response?.status;
+    const status  = error.response?.status;
 
     const isLoginRequest = error.config?.url?.includes('/auth/login');
 

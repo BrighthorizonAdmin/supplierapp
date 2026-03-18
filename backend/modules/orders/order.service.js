@@ -88,9 +88,14 @@ const confirmOrder = async (orderId, userId) => {
 
     const items = await OrderItem.find({ orderId }).session(session);
 
-    // Allocate stock per item
+    // Allocate stock per item and decrement product-level currentStockQty
     for (const item of items) {
       await inventoryService.allocateStock(item.productId, item.warehouseId, item.quantity, session);
+      await Product.findByIdAndUpdate(
+        item.productId,
+        [{ $set: { currentStockQty: { $max: [0, { $add: ['$currentStockQty', -item.quantity] }] } } }],
+        { session }
+      );
     }
 
     // Create Invoice
@@ -162,9 +167,14 @@ const cancelOrder = async (orderId, reason, userId) => {
     const items = await OrderItem.find({ orderId }).session(session);
 
     if (wasConfirmed) {
-      // Release inventory allocations
+      // Release inventory allocations and restore product-level currentStockQty
       for (const item of items) {
         await inventoryService.releaseAllocation(item.productId, item.warehouseId, item.quantity, session);
+        await Product.findByIdAndUpdate(
+          item.productId,
+          { $inc: { currentStockQty: item.quantity } },
+          { session }
+        );
       }
 
       // Reverse creditUsed

@@ -50,8 +50,11 @@ const ProductFormPage = () => {
     // Map form field names to Product schema field names
     const { stockDate, stockQty, specWeight, specDimensions, specColor, ...productData } = data;
 
-    productData.openingStockDate = stockDate || undefined;
-    productData.openingStockQty  = Number(stockQty) || 0;
+    // openingStockQty / openingStockDate are set only at creation — they are immutable after that
+    if (!isEdit) {
+      productData.openingStockDate = stockDate || undefined;
+      productData.openingStockQty  = Number(stockQty) || 0;
+    }
     productData.specifications   = {
       weight:     specWeight     || '',
       dimensions: specDimensions || '',
@@ -120,21 +123,48 @@ const ProductFormPage = () => {
             <F label="SKU Code" name="sku" />
             <F label="MOQ" name="moq" type="number" />
             <div>
-              <label className="label">Initial Stock</label>
+              <label className="label">
+                Opening Stock
+                {isEdit && <span className="ml-2 text-xs text-gray-400">(read-only)</span>}
+              </label>
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="date"
-                  className="input"
+                  className={`input ${isEdit ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                  readOnly={isEdit}
                   {...register('stockDate')}
                 />
                 <input
                   type="number"
                   placeholder="Quantity"
-                  className="input"
+                  className={`input ${isEdit ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                  readOnly={isEdit}
                   {...register('stockQty', { valueAsNumber: true })}
                 />
               </div>
             </div>
+
+            {isEdit && (() => {
+              const cur  = selected?.currentStockQty  ?? 0;
+              const open = selected?.openingStockQty ?? 0;
+              const status = cur <= 0
+                ? { label: 'No Stock',  cls: 'bg-red-100 text-red-700 border-red-200' }
+                : open > 0 && cur < open * 0.2
+                ? { label: 'Low Stock', cls: 'bg-amber-100 text-amber-700 border-amber-200' }
+                : { label: 'In Stock',  cls: 'bg-green-100 text-green-700 border-green-200' };
+              return (
+                <div>
+                  <label className="label">Current Stock Quantity</label>
+                  <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-200 bg-blue-50">
+                    <span className="text-2xl font-bold text-blue-700">{cur}</span>
+                    <span className="text-sm text-gray-500">units on hand</span>
+                    <span className={`ml-auto text-xs font-semibold px-2.5 py-1 rounded-full border ${status.cls}`}>
+                      {status.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
             <div>
               <p className="label">Specification</p>
               <div className="space-y-2">

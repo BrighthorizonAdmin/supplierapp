@@ -22,16 +22,27 @@ const fmtCurrency = (n) => (n != null ? `₹${Number(n).toLocaleString('en-IN')}
 // ─── Chart colours (green-500, amber-500, red-500) ────────────────────────────
 const DONUT_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
 
+// ─── Stock status helpers (rule: noStock ≤0 | lowStock <20% of opening | inStock ≥20%) ──
+const stockStatus = (item) => {
+  const cur  = item.currentStockQty ?? 0;
+  const open = item.openingStockQty ?? 0;
+  if (cur <= 0)                          return 'no-stock';
+  if (open > 0 && cur < open * 0.2)     return 'low-stock';
+  return 'in-stock';
+};
+
 // ─── Stock status chip ────────────────────────────────────────────────────────
 const StockChip = ({ item }) => {
-  if (!item.quantityOnHand) return <span className="badge-red">Out of Stock</span>;
-  if (item.isLowStock)      return <span className="badge-yellow">Low Stock</span>;
+  const s = stockStatus(item);
+  if (s === 'no-stock')  return <span className="badge-red">No Stock</span>;
+  if (s === 'low-stock') return <span className="badge-yellow">Low Stock</span>;
   return <span className="badge-green">In-Stock</span>;
 };
 
 const forecastLabel = (item) => {
-  if (!item.quantityOnHand) return 'Replenishment Required';
-  if (item.isLowStock)      return 'Projected to Spike – order soon';
+  const s = stockStatus(item);
+  if (s === 'no-stock')  return 'Replenishment Required';
+  if (s === 'low-stock') return 'Projected to Spike – order soon';
   return 'Stable Demand – next 30 days';
 };
 
@@ -239,11 +250,12 @@ const InventoryPage = () => {
     const rows = list.map((item) => {
       const prod = item.productId || {};
       const wh   = item.warehouseId || {};
-      const status = !item.quantityOnHand ? 'Out of Stock' : item.isLowStock ? 'Low Stock' : 'In Stock';
+      const s      = stockStatus(item);
+      const status = s === 'no-stock' ? 'No Stock' : s === 'low-stock' ? 'Low Stock' : 'In Stock';
       return [
         prod.name || '—', prod.productCode || '—', prod.category || '—',
         wh.name || '—',
-        item.quantityAvailable ?? 0, item.quantityAllocated ?? 0, item.quantityOnHand ?? 0,
+        item.currentStockQty ?? 0, item.quantityAllocated ?? 0, item.quantityOnHand ?? 0,
         prod.basePrice ?? 0, status,
       ];
     });
@@ -508,7 +520,7 @@ const InventoryPage = () => {
                       {/* Available */}
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-slate-800">
-                          {(item.quantityAvailable ?? 0).toLocaleString('en-IN')}
+                          {(item.currentStockQty ?? 0).toLocaleString('en-IN')}
                         </p>
                         {prod.unit && <p className="text-xs text-slate-400 mt-0.5">{prod.unit}</p>}
                       </td>
