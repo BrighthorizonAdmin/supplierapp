@@ -17,7 +17,7 @@ const auditLogSchema = new mongoose.Schema(
     action: {
       type: String,
       enum: {
-        values: ['create', 'update', 'delete', 'approve', 'reject', 'suspend', 'confirm', 'cancel', 'allocate', 'refund', 'login', 'logout'],
+        values: ['create', 'update', 'delete', 'approve', 'reject', 'suspend', 'confirm', 'cancel', 'allocate', 'refund', 'login', 'logout', 'password_change', 'password_reset'],
         message: '{VALUE} is not a valid action',
       },
       required: [true, 'Action is required'],

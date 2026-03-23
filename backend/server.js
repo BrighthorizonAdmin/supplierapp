@@ -31,6 +31,7 @@ const auditRoutes = require('./modules/audit/audit.routes');
 const notificationRoutes = require('./modules/notifications/notification.routes');
 const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
 const settingsRoutes = require('./modules/settings/settings.routes');
+const roleRoutes = require('./modules/roles/role.routes');
 
 const app = express();
 
@@ -109,6 +110,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/roles', roleRoutes);
 
 // Frontend routing - serve index.html for all non-API routes (React Router support)
 app.get('*', (req, res, next) => {
@@ -124,9 +126,25 @@ app.use((req, res) => {
 // Centralized error handler
 app.use(errorMiddleware);
 
+/**
+ * Seed default roles if the Role collection is empty.
+ * Runs once on startup so existing deployments retain their access without manual setup.
+ */
+const seedDefaultRoles = async () => {
+  const Role = require('./modules/roles/role.model');
+  const { DEFAULT_ROLES } = require('./utils/permissions');
+
+  const count = await Role.countDocuments();
+  if (count > 0) return;
+
+  await Role.insertMany(DEFAULT_ROLES);
+  logger.info('Default roles seeded successfully');
+};
+
 // Bootstrap
 const startServer = async () => {
   await connectDB();
+  await seedDefaultRoles();
   const httpServer = http.createServer(app);
   initSocket(httpServer);
 
@@ -141,4 +159,8 @@ const startServer = async () => {
   });
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = app;
