@@ -8,11 +8,11 @@ export default defineConfig({
     port: 5001,
     proxy: {
       '/api': {
-        target: 'http://34.131.27.112:3001',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://34.131.27.112:3001',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },
