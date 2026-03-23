@@ -5,54 +5,74 @@ import { fetchProducts, fetchCategories } from '../productSlice';
 import Pagination from '../../../components/ui/Pagination';
 import { Plus, Search, Upload, Package, Pencil } from 'lucide-react';
 
+// filePath stored as "uploads/products/uuid.jpg" → browser URL "/uploads/products/uuid.jpg"
+// For old records with no filePath, fall back to building URL from fileName
+const getImageSrc = (product) => {
+  const img = product.images?.find((i) => i.isPrimary) || product.images?.[0];
+  if (!img) return null;
+  if (img.filePath) return '/' + img.filePath.replace(/\\/g, '/');
+  if (img.fileName) return '/uploads/products/' + img.fileName;
+  return null;
+};
+
 // ─── Product Card ─────────────────────────────────────────────────────────────
-const ProductCard = ({ product, onEdit }) => (
-  <div className="card overflow-hidden group hover:shadow-md transition-shadow">
-    {/* Image area */}
-    <div className="relative bg-slate-100 h-44 flex items-center justify-center">
-      <span className="absolute top-3 left-3 text-[10px] font-bold bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide">
-        {product.isActive ? 'Instock' : 'outofstock'}
-      </span>
-     
-      {product.imageUrl ? (
-        <img src={product.imageUrl} alt={product.name} className="h-28 w-28 object-contain" />
-      ) : (
-        <Package size={52} strokeWidth={1.2} className="text-slate-300" />
-      )}
-    </div>
+const ProductCard = ({ product, onEdit }) => {
+  const [imgError, setImgError] = useState(false);
+  const src = getImageSrc(product);
 
-    {/* Card body */}
-    <div className="p-3">
-      <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">
-        {product.category || 'GENERAL'}
-      </p>
-      <h3 className="font-bold text-slate-900 text-sm leading-snug mb-1 line-clamp-1">
-        {product.name}
-      </h3>
-      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-3 min-h-[2.5rem]">
-        {product.description || product.brand
-          ? `${product.description || ''}${product.description && product.brand ? ' · ' : ''}${product.brand || ''}`
-          : 'No description available.'}
-      </p>
+  return (
+    <div className="card overflow-hidden group hover:shadow-md transition-shadow">
+      {/* Image area */}
+      <div className="relative bg-slate-100 h-44 flex items-center justify-center">
+        <span className="absolute top-3 left-3 text-[10px] font-bold bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide">
+          {product.isActive ? 'Instock' : 'outofstock'}
+        </span>
 
-      {/* Price row */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[10px] text-slate-400 font-medium">Dealer Price</p>
-          <p className="text-sm font-bold text-slate-900">
-            ₹{(product.basePrice || 0).toLocaleString('en-IN')}
-          </p>
+        {src && !imgError ? (
+          <img
+            src={src}
+            alt={product.name}
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <Package size={52} strokeWidth={1.2} className="text-slate-300" />
+        )}
+      </div>
+
+      {/* Card body */}
+      <div className="p-3">
+        <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">
+          {product.category || 'GENERAL'}
+        </p>
+        <h3 className="font-bold text-slate-900 text-sm leading-snug mb-1 line-clamp-1">
+          {product.name}
+        </h3>
+        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-3 min-h-[2.5rem]">
+          {product.description || product.brand
+            ? `${product.description || ''}${product.description && product.brand ? ' · ' : ''}${product.brand || ''}`
+            : 'No description available.'}
+        </p>
+
+        {/* Price row */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-slate-400 font-medium">Dealer Price</p>
+            <p className="text-sm font-bold text-slate-900">
+              ₹{(product.basePrice || 0).toLocaleString('en-IN')}
+            </p>
+          </div>
+          <button
+            onClick={() => onEdit(product._id)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium transition-colors shadow-sm"
+          >
+            <Pencil size={11} /> Edit
+          </button>
         </div>
-        <button
-          onClick={() => onEdit(product._id)}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium transition-colors shadow-sm"
-        >
-          <Pencil size={11} /> Edit
-        </button>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 const ProductListPage = () => {

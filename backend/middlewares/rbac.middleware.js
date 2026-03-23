@@ -9,7 +9,7 @@ const PERMISSIONS = {
     'retailOrders:read', 'retailOrders:write', 'returns:read', 'returns:write',
     'payments:read', 'payments:write', 'invoices:read', 'invoices:write',
     'notifications:read', 'notifications:write', 'audit:read', 'dashboard:read',
-    'finance:read',
+    'finance:read', 'marketing:read', 'marketing:write',
   ],
   finance: [
     'finance:read', 'finance:write', 'payments:read', 'payments:write',
@@ -23,7 +23,10 @@ const PERMISSIONS = {
   ],
   'onboarding-manager': [
     'dealer:read', 'dealer:write', 'documents:read', 'documents:write',
-    'audit:read', 'dashboard:read',
+    'audit:read', 'dashboard:read', 'marketing:read', 'marketing:write',
+  ],
+  marketing: [
+    'marketing:read', 'marketing:write', 'dashboard:read',
   ],
   support: [
     'dealer:read', 'orders:read', 'retailOrders:read', 'returns:read',

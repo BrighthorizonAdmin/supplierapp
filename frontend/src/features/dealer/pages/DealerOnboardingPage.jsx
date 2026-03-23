@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { formatDistanceToNow, format } from 'date-fns';
 import { MapPin, Calendar, Hash, FileText, CheckCircle, AlertCircle, AlertTriangle } from 'lucide-react';
-import { fetchDealers, approveDealer, rejectDealer } from '../dealerSlice';
+import { fetchDealers, approveDealer, rejectDealer, requestDealerUpdate } from '../dealerSlice';
 import Modal from '../../../components/ui/Modal';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
@@ -189,13 +189,21 @@ const DealerOnboardingPage = () => {
 
   const handleSendRequest = () => {
     if (!selected || !requestField) return;
-    toast.success(`Update request sent to ${selected.businessName}: ${requestField}`);
-    setShowRequestModal(false);
-    setRequestField('');
-    setRequestInstructions('');
+    dispatch(requestDealerUpdate({
+      id: selected._id,
+      field: requestField,
+      instructions: requestInstructions,
+    })).then((res) => {
+      if (!res.error) {
+        setSelected(null);
+        setShowRequestModal(false);
+        setRequestField('');
+        setRequestInstructions('');
+      }
+    });
   };
 
-  const appId = selected?._id ? `DLR-${selected._id.slice(-4).toUpperCase()}` : '—';
+  const appId = selected?.applicationId || (selected?._id ? `DLR-${selected._id.slice(-4).toUpperCase()}` : '—');
   const location = [selected?.address?.city, selected?.address?.state].filter(Boolean).join(', ') || '—';
 
   return (
@@ -215,11 +223,10 @@ const DealerOnboardingPage = () => {
               <button
                 key={tab.value}
                 onClick={() => setActiveTab(tab.value)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                  isActive
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${isActive
                     ? 'border border-blue-600 text-blue-600 bg-white'
                     : 'text-slate-500 hover:text-slate-800'
-                }`}
+                  }`}
               >
                 {tab.label}
                 {count && <span className="ml-0.5">({count})</span>}
@@ -252,9 +259,8 @@ const DealerOnboardingPage = () => {
               <button
                 key={dealer._id}
                 onClick={() => { setSelected(dealer); setInReview(false); }}
-                className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-l-2 ${
-                  selected?._id === dealer._id ? 'border-blue-600 bg-blue-50/50' : 'border-transparent'
-                }`}
+                className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-l-2 ${selected?._id === dealer._id ? 'border-blue-600 bg-blue-50/50' : 'border-transparent'
+                  }`}
               >
                 <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                   {getInitials(dealer.ownerName || dealer.businessName)}
@@ -397,7 +403,7 @@ const DealerOnboardingPage = () => {
               </div>
             </div>
 
-    
+
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-slate-50 text-slate-400 text-sm">

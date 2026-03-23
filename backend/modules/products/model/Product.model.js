@@ -142,10 +142,10 @@ productSchema.methods.getPriceForTier = function (tier) {
   return this.basePrice;
 };
 
-productSchema.index({ productCode: 1 }, { unique: true });
+// productSchema.index({ productCode: 1 }, { unique: true });
 productSchema.index({ category: 1 });
 productSchema.index({ isActive: 1 });
 productSchema.index({ name: 'text', description: 'text', tags: 'text' });
-productSchema.index({ sku: 1 }, { sparse: true });
+// productSchema.index({ sku: 1 }, { sparse: true });
 
 module.exports = mongoose.model('Product', productSchema);
