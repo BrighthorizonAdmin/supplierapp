@@ -5,6 +5,27 @@ const auditService = require('../audit/audit.service');
 const notificationService = require('../notifications/notification.service');
 const { emitToRole, emitToAll } = require('../../websocket/socket');
 const { DEALER_APPROVED, DEALER_REJECTED, DEALER_SUSPENDED } = require('../../websocket/events');
+const axios = require('axios');
+
+const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5001';
+
+const syncToDealerApp = async (applicationId, action, payload = {}) => {
+  if (!applicationId) return;
+  try {
+    await axios.patch(
+      `${DEALER_API_URL}/api/dealership/supplier/review/${applicationId}`,
+      { action, ...payload },
+      {
+        headers: {
+          'x-api-key': process.env.DEALER_WEBHOOK_SECRET,
+        },
+      }
+    );
+    console.log(`[DealerSync] Synced ${action} for ${applicationId}`);
+  } catch (err) {
+    console.error('[DealerSync] Failed:', err.response?.data || err.message);
+  }
+};
 
 const createDealer = async (data, userId) => {
   const dealer = await Dealer.create({ ...data, onboardedBy: userId });
@@ -81,6 +102,8 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => 
   emitToRole('admin', DEALER_APPROVED, { dealerId, dealerCode: dealer.dealerCode, businessName: dealer.businessName });
   emitToAll(DEALER_APPROVED, { dealerId, businessName: dealer.businessName });
 
+  await syncToDealerApp(dealer.applicationId, 'APPROVE');
+
   return dealer;
 };
 
@@ -97,6 +120,35 @@ const rejectDealer = async (dealerId, reason, userId) => {
 
   await auditService.log('dealer', dealerId, 'reject', userId, { before, after: { status: 'rejected', reason } });
   emitToRole('onboarding-manager', DEALER_REJECTED, { dealerId, reason });
+
+  await syncToDealerApp(dealer.applicationId, 'REJECT', { 
+    supplierFeedback: reason,
+    rejectionReasons: [reason],
+  });
+
+  return dealer;
+};
+
+const requestUpdate = async (dealerId, { field, instructions }, userId) => {
+  const dealer = await Dealer.findById(dealerId);
+  if (!dealer) throw new AppError('Dealer not found', 404);
+  if (dealer.status !== 'pending') throw new AppError('Can only request update on a pending application', 400);
+
+  const before = { status: dealer.status };
+  dealer.status = 'updates-required';
+  dealer.notes = `[Update Requested] ${field}: ${instructions}`;
+  await dealer.save();
+
+  await auditService.log('dealer', dealerId, 'request_update', userId, {
+    before,
+    after: { status: 'updates-required', field, instructions },
+  });
+
+  await syncToDealerApp(dealer.applicationId, 'REQUEST_UPDATE', {
+    supplierFeedback: instructions,
+    updateFields: [field],
+  });
+
   return dealer;
 };
 
@@ -174,4 +226,5 @@ const getDealerStats = async (dealerId) => {
 module.exports = {
   createDealer, getDealers, getDealerById, approveDealer,
   rejectDealer, suspendDealer, reactivateDealer, updateDealer, getDealerStats,
+  requestUpdate,
 };

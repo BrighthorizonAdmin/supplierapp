@@ -21,9 +21,9 @@ export const fetchDealerCounts = createAsyncThunk('dealer/fetchCounts', async (_
       api.get('/dealers', { params: { limit: 1, status: 'suspended' } }),
     ]);
     return {
-      total:     tot.data.pagination?.total ?? 0,
-      active:    act.data.pagination?.total ?? 0,
-      pending:   pnd.data.pagination?.total ?? 0,
+      total: tot.data.pagination?.total ?? 0,
+      active: act.data.pagination?.total ?? 0,
+      pending: pnd.data.pagination?.total ?? 0,
       suspended: sus.data.pagination?.total ?? 0,
     };
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
@@ -59,6 +59,17 @@ export const rejectDealer = createAsyncThunk('dealer/reject', async ({ id, reaso
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
+
+export const requestDealerUpdate = createAsyncThunk(
+  'dealer/requestUpdate',
+  async ({ id, field, instructions }, { rejectWithValue }) => {
+    try {
+      const { data } = await api.patch(`/dealers/${id}/request-update`, { field, instructions });
+      toast.success('Update request sent to dealer');
+      return data.data;
+    } catch (err) { return rejectWithValue(err.response?.data?.message); }
+  }
+);
 
 export const suspendDealer = createAsyncThunk('dealer/suspend', async ({ id, reason }, { rejectWithValue }) => {
   try {
@@ -110,9 +121,9 @@ const dealerSlice = createSlice({
         // Derive count for this status from pagination so stats stay fresh without extra calls
         const total = action.payload.pagination?.total ?? 0;
         const s = action.payload._fetchedStatus;
-        if (s === '')          state.counts.total     = total;
-        else if (s === 'active')    state.counts.active    = total;
-        else if (s === 'pending')   state.counts.pending   = total;
+        if (s === '') state.counts.total = total;
+        else if (s === 'active') state.counts.active = total;
+        else if (s === 'pending') state.counts.pending = total;
         else if (s === 'suspended') state.counts.suspended = total;
       })
       .addCase(fetchDealers.rejected, (state, action) => {
@@ -130,18 +141,24 @@ const dealerSlice = createSlice({
         const idx = state.list.findIndex((d) => d._id === action.payload._id);
         if (idx !== -1) state.list[idx] = action.payload;
         if (state.selected?._id === action.payload._id) state.selected = action.payload;
-        state.counts.pending  = Math.max(0, state.counts.pending - 1);
-        state.counts.active  += 1;
+        state.counts.pending = Math.max(0, state.counts.pending - 1);
+        state.counts.active += 1;
       })
       .addCase(rejectDealer.fulfilled, (state, action) => {
         const idx = state.list.findIndex((d) => d._id === action.payload._id);
         if (idx !== -1) state.list[idx] = action.payload;
         state.counts.pending = Math.max(0, state.counts.pending - 1);
       })
+      .addCase(requestDealerUpdate.fulfilled, (state, action) => {
+        const idx = state.list.findIndex((d) => d._id === action.payload._id);
+        if (idx !== -1) state.list[idx] = action.payload;
+        if (state.selected?._id === action.payload._id) state.selected = action.payload;
+        state.counts.pending = Math.max(0, state.counts.pending - 1);
+      })
       .addCase(suspendDealer.fulfilled, (state, action) => {
         const idx = state.list.findIndex((d) => d._id === action.payload._id);
         if (idx !== -1) state.list[idx] = action.payload;
-        state.counts.active    = Math.max(0, state.counts.active - 1);
+        state.counts.active = Math.max(0, state.counts.active - 1);
         state.counts.suspended += 1;
       })
       .addCase(updateDealer.fulfilled, (state, action) => {
