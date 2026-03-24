@@ -45,6 +45,10 @@ const ALL_PERMISSIONS = [
   { key: 'invoices:read',       label: 'View Invoices',          group: 'Finance' },
   { key: 'invoices:write',      label: 'Manage Invoices',        group: 'Finance' },
 
+  //marketing
+  {key: 'marketing:read', label: 'View Marketings', group:'Marketing'},
+  {key: 'marketing:write', label: 'Mange Marketings', group:'Marketing'},
+
   // System
   { key: 'notifications:read',  label: 'View Notifications',     group: 'System' },
   { key: 'notifications:write', label: 'Manage Notifications',   group: 'System' },

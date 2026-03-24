@@ -1,4 +1,4 @@
-import { HashRouter , Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import ProtectedRoute from './ProtectedRoute';
 import MainLayout from '../components/layout/MainLayout';
@@ -26,6 +26,8 @@ import NotificationPage from '../features/notifications/pages/NotificationPage';
 import MarketingPage from '../features/Marketing/pages/MarketingPage';
 import AddMarketingLeadPage from '../features/Marketing/pages/AddMarketingLeadPage';
 import MarketingLeadDetailPage from '../features/Marketing/pages/MarketingLeadDetailPage';
+import RoleManagementPage from '../features/usermanagement/pages/RoleManagement';
+import UserManagementPage from '../features/usermanagement/pages/UserManagement';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -39,26 +41,119 @@ const AppRouter = () => {
           element={<ProtectedRoute><MainLayout /></ProtectedRoute>}
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="onboarding" element={<DealerOnboardingPage />} />
-          <Route path="dealers" element={<DealerListPage />} />
-          <Route path="dealers/:id" element={<DealerDetailPage />} />
-          <Route path="inventory" element={<InventoryPage />} />
-          <Route path="products" element={<ProductListPage />} />
-          <Route path="products/new" element={<ProductFormPage />} />
-          <Route path="products/:id/edit" element={<ProductFormPage />} />
-          <Route path="orders" element={<OrderListPage />} />
-          <Route path="orders/:id" element={<OrderDetailPage />} />
-          <Route path="retail-orders" element={<RetailOrderListPage />} />
-          <Route path="payments" element={<PaymentListPage />} />
-          <Route path="invoices" element={<InvoiceListPage />} />
-          <Route path="returns" element={<ReturnListPage />} />
-          <Route path="finance" element={<FinancePage />} />
-          <Route path="audit" element={<AuditPage />} />
-          <Route path="notifications" element={<NotificationPage />} />
-          <Route path="marketing-leads" element={<MarketingPage />} />
-          <Route path="marketing-leads/new" element={<AddMarketingLeadPage />} />
-          <Route path="marketing-leads/:id" element={<MarketingLeadDetailPage />} />
+          <Route path="dashboard"
+            element={
+              <ProtectedRoute permission="dashboard:read">
+                <DashboardPage />
+              </ProtectedRoute>} />
+          <Route path="onboarding"
+            element={
+              <ProtectedRoute permission="dealer:read">
+                <DealerOnboardingPage />
+              </ProtectedRoute>
+            } />
+          <Route path="dealers"
+            element={
+              <ProtectedRoute permission="dealer:read">
+                <DealerListPage />
+              </ProtectedRoute>
+            } />
+          <Route path="dealers/:id" element={
+            <ProtectedRoute permission="dealer:read">
+              <DealerDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="inventory" element={
+            <ProtectedRoute permission="inventory:read">
+              <InventoryPage />
+            </ProtectedRoute>
+          } />
+          <Route path="products" element={
+            <ProtectedRoute permission="products:write">
+              <ProductListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="products/new" element={
+            <ProtectedRoute permission="products:write">
+              <ProductFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="products/:id/edit" element={
+            <ProtectedRoute permission="products:write">
+              <ProductFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="orders" element={
+            <ProtectedRoute permission="orders:read">
+              <OrderListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="orders/:id" element={
+            <ProtectedRoute permission="orders:read">
+              <OrderDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="retail-orders" element={
+            <ProtectedRoute permission="retailOrders:read">
+              <RetailOrderListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="payments" element={
+            <ProtectedRoute permission="payments:read">
+              <PaymentListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="invoices" element={
+            <ProtectedRoute permission="invoices:read'">
+              <InvoiceListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="returns" element={
+            <ProtectedRoute permission="returns:read">
+              <ReturnListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="finance" element={
+            <ProtectedRoute permission="finance:read">
+              <FinancePage />
+            </ProtectedRoute>
+          } />
+          <Route path="audit" element={
+            <ProtectedRoute permission="audit:read">
+              <AuditPage />
+            </ProtectedRoute>
+          } />
+          <Route path="notifications" element={
+            <ProtectedRoute permission="dashboard:read">
+              <NotificationPage />
+            </ProtectedRoute>
+          } />
+          <Route path="marketing-leads" element={
+            <ProtectedRoute permission='marketing:read'>
+              <MarketingPage />
+            </ProtectedRoute>
+            } />
+          <Route path="marketing-leads/new" element={
+            <ProtectedRoute permission="marketing:write">
+              <AddMarketingLeadPage />
+            </ProtectedRoute>
+            } />
+          <Route path="marketing-leads/:id" element={
+            <ProtectedRoute permission="marketing:read">
+              <MarketingLeadDetailPage />
+            </ProtectedRoute>
+            } />
+          
+          <Route path="rolemanagement" element={
+            <ProtectedRoute permission="users:manage">
+              <RoleManagementPage />
+            </ProtectedRoute>
+          } />
+          <Route path="usermanagement" element={
+            <ProtectedRoute permission="users:manage">
+              <UserManagementPage />
+            </ProtectedRoute>
+          } />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
