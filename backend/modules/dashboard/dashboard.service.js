@@ -7,10 +7,19 @@ const AuditLog = require('../audit/model/AuditLog.model');
 const Transaction = require('../finance/model/Transaction.model');
 const { emitToAll } = require('../../websocket/socket');
 const { KPI_UPDATE } = require('../../websocket/events');
+const { hasPermission } = require('../../middlewares/rbac.middleware');
 
-const getKPIs = async () => {
+/**
+ * Returns only the KPIs the user is permitted to see, based on their role and permissions.
+ * Super-admin sees everything; all other roles are filtered by their permission set.
+ */
+const getKPIs = async (user = {}) => {
+  const { role, permissions = [] } = user;
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const isSuperAdmin = role === 'super-admin';
+  const can = (perm) => isSuperAdmin || hasPermission(permissions, perm);
 
   const [
     totalDealers,
@@ -22,37 +31,37 @@ const getKPIs = async () => {
     lowStockAlerts,
     pendingReturns,
   ] = await Promise.all([
-    Dealer.countDocuments(),
-    Dealer.countDocuments({ status: 'active' }),
-    Dealer.countDocuments({ status: 'pending' }),
-    Order.countDocuments({ status: { $in: ['confirmed', 'processing', 'shipped'] } }),
-    Transaction.aggregate([
-      { $match: { type: 'debit', 'ref.refType': 'order', createdAt: { $gte: monthStart } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]),
-    Invoice.countDocuments({
-      status: { $in: ['issued', 'partial'] },
-      dueDate: { $lt: now },
-    }),
-    Inventory.countDocuments({
-      $expr: { $lte: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] },
-    }),
-    Return.countDocuments({ status: { $in: ['requested', 'approved'] } }),
+    can('dealer:read') ? Dealer.countDocuments() : Promise.resolve(undefined),
+    can('dealer:read') ? Dealer.countDocuments({ status: 'active' }) : Promise.resolve(undefined),
+    can('dealer:read') ? Dealer.countDocuments({ status: 'pending' }) : Promise.resolve(undefined),
+    can('orders:read') ? Order.countDocuments({ status: { $in: ['confirmed', 'processing', 'shipped'] } }) : Promise.resolve(undefined),
+    can('finance:read')
+      ? Transaction.aggregate([
+          { $match: { type: 'debit', 'ref.refType': 'order', createdAt: { $gte: monthStart } } },
+          { $group: { _id: null, total: { $sum: '$amount' } } },
+        ])
+      : Promise.resolve(undefined),
+    can('finance:read') || can('invoices:read')
+      ? Invoice.countDocuments({ status: { $in: ['issued', 'partial'] }, dueDate: { $lt: now } })
+      : Promise.resolve(undefined),
+    can('inventory:read')
+      ? Inventory.countDocuments({
+          $expr: { $lte: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] },
+        })
+      : Promise.resolve(undefined),
+    can('returns:read') ? Return.countDocuments({ status: { $in: ['requested', 'approved'] } }) : Promise.resolve(undefined),
   ]);
 
-  const kpis = {
-    totalDealers,
-    activeDealers,
-    pendingApprovals,
-    activeOrders,
-    monthRevenue: monthRevenue[0]?.total || 0,
-    overdueInvoices,
-    lowStockAlerts,
-    pendingReturns,
-    updatedAt: new Date(),
-  };
+  const kpis = { updatedAt: new Date() };
+  if (totalDealers !== undefined) kpis.totalDealers = totalDealers;
+  if (activeDealers !== undefined) kpis.activeDealers = activeDealers;
+  if (pendingApprovals !== undefined) kpis.pendingApprovals = pendingApprovals;
+  if (activeOrders !== undefined) kpis.activeOrders = activeOrders;
+  if (monthRevenue !== undefined) kpis.monthRevenue = monthRevenue[0]?.total || 0;
+  if (overdueInvoices !== undefined) kpis.overdueInvoices = overdueInvoices;
+  if (lowStockAlerts !== undefined) kpis.lowStockAlerts = lowStockAlerts;
+  if (pendingReturns !== undefined) kpis.pendingReturns = pendingReturns;
 
-  // Broadcast updated KPIs
   try {
     emitToAll(KPI_UPDATE, kpis);
   } catch {}
@@ -60,8 +69,16 @@ const getKPIs = async () => {
   return kpis;
 };
 
-const getRecentActivity = async (limit = 10) => {
-  return AuditLog.find()
+/**
+ * Users with audit:read see all activity. Others see only their own actions.
+ */
+const getRecentActivity = async (limit = 10, user = {}) => {
+  const { role, id: userId, permissions = [] } = user;
+  const canSeeAll = role === 'super-admin' || hasPermission(permissions, 'audit:read');
+
+  const filter = canSeeAll ? {} : { performedBy: userId };
+
+  return AuditLog.find(filter)
     .populate('performedBy', 'name role')
     .sort({ createdAt: -1 })
     .limit(limit)

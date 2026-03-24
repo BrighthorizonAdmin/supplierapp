@@ -3,13 +3,13 @@ const asyncHandler = require('../../utils/asyncHandler');
 const { success } = require('../../utils/response');
 
 const getKPIs = asyncHandler(async (req, res) => {
-  const kpis = await dashboardService.getKPIs();
+  const kpis = await dashboardService.getKPIs(req.user);
   return success(res, kpis, 'Dashboard KPIs fetched');
 });
 
 const getRecentActivity = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 10;
-  const activity = await dashboardService.getRecentActivity(limit);
+  const activity = await dashboardService.getRecentActivity(limit, req.user);
   return success(res, activity, 'Recent activity fetched');
 });
 
