@@ -14,13 +14,13 @@ const getRecentActivity = asyncHandler(async (req, res) => {
 });
 
 const getSalesChart = asyncHandler(async (req, res) => {
-  const data = await dashboardService.getSalesChart(req.query.period);
+  const data = await dashboardService.getSalesChart(req.query.period, req.user);
   return success(res, data, 'Sales chart data fetched');
 });
 
 const getTopDealers = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 5;
-  const data = await dashboardService.getTopDealers(limit);
+  const data = await dashboardService.getTopDealers(limit, req.user);
   return success(res, data, 'Top dealers fetched');
 });
 

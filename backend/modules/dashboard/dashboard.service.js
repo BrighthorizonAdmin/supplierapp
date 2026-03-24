@@ -85,7 +85,14 @@ const getRecentActivity = async (limit = 10, user = {}) => {
     .lean();
 };
 
-const getSalesChart = async (period = 'month') => {
+/**
+ * Returns sales chart data. Returns empty array if user lacks finance:read.
+ */
+const getSalesChart = async (period = 'month', user = {}) => {
+  const { role, permissions = [] } = user;
+  const isSuperAdmin = role === 'super-admin';
+  if (!isSuperAdmin && !hasPermission(permissions, 'finance:read')) return [];
+
   const now = new Date();
   let startDate, groupFormat;
 
@@ -123,7 +130,14 @@ const getSalesChart = async (period = 'month') => {
   ]);
 };
 
-const getTopDealers = async (limit = 5) => {
+/**
+ * Returns top dealers by revenue. Returns empty array if user lacks dealer:read.
+ */
+const getTopDealers = async (limit = 5, user = {}) => {
+  const { role, permissions = [] } = user;
+  const isSuperAdmin = role === 'super-admin';
+  if (!isSuperAdmin && !hasPermission(permissions, 'dealer:read')) return [];
+
   return Order.aggregate([
     { $match: { status: { $in: ['confirmed', 'processing', 'shipped', 'delivered'] } } },
     { $group: { _id: '$dealerId', totalOrders: { $sum: 1 }, totalRevenue: { $sum: '$netAmount' } } },

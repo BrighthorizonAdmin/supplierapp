@@ -9,7 +9,7 @@ router.use(authenticate);
 
 router.get('/kpis', authorize('dashboard:read'), getKPIs);
 router.get('/activity', authorize('dashboard:read'), getRecentActivity);
-router.get('/sales-chart', authorize('dashboard:read', 'finance:read'), getSalesChart);
-router.get('/top-dealers', authorize('dashboard:read', 'dealer:read'), getTopDealers);
+router.get('/sales-chart', authorize('dashboard:read'), getSalesChart);
+router.get('/top-dealers', authorize('dashboard:read'), getTopDealers);
 
 module.exports = router;
