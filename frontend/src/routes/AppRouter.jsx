@@ -23,6 +23,9 @@ import ReturnListPage from '../features/returns/pages/ReturnListPage';
 import FinancePage from '../features/finance/pages/FinancePage';
 import AuditPage from '../features/audit/pages/AuditPage';
 import NotificationPage from '../features/notifications/pages/NotificationPage';
+import MarketingPage from '../features/Marketing/pages/MarketingPage';
+import AddMarketingLeadPage from '../features/Marketing/pages/AddMarketingLeadPage';
+import MarketingLeadDetailPage from '../features/Marketing/pages/MarketingLeadDetailPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -53,6 +56,9 @@ const AppRouter = () => {
           <Route path="finance" element={<FinancePage />} />
           <Route path="audit" element={<AuditPage />} />
           <Route path="notifications" element={<NotificationPage />} />
+          <Route path="marketing-leads" element={<MarketingPage />} />
+          <Route path="marketing-leads/new" element={<AddMarketingLeadPage />} />
+          <Route path="marketing-leads/:id" element={<MarketingLeadDetailPage />} />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

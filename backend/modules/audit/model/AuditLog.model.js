@@ -5,7 +5,7 @@ const auditLogSchema = new mongoose.Schema(
     entity: {
       type: String,
       enum: {
-        values: ['dealer', 'order', 'payment', 'return', 'product', 'inventory', 'user', 'invoice', 'warehouse', 'retailOrder'],
+        values: ['dealer', 'order', 'payment', 'return', 'product', 'inventory', 'user', 'invoice', 'warehouse', 'retailOrder', 'marketingLead'],
         message: '{VALUE} is not a valid entity type',
       },
       required: [true, 'Entity type is required'],
@@ -17,7 +17,7 @@ const auditLogSchema = new mongoose.Schema(
     action: {
       type: String,
       enum: {
-        values: ['create', 'update', 'delete', 'approve', 'reject', 'suspend', 'confirm', 'cancel', 'allocate', 'refund', 'login', 'logout', 'password_change', 'password_reset'],
+        values: ['create', 'update', 'delete', 'approve', 'reject', 'suspend', 'confirm', 'cancel', 'allocate', 'refund', 'login', 'logout','password_change', 'password_reset', 'logCall', 'requestDocuments', 'advancePipeline'],
         message: '{VALUE} is not a valid action',
       },
       required: [true, 'Action is required'],
@@ -25,7 +25,7 @@ const auditLogSchema = new mongoose.Schema(
     performedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Performer is required'],
+      // required: [true, 'Performer is required'],
     },
     changes: {
       before: { type: mongoose.Schema.Types.Mixed },

@@ -27,6 +27,15 @@ const rejectDealer = asyncHandler(async (req, res) => {
   return success(res, dealer, 'Dealer rejected');
 });
 
+const requestUpdate = asyncHandler(async (req, res) => {
+  const dealer = await dealerService.requestUpdate(
+    req.params.id,
+    { field: req.body.field, instructions: req.body.instructions },
+    req.user.id
+  );
+  return success(res, dealer, 'Update requested from dealer');
+});
+
 const suspendDealer = asyncHandler(async (req, res) => {
   const dealer = await dealerService.suspendDealer(req.params.id, req.body.reason, req.user.id);
   return success(res, dealer, 'Dealer suspended');
@@ -50,4 +59,5 @@ const getDealerStats = asyncHandler(async (req, res) => {
 module.exports = {
   createDealer, getDealers, getDealerById, approveDealer,
   rejectDealer, suspendDealer, reactivateDealer, updateDealer, getDealerStats,
+  requestUpdate,
 };

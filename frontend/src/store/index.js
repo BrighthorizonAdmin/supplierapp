@@ -12,6 +12,7 @@ import dashboardReducer from '../features/dashboard/dashboardSlice';
 import notificationReducer from '../features/notifications/notificationSlice';
 import auditReducer from '../features/audit/auditSlice';
 import settingsReducer from '../features/notifications/settingsSlice';
+import marketingReducer from '../features/Marketing/marketingSlice';
 import uiReducer from './uiSlice';
 
 const store = configureStore({
@@ -29,6 +30,7 @@ const store = configureStore({
     notification: notificationReducer,
     audit: auditReducer,
     settings: settingsReducer,
+    marketing: marketingReducer,
     ui: uiReducer,
   },
   middleware: (getDefaultMiddleware) =>
