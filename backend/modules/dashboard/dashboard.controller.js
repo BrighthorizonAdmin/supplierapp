@@ -24,4 +24,10 @@ const getTopDealers = asyncHandler(async (req, res) => {
   return success(res, data, 'Top dealers fetched');
 });
 
-module.exports = { getKPIs, getRecentActivity, getSalesChart, getTopDealers };
+const getRecentOrders = asyncHandler(async (req, res) => {
+  const limit = parseInt(req.query.limit, 10) || 6;
+  const data = await dashboardService.getRecentOrders(limit);
+  return success(res, data, 'Recent orders fetched');
+});
+
+module.exports = { getKPIs, getRecentActivity, getSalesChart, getTopDealers, getRecentOrders };

@@ -164,4 +164,18 @@ const getTopDealers = async (limit = 5, user = {}) => {
   ]);
 };
 
-module.exports = { getKPIs, getRecentActivity, getSalesChart, getTopDealers };
+/**
+ * Returns the most recent orders for the dashboard widget.
+ * Gated by dashboard:read only — callers do NOT need orders:read.
+ * Returns a slim projection (no line-item details, no internal pricing).
+ */
+const getRecentOrders = async (limit = 6) => {
+  return Order.find()
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .populate('dealerId', 'businessName dealerCode')
+    .select('orderNumber dealerId createdAt netAmount status')
+    .lean();
+};
+
+module.exports = { getKPIs, getRecentActivity, getSalesChart, getTopDealers, getRecentOrders };
