@@ -137,6 +137,12 @@ const DEFAULT_ROLES = [
     ],
     isSystem: false,
   },
+  {
+    name: 'analyst',
+    description: 'Access to the analytics/audit dashboard. Can view aggregated business metrics and audit logs without access to individual module records.',
+    permissions: ['audit:read'],
+    isSystem: false,
+  },
 ];
 
 module.exports = { ALL_PERMISSIONS, DEFAULT_ROLES, isValidPermission };
