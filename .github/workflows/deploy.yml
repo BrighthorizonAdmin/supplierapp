@@ -31,7 +31,8 @@ jobs:
             cd ~/supplierapp
 
             echo "==> Pulling latest changes from main"
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "==> Installing backend dependencies"
             cd backend
