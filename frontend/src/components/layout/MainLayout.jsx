@@ -10,14 +10,20 @@ const MainLayout = () => {
   useSocketEvents(); // Connect socket and listen to events
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar />
-      <div className={`flex flex-col flex-1 overflow-hidden transition-all duration-200 ${sidebarOpen ? 'ml-64' : 'ml-16'}`}>
-        <Topbar />
-        <main className="flex-1 overflow-y-auto p-6">
+    <div className="flex h-screen overflow-hidden bg-slate-50 print:block print:h-auto print:overflow-visible">
+      <div className="print:hidden">
+        <Sidebar />
+      </div>
+      <div className={`flex flex-col flex-1 overflow-hidden transition-all duration-200 ${sidebarOpen ? 'ml-64' : 'ml-16'} print:ml-0 print:block print:overflow-visible`}>
+        <div className="print:hidden">
+          <Topbar />
+        </div>
+        <main className="flex-1 overflow-y-auto p-6 print:p-0 print:overflow-visible">
           <Outlet />
         </main>
-        <Footer />
+        <div className="print:hidden">
+          <Footer />
+        </div>
       </div>
     </div>
   );
