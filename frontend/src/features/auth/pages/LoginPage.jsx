@@ -2,13 +2,52 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useDispatch, useSelector } from 'react-redux';
 import { login } from '../authSlice';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 const LoginPage = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { loading, error } = useSelector((s) => s.auth);
   const { register, handleSubmit, formState: { errors } } = useForm();
 
-  const onSubmit = (data) => dispatch(login(data));
+  useEffect(() => {
+    if (location.state?.message) {
+      toast.success(location.state.message);
+    }
+  }, []);
+
+  // const onSubmit = (data) => dispatch(login(data));
+
+  const onSubmit = async (data) => {
+  const res = await dispatch(login(data));
+
+  if (res.meta.requestStatus === 'fulfilled') {
+    const { permissions, isFirstLogin } = res.payload;
+    console.log(isFirstLogin)
+    // 🔐 FIRST LOGIN
+    if (isFirstLogin) {
+      navigate('/changePassword');
+      return;
+    }
+
+    // 🔥 RBAC REDIRECT
+    if (permissions.includes('*') || permissions.includes('dashboard:read')) {
+      navigate('/dashboard');
+    } else if (permissions.includes('audit:read')) {
+      navigate('/audit');
+    } else if (permissions.includes('orders:read')) {
+      navigate('/orders');
+    } else if (permissions.includes('marketing:read')) {
+      navigate('/marketing-leads');
+    } else if (permissions.includes('finance:read')) {
+      navigate('/finance');
+    } else {
+      navigate('/unauthorized');
+    }
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-primary-900 flex items-center justify-center p-4">
@@ -45,6 +84,15 @@ const LoginPage = () => {
                 {...register('password', { required: 'Password is required' })}
               />
               {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
+            </div>
+
+            <div className="flex justify-end text-sm mt-2">
+              <Link
+                to="/forgot-password"
+                className="text-blue-600 hover:underline"
+              >
+                Reset Password?
+              </Link>
             </div>
 
             {error && (

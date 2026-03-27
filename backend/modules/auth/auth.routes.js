@@ -8,6 +8,8 @@ const {
   updateUser,
   changePassword,
   resetPassword,
+  forgotPassword,
+  resetPasswordByToken,
 } = require('./auth.controller');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { authorize } = require('../../middlewares/rbac.middleware');
@@ -26,6 +28,8 @@ const bootstrapOrAuth = async (req, res, next) => {
 // Public
 router.post('/register', bootstrapOrAuth, register);
 router.post('/login', login);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password/:token', resetPasswordByToken);
 
 // Authenticated
 router.get('/me', authenticate, getMe);

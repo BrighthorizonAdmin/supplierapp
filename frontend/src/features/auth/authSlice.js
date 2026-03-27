@@ -35,7 +35,8 @@ const authSlice = createSlice({
     isAuthenticated: !!storedToken,
     loading: false,
     error: null,
-    permissions: storedPermissions ? JSON.parse(storedPermissions) : [],
+    permissions: storedPermissions ? JSON.parse(storedPermissions) : null,
+    isFirstLogin: false,
   },
   reducers: {
     logout: (state) => {
@@ -54,12 +55,13 @@ const authSlice = createSlice({
       .addCase(login.fulfilled, (state, action) => {
   state.loading = false;
 
-  const { user, permissions } = action.payload;
+  const { user, permissions, isFirstLogin } = action.payload;
 
   state.user = user;
   state.token = action.payload.token;
   state.isAuthenticated = true;
   state.permissions = permissions;
+  state.isFirstLogin = isFirstLogin; // ✅ IMPORTANT
   localStorage.setItem('user', JSON.stringify(user));
   localStorage.setItem('permissions', JSON.stringify(permissions));
 
@@ -70,8 +72,11 @@ const authSlice = createSlice({
         state.error = action.payload;
       })
       .addCase(getMe.fulfilled, (state, action) => {
-        state.user = action.payload;
-        localStorage.setItem('user', JSON.stringify(action.payload));
+        state.user = action.payload.user;
+        state.permissions = action.payload.permissions; // 🔥 IMPORTANT
+
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
+        localStorage.setItem('permissions', JSON.stringify(action.payload.permissions));
       });
   },
 });

@@ -32,12 +32,46 @@ export const updateUser = createAsyncThunk(
   'users/updateUser',
   async ({ id, payload }, { rejectWithValue }) => {
     try {
-      const { data } = await api.put(`auth/users/${id}`, payload);
+      const { data } = await api.patch(`auth/users/${id}`, payload);
       toast.success('User updated');
       return data.data;
     } catch (err) {
       toast.error(err.response?.data?.message || 'Update failed');
       return rejectWithValue(err.response?.data?.message);
+    }
+  }
+);
+
+export const resetUserPassword = createAsyncThunk(
+  'users/resetPassword',
+  async ({ id, password },{rejectWithValue}) => {
+    try{
+      await api.patch(`auth/users/${id}/password`,{newPassword:password});
+    toast.success('Password reset successfully');
+    return id;
+    }
+    catch(err){
+       toast.error(err.response?.data?.message || 'Update failed');
+      return rejectWithValue(err.response?.data?.message);
+    }
+  }
+);
+
+export const changePassword = createAsyncThunk(
+  'auth/changePassword',
+  async ({ currentPassword, newPassword }, { rejectWithValue }) => {
+    try {
+      const { data } = await api.patch('/auth/me/password', {
+        currentPassword,
+        newPassword,
+      });
+
+      toast.success(data.message || 'Password changed successfully');
+      return data;
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Password change failed';
+      toast.error(msg);
+      return rejectWithValue(msg);
     }
   }
 );

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('./model/User.model');
 const Role = require('../roles/role.model');
@@ -6,13 +7,19 @@ const { AppError } = require('../../middlewares/error.middleware');
 const auditService = require('../audit/audit.service');
 
 /**
- * Fetch the permissions array for a given role name.
+ * Fetch merged permissions for one role (string) or multiple roles (array).
  * Super-admin always gets ['*'] regardless of DB state.
  */
-const getPermissionsForRole = async (roleName) => {
-  if (roleName === 'super-admin') return ['*'];
-  const role = await Role.findOne({ name: roleName, isActive: true }).lean();
-  return role ? role.permissions : [];
+const getPermissionsForRole = async (roleInput) => {
+  const roles = Array.isArray(roleInput) ? roleInput : [roleInput];
+
+  if (roles.includes('super-admin')) return ['*'];
+
+  const roleDocs = await Role.find({ name: { $in: roles }, isActive: true }).lean();
+
+  // Merge and deduplicate permissions across all matched roles
+  const merged = [...new Set(roleDocs.flatMap((r) => r.permissions))];
+  return merged;
 };
 
 /**
@@ -59,6 +66,8 @@ const login = async (email, password, meta = {}) => {
   const isMatch = await user.comparePassword(password);
   if (!isMatch) throw new AppError('Invalid email or password', 401);
 
+  const isFirstLogin = user.isFirstLogin;
+
   user.lastLogin = new Date();
   await user.save({ validateBeforeSave: false });
 
@@ -66,7 +75,7 @@ const login = async (email, password, meta = {}) => {
 
   const permissions = await getPermissionsForRole(user.role);
   const token = signToken(user, permissions);
-  return { user, token, permissions };
+  return { user, token, permissions, isFirstLogin };
 };
 
 const getMe = async (userId) => {
@@ -95,25 +104,37 @@ const createUser = async (data, performedBy) => {
   const existing = await User.findOne({ email: data.email });
   if (existing) throw new AppError('Email is already registered', 409);
 
-  const roleName = (data.role || 'read-only').toLowerCase();
-  const roleDoc = await Role.findOne({ name: roleName });
-  if (!roleDoc) throw new AppError(`Role "${roleName}" does not exist`, 400);
+  // ensure roles is array
+  const roles = Array.isArray(data.role) && data.role.length > 0
+    ? data.role.map(r => r.toLowerCase())
+    : ['read-only'];
 
-  const user = await User.create({ ...data, role: roleName });
+  // validate roles
+  const roleDocs = await Role.find({ name: { $in: roles } });
+
+  if (roleDocs.length !== roles.length) {
+    throw new AppError(`One or more roles do not exist`, 400);
+  }
+
+  const user = await User.create({ ...data, role: roles,isFirstLogin: true, });
   await auditService.log('user', user._id, 'create', performedBy, {
-    after: { name: user.name, email: user.email, role: user.role },
+    after: { name: user.name, email: user.email, role: user.role,isFirstLogin:user.isFirstLogin, },
   });
 
   return user;
 };
 
 const updateUser = async (userId, updates, performedBy) => {
-  // Validate role exists if being changed
   if (updates.role) {
-    const roleName = updates.role.toLowerCase();
-    const roleDoc = await Role.findOne({ name: roleName });
-    if (!roleDoc) throw new AppError(`Role "${updates.role}" does not exist`, 400);
-    updates.role = roleName;
+    const roles = Array.isArray(updates.role)
+      ? updates.role.map((r) => r.toLowerCase())
+      : [updates.role.toLowerCase()];
+
+    const roleDocs = await Role.find({ name: { $in: roles } });
+    if (roleDocs.length !== roles.length)
+      throw new AppError('One or more roles do not exist', 400);
+
+    updates.role = roles;
   }
 
   const allowedFields = ['name', 'role', 'isActive'];
@@ -126,7 +147,6 @@ const updateUser = async (userId, updates, performedBy) => {
   await auditService.log('user', userId, 'update', performedBy, { after: filtered });
   return user;
 };
-
 /**
  * Change own password — requires current password verification.
  */
@@ -139,6 +159,7 @@ const changePassword = async (userId, currentPassword, newPassword) => {
 
   user.password = newPassword;
   user.passwordChangedAt = new Date();
+  user.isFirstLogin = false;
   await user.save();
 
   await auditService.log('user', userId, 'password_change', userId, {});
@@ -160,6 +181,53 @@ const resetPassword = async (userId, newPassword, performedBy) => {
   return { message: 'Password reset successfully' };
 };
 
+/**
+ * Forgot password — generate a reset token and email it to the user.
+ * Always responds the same way (even if email not found) to prevent user enumeration.
+ */
+/**
+ * Forgot password — generate a reset token and return it directly.
+ * No email is sent; the caller receives the token to proceed immediately.
+ */
+const forgotPassword = async (email) => {
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user) throw new AppError('No account found with that email address', 404);
+  if (!user.isActive) throw new AppError('This account has been deactivated. Contact admin.', 403);
+
+  const plainToken = crypto.randomBytes(32).toString('hex');
+  const hashedToken = crypto.createHash('sha256').update(plainToken).digest('hex');
+
+  user.resetToken = hashedToken;
+  user.resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+  await user.save({ validateBeforeSave: false });
+
+  return { token: plainToken };
+};
+
+/**
+ * Reset password using the token from the email link.
+ */
+const resetPasswordByToken = async (plainToken, newPassword) => {
+  const hashedToken = crypto.createHash('sha256').update(plainToken).digest('hex');
+
+  const user = await User.findOne({
+    resetToken: hashedToken,
+    resetTokenExpiry: { $gt: new Date() },
+  }).select('+password');
+
+  if (!user) throw new AppError('Reset link is invalid or has expired', 400);
+
+  user.password = newPassword;
+  user.passwordChangedAt = new Date();
+  user.isFirstLogin = false;
+  user.resetToken = undefined;
+  user.resetTokenExpiry = undefined;
+  await user.save();
+
+  await auditService.log('user', user._id, 'password_reset', user._id, {});
+  return { message: 'Password reset successfully. Please log in.' };
+};
+
 module.exports = {
   register,
   login,
@@ -169,5 +237,7 @@ module.exports = {
   updateUser,
   changePassword,
   resetPassword,
+  forgotPassword,
+  resetPasswordByToken,
   signToken,
 };

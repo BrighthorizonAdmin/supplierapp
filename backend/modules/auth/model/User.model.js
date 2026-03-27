@@ -24,12 +24,18 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
     role: {
-      type: String,
+      type: [String],
       required: [true, 'Role is required'],
       trim: true,
       lowercase: true,
       default: 'read-only',
     },
+    isFirstLogin: {
+  type: Boolean,
+  default: true,
+},
+resetToken: String,
+resetTokenExpiry: Date,
     isActive: {
       type: Boolean,
       default: true,

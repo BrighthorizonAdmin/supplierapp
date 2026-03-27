@@ -5,6 +5,8 @@ import MainLayout from '../components/layout/MainLayout';
 
 // Auth
 import LoginPage from '../features/auth/pages/LoginPage';
+import ForgotPasswordPage from '../features/auth/pages/ForgotPasswordPage';
+import ResetPasswordPage from '../features/auth/pages/ResetPasswordPage';
 
 // Pages (lazy would be better for production, keeping simple here)
 import DashboardPage from '../features/dashboard/pages/DashboardPage';
@@ -31,14 +33,22 @@ import UserManagementPage from '../features/usermanagement/pages/UserManagement'
 import InvoiceFormPage from '../features/payments/pages/InvoiceFormPage';
 import InvoiceDetailPage from '../features/payments/pages/InvoiceDetailPage';
 
+import ChangePassword from '../features/usermanagement/pages/ChangePassword';
 
 const AppRouter = () => {
-  const { isAuthenticated } = useSelector((s) => s.auth);
+  const { isAuthenticated} = useSelector((s) => s.auth);
 
   return (
     <HashRouter >
       <Routes>
         <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+        <Route path="/forgot-password" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <ForgotPasswordPage />} />
+        <Route path="/reset-password/:token" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <ResetPasswordPage />} />
+        <Route path="/changePassword" element={
+          <ProtectedRoute>
+            <ChangePassword />
+          </ProtectedRoute>
+        } />
         <Route
           path="/"
           element={<ProtectedRoute><MainLayout /></ProtectedRoute>}
@@ -111,6 +121,21 @@ const AppRouter = () => {
               <InvoiceListPage />
             </ProtectedRoute>
           } />
+          <Route path="invoices/new" element={
+            <ProtectedRoute permission="invoices:write">
+              <InvoiceFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="invoices/:id" element={
+            <ProtectedRoute permission="invoices:read">
+              <InvoiceDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="invoices/:id/edit" element={
+            <ProtectedRoute permission="invoices:write">
+              <InvoiceFormPage />
+            </ProtectedRoute>
+          } />
           <Route path="returns" element={
             <ProtectedRoute permission="returns:read">
               <ReturnListPage />
@@ -127,7 +152,7 @@ const AppRouter = () => {
             </ProtectedRoute>
           } />
           <Route path="notifications" element={
-            <ProtectedRoute permission="notifications:read">
+            <ProtectedRoute permission='notifications:read'>
               <NotificationPage />
             </ProtectedRoute>
           } />
@@ -157,10 +182,6 @@ const AppRouter = () => {
               <UserManagementPage />
             </ProtectedRoute>
           } />
-          <Route path="invoices" element={<InvoiceListPage />} />
-          <Route path="invoices/new" element={<InvoiceFormPage />} />
-          <Route path="invoices/:id" element={<InvoiceDetailPage />} />
-          <Route path="invoices/:id/edit" element={<InvoiceFormPage />} />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

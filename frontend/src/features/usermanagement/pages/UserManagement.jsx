@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { createUser, getUsers, updateUser } from '../userSlice';
+import { createUser, getUsers, resetUserPassword, updateUser } from '../userSlice';
 import { getRoles } from '../roleSlice';
+import Select from 'react-select';
+
 
 const UserManagementPage = () => {
   const dispatch = useDispatch();
@@ -13,10 +15,11 @@ const UserManagementPage = () => {
     name: '',
     email: '',
     password: '',
-    role: '',
+    role: [],
   });
 
   const [editingId, setEditingId] = useState(null);
+
 
   useEffect(() => {
     dispatch(getUsers());
@@ -38,7 +41,7 @@ const UserManagementPage = () => {
       name: '',
       email: '',
       password: '',
-      role: '',
+      role: [],
     });
     setEditingId(null);
   };
@@ -48,11 +51,23 @@ const UserManagementPage = () => {
       name: user.name,
       email: user.email,
       password: '',
-      role: user.role?._id || user.role,
+      role: Array.isArray(user.role) ? user.role : [user.role].filter(Boolean),
     });
 
     setEditingId(user._id);
   };
+
+  const handleReset = (id) => {
+    const newPassword = prompt('Enter new password');
+    if (!newPassword) return;
+
+    dispatch(resetUserPassword({ id, password: newPassword }));
+  };
+
+  const roleOptions = roles.map((r) => ({
+    value: r.name,
+    label: r.name,
+  }));
 
   return (
     <div className="p-6">
@@ -94,21 +109,20 @@ const UserManagementPage = () => {
             />
           )}
 
-          <select
-            value={form.role}
-            onChange={(e) =>
-              setForm({ ...form, role: e.target.value })
-            }
-            className="border p-2"
-          >
-            <option value="">Select Role</option>
-
-            {roles.map((r) => (
-              <option key={r._id} value={r.name}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+          <Select
+            options={roleOptions}
+            isMulti
+            placeholder="Select Roles..."
+            className="w-full"
+            classNamePrefix="select"
+            value={roleOptions.filter(option =>
+              form.role.includes(option.value)
+            )}
+            onChange={(selectedOptions) => {
+              const values = selectedOptions.map(opt => opt.value);
+              setForm({ ...form, role: values });
+            }}
+          />
 
         </div>
 
@@ -132,9 +146,16 @@ const UserManagementPage = () => {
               <p className="font-semibold">{u.name}</p>
               <p className="text-sm">{u.email}</p>
               <p className="text-xs text-blue-600">
-                Role: {u.role?.name || u.role}
+                Role: {Array.isArray(u.role) ? u.role.join(", ") : u.role}
               </p>
+              <button
+                onClick={() => handleReset(u._id)}
+                className="bg-red-500 text-white px-2 py-1"
+              >
+                Reset Password
+              </button>
             </div>
+
 
             <button
               onClick={() => handleEdit(u)}

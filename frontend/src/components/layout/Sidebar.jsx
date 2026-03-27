@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { useState } from 'react';
-import { ShieldCheck, X } from 'lucide-react';
+import { ShieldCheck, X, KeyRound } from 'lucide-react';
 import {
   LayoutDashboard, Users, Package, Boxes, ShoppingCart,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { to: '/invoices', icon: FileText, label: 'Sales Invoices', perm: 'invoices:read' },
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
   { to: '/audit', icon: BarChart2, label: 'Analytics', perm: 'audit:read' },
-  { to: '/notifications', icon: Settings, label: 'Settings', perm: null },
+  { to: '/notifications', icon: Settings, label: 'Settings', perm: 'notifications:read' },
 { to: '/rolemanagement', icon: ShieldCheck, label: 'Role Permissions', perm: 'users:manage' },
 { to: '/usermanagement', icon: Users, label: 'User Management', perm: 'users:manage' }
 ];
@@ -62,7 +62,7 @@ const Sidebar = () => {
         {sidebarOpen && (
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white truncate leading-tight">Company Name</p>
-            <p className="text-xs text-blue-600 truncate leading-tight">{`Supplier ${user.role} Portal`}</p>
+            <p className="text-xs text-blue-600 truncate leading-tight">{`Supplier ${Array.isArray(user.role) ? user.role.join(', ') : user.role} Portal`}</p>
           </div>
         )}
         <button
@@ -141,9 +141,16 @@ const Sidebar = () => {
                 {user?.name || 'Supplier User'}
               </p>
               <p className="text-xs text-blue-300 truncate leading-tight capitalize">
-                {user?.role || 'User'}
+                {Array.isArray(user?.role) ? user.role.join(', ') : (user?.role || 'User')}
               </p>
             </div>
+            <button
+              onClick={() => navigate('/changePassword')}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-blue-300 hover:text-white transition-colors flex-shrink-0"
+              title="Change password"
+            >
+              <KeyRound size={15} />
+            </button>
             <button
               onClick={handleLogout}
               className="p-1.5 rounded-lg hover:bg-white/10 text-blue-300 hover:text-red-300 transition-colors flex-shrink-0"
