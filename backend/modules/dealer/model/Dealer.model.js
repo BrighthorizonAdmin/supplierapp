@@ -61,26 +61,28 @@ const dealerSchema = new mongoose.Schema(
     },
     gstNumber: {
       type: String,
-      required: [true, 'GST number is required'],
+      // required: [true, 'GST number is required'],
       unique: true,
       uppercase: true,
       trim: true,
-      match: [
-        /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
-        'Please provide a valid GST number',
-      ],
+      sparse: true,
+      // match: [
+      //   /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+      //   'Please provide a valid GST number',
+      // ],
     },
     panNumber: {
       type: String,
-      required: [true, 'PAN number is required'],
+      // required: [true, 'PAN number is required'],
       unique: true,
       uppercase: true,
       trim: true,
-      match: [/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Please provide a valid PAN number'],
+      // match: [/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Please provide a valid PAN number'],
+      sparse: true,
     },
     address: {
       type: addressSchema,
-      required: [true, 'Address is required'],
+      // required: [true, 'Address is required'],
     },
     businessType: {
       type: String,
@@ -93,7 +95,7 @@ const dealerSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['pending', 'active', 'suspended', 'rejected'],
+        values: ['pending', 'updates-required', 'active', 'suspended', 'rejected'],
         message: '{VALUE} is not a valid status',
       },
       default: 'pending',
@@ -150,6 +152,11 @@ const dealerSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    applicationId: {        
+      type: String,
+      trim: true,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -165,11 +172,10 @@ dealerSchema.virtual('availableCredit').get(function () {
 });
 
 // Auto-generate dealerCode before save
-dealerSchema.pre('save', async function (next) {
-  if (this.dealerCode) return next();
+dealerSchema.pre('save', async function () {
+  if (this.dealerCode) return;
   const { generateCode } = require('../../../utils/autoCode');
   this.dealerCode = await generateCode(this.constructor, 'DLR', 'dealerCode', 'yyyyMM');
-  next();
 });
 
 dealerSchema.index({ gstNumber: 1 }, { unique: true });

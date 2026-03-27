@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const Product = require('./model/Product.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
@@ -21,9 +23,7 @@ const getProducts = async (query = {}) => {
   if (query.isActive !== undefined) match.isActive = query.isActive === 'true';
   if (query.category) match.category = query.category;
   if (query.brand) match.brand = query.brand;
-  if (query.search) {
-    match.$text = { $search: query.search };
-  }
+  if (query.search) match.$text = { $search: query.search };
 
   const sortOpts = query.search ? { score: { $meta: 'textScore' } } : { createdAt: -1 };
 
@@ -80,8 +80,52 @@ const addProductImage = async (id, file, userId) => {
   return product;
 };
 
+// ── Delete a specific image by fileName ──────────────────────────────────────
+const deleteProductImage = async (id, fileName, userId) => {
+  const product = await Product.findById(id);
+  if (!product) throw new AppError('Product not found', 404);
+
+  const imgIndex = product.images.findIndex((img) => img.fileName === fileName);
+  if (imgIndex === -1) throw new AppError('Image not found', 404);
+
+  const [removed] = product.images.splice(imgIndex, 1);
+
+  // Delete physical file from disk
+  if (removed.filePath) {
+    const absPath = path.resolve(removed.filePath);
+    fs.unlink(absPath, () => {}); // silent — file may already be gone
+  }
+
+  // If deleted image was primary, promote the next one
+  if (removed.isPrimary && product.images.length > 0) {
+    product.images[0].isPrimary = true;
+  }
+
+  await product.save();
+  await auditService.log('product', id, 'update', userId, { after: { deletedImage: fileName } });
+  return product;
+};
+
+// ── Set a specific image as primary ─────────────────────────────────────────
+const setPrimaryImage = async (id, fileName, userId) => {
+  const product = await Product.findById(id);
+  if (!product) throw new AppError('Product not found', 404);
+
+  const target = product.images.find((img) => img.fileName === fileName);
+  if (!target) throw new AppError('Image not found', 404);
+
+  product.images.forEach((img) => { img.isPrimary = img.fileName === fileName; });
+
+  await product.save();
+  await auditService.log('product', id, 'update', userId, { after: { primaryImage: fileName } });
+  return product;
+};
+
 const getCategories = async () => {
   return Product.distinct('category', { isActive: true });
 };
 
-module.exports = { createProduct, getProducts, getProductById, updateProduct, deleteProduct, addProductImage, getCategories };
+module.exports = {
+  createProduct, getProducts, getProductById, updateProduct,
+  deleteProduct, addProductImage, deleteProductImage, setPrimaryImage, getCategories,
+};

@@ -15,6 +15,7 @@ const { initSocket } = require('./websocket/socket');
 const errorMiddleware = require('./middlewares/error.middleware');
 
 // Route imports
+const webhookRoutes = require('./modules/webhooks/webhook.routes');
 const authRoutes = require('./modules/auth/auth.routes');
 const dealerRoutes = require('./modules/dealer/dealer.routes');
 const documentRoutes = require('./modules/dealer/document.routes');
@@ -31,6 +32,7 @@ const auditRoutes = require('./modules/audit/audit.routes');
 const notificationRoutes = require('./modules/notifications/notification.routes');
 const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
 const settingsRoutes = require('./modules/settings/settings.routes');
+const marketingLeadRoutes = require('./modules/marketingLeads/marketingLead.routes');
 
 const app = express();
 
@@ -93,6 +95,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
+app.use('/api/webhooks', webhookRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);
@@ -109,6 +112,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/marketing-leads', marketingLeadRoutes);
 
 // Frontend routing - serve index.html for all non-API routes (React Router support)
 app.get('*', (req, res, next) => {

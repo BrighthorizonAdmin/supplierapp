@@ -79,11 +79,10 @@ const paymentSchema = new mongoose.Schema(
 );
 
 // Auto-generate paymentNumber
-paymentSchema.pre('save', async function (next) {
-  if (this.paymentNumber) return next();
+paymentSchema.pre('save', async function () {
+  if (this.paymentNumber) return;
   const { generateCode } = require('../../../utils/autoCode');
   this.paymentNumber = await generateCode(this.constructor, 'PAY', 'paymentNumber', 'yyyyMMdd');
-  next();
 });
 
 // Immutability guard: status cannot change once confirmed

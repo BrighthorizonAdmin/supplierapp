@@ -34,9 +34,22 @@ const addProductImage = asyncHandler(async (req, res) => {
   return success(res, product, 'Image added');
 });
 
+const deleteProductImage = asyncHandler(async (req, res) => {
+  const product = await productService.deleteProductImage(req.params.id, req.params.fileName, req.user.id);
+  return success(res, product, 'Image deleted');
+});
+
+const setPrimaryImage = asyncHandler(async (req, res) => {
+  const product = await productService.setPrimaryImage(req.params.id, req.params.fileName, req.user.id);
+  return success(res, product, 'Primary image updated');
+});
+
 const getCategories = asyncHandler(async (req, res) => {
   const categories = await productService.getCategories();
   return success(res, categories, 'Categories fetched');
 });
 
-module.exports = { createProduct, getProducts, getProductById, updateProduct, deleteProduct, addProductImage, getCategories };
+module.exports = {
+  createProduct, getProducts, getProductById, updateProduct,
+  deleteProduct, addProductImage, deleteProductImage, setPrimaryImage, getCategories,
+};

@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import {
   LayoutDashboard, Users, Package, Boxes, ShoppingCart,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
-  UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2,
+  UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText,
 } from 'lucide-react';
 import { toggleSidebar } from '../../store/uiSlice';
 import { usePermission } from '../../routes/ProtectedRoute';
@@ -14,13 +14,15 @@ import toast from 'react-hot-toast';
 
 const NAV_ITEMS = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', perm: 'dashboard:read' },
+  { to: '/marketing-leads', icon: Users, label: 'Marketing Leads', perm: 'marketing:read', end: false },
   { to: '/onboarding', icon: UserPlus, label: 'Onboarding', perm: 'dealer:read' },
   { to: '/dealers', icon: Users, label: 'Dealer Management', perm: 'dealer:read', end: false },
   { to: '/products', icon: Package, label: 'Product Catalog', perm: 'products:read' },
-    { to: '/inventory', icon: Boxes, label: 'Inventory', perm: 'inventory:read' },
+  { to: '/inventory', icon: Boxes, label: 'Inventory', perm: 'inventory:read' },
   { to: '/orders', icon: ShoppingCart, label: 'Orders', perm: 'orders:read' },
   { to: '/finance', icon: TrendingUp, label: 'Finances', perm: 'finance:read' },
   { to: '/payments', icon: CreditCard, label: 'Payments & Credits', perm: 'payments:read' },
+  { to: '/invoices', icon: FileText, label: 'Sales Invoices', perm: 'invoices:read' },
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
   { to: '/audit', icon: BarChart2, label: 'Analytics', perm: 'audit:read' },
   { to: '/notifications', icon: Settings, label: 'Settings', perm: null },
