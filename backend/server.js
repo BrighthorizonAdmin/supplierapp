@@ -15,6 +15,7 @@ const { initSocket } = require('./websocket/socket');
 const errorMiddleware = require('./middlewares/error.middleware');
 
 // Route imports
+const webhookRoutes = require('./modules/webhooks/webhook.routes');
 const authRoutes = require('./modules/auth/auth.routes');
 const dealerRoutes = require('./modules/dealer/dealer.routes');
 const documentRoutes = require('./modules/dealer/document.routes');
@@ -95,6 +96,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
+app.use('/api/webhooks', webhookRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);

@@ -5,7 +5,7 @@ import { ShieldCheck, X } from 'lucide-react';
 import {
   LayoutDashboard, Users, Package, Boxes, ShoppingCart,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
-  UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2,
+  UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText,
 } from 'lucide-react';
 import { toggleSidebar } from '../../store/uiSlice';
 import { usePermission } from '../../routes/ProtectedRoute';
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { to: '/orders', icon: ShoppingCart, label: 'Orders', perm: 'orders:read' },
   { to: '/finance', icon: TrendingUp, label: 'Finances', perm: 'finance:read' },
   { to: '/payments', icon: CreditCard, label: 'Payments & Credits', perm: 'payments:read' },
+  { to: '/invoices', icon: FileText, label: 'Sales Invoices', perm: 'invoices:read' },
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
   { to: '/audit', icon: BarChart2, label: 'Analytics', perm: 'audit:read' },
   { to: '/notifications', icon: Settings, label: 'Settings', perm: null },

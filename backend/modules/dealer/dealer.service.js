@@ -12,9 +12,11 @@ const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5001';
 const syncToDealerApp = async (applicationId, action, payload = {}) => {
   if (!applicationId) return;
   try {
+    const body = { action, ...payload };
+    console.log('[DealerSync] Sending to D-BE:', JSON.stringify(body));  // ADD THIS
     await axios.patch(
       `${DEALER_API_URL}/api/dealership/supplier/review/${applicationId}`,
-      { action, ...payload },
+      body,
       {
         headers: {
           'x-api-key': process.env.DEALER_WEBHOOK_SECRET,
@@ -81,7 +83,7 @@ const getDealerById = async (id) => {
 const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
-  if (dealer.status !== 'pending') throw new AppError(`Dealer is already ${dealer.status}`, 400);
+  if (!['pending', 'updates-required'].includes(dealer.status)) throw new AppError(`Cannot approve dealer with status: ${dealer.status}`, 400);
 
   const before = { status: dealer.status, creditLimit: dealer.creditLimit, pricingTier: dealer.pricingTier };
 
@@ -110,7 +112,7 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => 
 const rejectDealer = async (dealerId, reason, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
-  if (dealer.status !== 'pending') throw new AppError(`Dealer is already ${dealer.status}`, 400);
+  if (!['pending', 'updates-required'].includes(dealer.status)) throw new AppError(`Cannot reject dealer with status: ${dealer.status}`, 400);
 
   const before = { status: dealer.status };
   dealer.status = 'rejected';
@@ -132,7 +134,7 @@ const rejectDealer = async (dealerId, reason, userId) => {
 const requestUpdate = async (dealerId, { field, instructions }, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
-  if (dealer.status !== 'pending') throw new AppError('Can only request update on a pending application', 400);
+  if (!['pending', 'updates-required'].includes(dealer.status)) throw new AppError('Can only request update on a pending or updates-required application', 400);
 
   const before = { status: dealer.status };
   dealer.status = 'updates-required';

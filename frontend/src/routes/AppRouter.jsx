@@ -28,6 +28,9 @@ import AddMarketingLeadPage from '../features/Marketing/pages/AddMarketingLeadPa
 import MarketingLeadDetailPage from '../features/Marketing/pages/MarketingLeadDetailPage';
 import RoleManagementPage from '../features/usermanagement/pages/RoleManagement';
 import UserManagementPage from '../features/usermanagement/pages/UserManagement';
+import InvoiceFormPage from '../features/payments/pages/InvoiceFormPage';
+import InvoiceDetailPage from '../features/payments/pages/InvoiceDetailPage';
+
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -154,6 +157,10 @@ const AppRouter = () => {
               <UserManagementPage />
             </ProtectedRoute>
           } />
+          <Route path="invoices" element={<InvoiceListPage />} />
+          <Route path="invoices/new" element={<InvoiceFormPage />} />
+          <Route path="invoices/:id" element={<InvoiceDetailPage />} />
+          <Route path="invoices/:id/edit" element={<InvoiceFormPage />} />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
