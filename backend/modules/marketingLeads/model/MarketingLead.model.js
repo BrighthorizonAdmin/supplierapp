@@ -110,11 +110,10 @@ const marketingLeadSchema = new mongoose.Schema(
 );
 
 // Auto-generate leadCode
-marketingLeadSchema.pre('save', async function (next) {
-  if (this.leadCode) return next();
+marketingLeadSchema.pre('save', async function () {
+  if (this.leadCode) return;
   const { generateCode } = require('../../../utils/autoCode');
   this.leadCode = await generateCode(this.constructor, 'MKT', 'leadCode', 'yyyyMM');
-  next();
 });
 
 marketingLeadSchema.index({ status: 1 });

@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'all',       label: 'All Dealers',       status: '' },
+  { id: 'all',       label: 'All Dealers',       status: 'active' },
   { id: 'active',    label: 'Active Dealers',     status: 'active' },
   { id: 'suspended', label: 'Suspended Dealers',  status: 'suspended' },
   // { id: 'new',       label: 'New Applications',   status: 'pending' },
@@ -147,7 +147,7 @@ const DealerListPage = () => {
   // Fetch list — abort the previous in-flight request on every filter change
   useEffect(() => {
     const params = { page, limit: 20 };
-    if (tabStatus)  params.status       = tabStatus;
+    params.status = tabStatus || 'active';
     if (search)     params.search       = search;
     if (bizType)    params.businessType = bizType;
     const promise = dispatch(fetchDealers(params));

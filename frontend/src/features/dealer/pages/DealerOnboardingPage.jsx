@@ -63,6 +63,7 @@ const STATUS_STYLES = {
   'in-review': 'bg-blue-50 text-blue-700 border-blue-200',
   active: 'bg-green-50 text-green-700 border-green-200',
   rejected: 'bg-red-50 text-red-700 border-red-200',
+  'updates-required': 'bg-orange-50 text-orange-700 border-orange-200',
 };
 
 const STATUS_LABELS = {
@@ -70,6 +71,7 @@ const STATUS_LABELS = {
   'in-review': 'In Review',
   active: 'Approved',
   rejected: 'Rejected',
+  'updates-required': 'Updates Required',
 };
 
 const StatusPill = ({ status }) => (
@@ -374,6 +376,7 @@ const DealerOnboardingPage = () => {
               </div>
 
               {/* Approval Actions */}
+              {(selected.status === 'pending' || selected.status === 'updates-required') && (
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <h3 className="text-sm font-semibold text-slate-800 mb-4">Approval Actions</h3>
                 <div className="flex items-center gap-3">
@@ -401,6 +404,7 @@ const DealerOnboardingPage = () => {
                   </button>
                 </div>
               </div>
+              )}
             </div>
 
 
