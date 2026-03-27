@@ -82,7 +82,7 @@ const AppRouter = () => {
             </ProtectedRoute>
           } />
           <Route path="products" element={
-            <ProtectedRoute permission="products:read">
+            <ProtectedRoute permission="products:write">
               <ProductListPage />
             </ProtectedRoute>
           } />
@@ -117,7 +117,7 @@ const AppRouter = () => {
             </ProtectedRoute>
           } />
           <Route path="invoices" element={
-            <ProtectedRoute permission="invoices:read">
+            <ProtectedRoute permission="invoices:read'">
               <InvoiceListPage />
             </ProtectedRoute>
           } />
@@ -173,12 +173,12 @@ const AppRouter = () => {
             } />
           
           <Route path="rolemanagement" element={
-            <ProtectedRoute permission="admin:read">
+            <ProtectedRoute permission="users:manage">
               <RoleManagementPage />
             </ProtectedRoute>
           } />
           <Route path="usermanagement" element={
-            <ProtectedRoute permission="admin:read">
+            <ProtectedRoute permission="users:manage">
               <UserManagementPage />
             </ProtectedRoute>
           } />
