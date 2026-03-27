@@ -131,18 +131,41 @@ app.use((req, res) => {
 app.use(errorMiddleware);
 
 /**
- * Seed default roles if the Role collection is empty.
- * Runs once on startup so existing deployments retain their access without manual setup.
+ * Upsert default roles on every startup.
+ *
+ * Why upsert instead of insert-once:
+ *  - New roles added to DEFAULT_ROLES (e.g. 'analyst', 'marketing') must reach
+ *    existing deployments without manual intervention.
+ *  - System roles (isSystem: true) have their permissions refreshed to match
+ *    the registry — prevents drift from manual edits.
+ *  - Non-system roles are only created if missing; their permissions are not
+ *    overwritten so admins can customise them freely after first creation.
  */
 const seedDefaultRoles = async () => {
   const Role = require('./modules/roles/role.model');
   const { DEFAULT_ROLES } = require('./utils/permissions');
 
-  const count = await Role.countDocuments();
-  if (count > 0) return;
+  const ops = DEFAULT_ROLES.map((role) => ({
+    updateOne: {
+      filter: { name: role.name },
+      update: {
+        $set: role.isSystem
+          ? { description: role.description, permissions: role.permissions, isSystem: true, isActive: true }
+          : { description: role.description, isSystem: false },
+        $setOnInsert: role.isSystem
+          ? {}
+          : { permissions: role.permissions, isActive: true },
+      },
+      upsert: true,
+    },
+  }));
 
-  await Role.insertMany(DEFAULT_ROLES);
-  logger.info('Default roles seeded successfully');
+  const result = await Role.bulkWrite(ops, { ordered: false });
+  const created = result.upsertedCount || 0;
+  const modified = result.modifiedCount || 0;
+  if (created || modified) {
+    logger.info(`Roles synced: ${created} created, ${modified} updated`);
+  }
 };
 
 // Bootstrap

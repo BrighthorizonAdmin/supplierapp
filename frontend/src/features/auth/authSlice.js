@@ -16,9 +16,9 @@ export const login = createAsyncThunk('auth/login', async (credentials, { reject
   }
 });
 
-export const getMe = createAsyncThunk('auth/getRoles', async (_, { rejectWithValue }) => {
+export const getMe = createAsyncThunk('auth/getMe', async (_, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/auth/getRoles');
+    const { data } = await api.get('/auth/me');
     return data.data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.message);

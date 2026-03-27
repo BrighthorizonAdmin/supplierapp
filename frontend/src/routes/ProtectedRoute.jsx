@@ -17,18 +17,29 @@ const ProtectedRoute = ({ children, permission }) => {
   return children;
 };
 
+/**
+ * usePermission — mirrors the backend hasPermission() logic exactly.
+ *
+ * Evaluation order (matches rbac.middleware.js):
+ *  1. '*'           → super-admin, matches every permission
+ *  2. 'resource:*'  → resource-level wildcard
+ *  3. exact string  → exact permission key match
+ */
 export const usePermission = () => {
   const { permissions } = useSelector((s) => s.auth);
 
   const hasPermission = (required) => {
     if (!permissions || permissions.length === 0) return false;
-
-    // super-admin
     if (permissions.includes('*')) return true;
 
-    return permissions.includes(required);
+    const [resource] = required.split(':');
+    return (
+      permissions.includes(required) ||
+      permissions.includes(`${resource}:*`)
+    );
   };
 
   return { hasPermission };
 };
+
 export default ProtectedRoute;
