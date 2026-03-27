@@ -75,7 +75,9 @@ const addProductImage = async (id, file, userId) => {
   if (!product) throw new AppError('Product not found', 404);
 
   const isPrimary = product.images.length === 0;
-  product.images.push({ fileName: file.filename, filePath: file.path, isPrimary });
+  // Normalize Windows backslashes → forward slashes so URL construction works on all platforms
+  const normalizedPath = file.path.replace(/\\/g, '/').replace(/^\.\//, '');
+  product.images.push({ fileName: file.filename, filePath: normalizedPath, isPrimary });
   await product.save();
   return product;
 };

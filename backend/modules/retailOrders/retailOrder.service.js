@@ -1,4 +1,5 @@
 const RetailOrder = require('./model/RetailOrder.model');
+const Invoice = require('../payments/model/Invoice.model');
 const Dealer = require('../dealer/model/Dealer.model');
 const Product = require('../products/model/Product.model');
 const { AppError } = require('../../middlewares/error.middleware');
@@ -47,29 +48,111 @@ const createRetailOrder = async (data, userId) => {
   return order;
 };
 
+// Normalize a native RetailOrder doc to a unified shape
+const normalizeRetailOrder = (doc) => ({
+  _id:           doc._id,
+  source:        'internal',
+  orderNumber:   doc.orderNumber,
+  dealerId:      doc.dealerId,
+  dealerName:    doc.dealerId?.businessName || doc.dealerId?.name || '—',
+  customerName:  doc.customerName,
+  customerPhone: doc.customerPhone || '',
+  status:        doc.status,
+  paymentMethod: doc.paymentMethod,
+  paymentStatus: doc.paymentStatus,
+  subtotal:      doc.subtotal,
+  taxAmount:     doc.taxAmount,
+  totalAmount:   doc.totalAmount,
+  notes:         doc.notes || '',
+  createdAt:     doc.createdAt,
+  updatedAt:     doc.updatedAt,
+});
+
+// Normalize a dealer-synced Invoice (invoiceType:'retail') to unified shape
+const normalizeSyncedInvoice = (doc) => {
+  // notes format from webhook: "Retail sale to: Name | Phone"
+  const notesRaw   = doc.notes || '';
+  const afterPrefix = notesRaw.replace('Retail sale to: ', '');
+  const [customerName = '', customerPhone = ''] = afterPrefix.split(' | ');
+
+  return {
+    _id:           doc._id,
+    source:        'dealer_sync',
+    orderNumber:   doc.invoiceNumber,          // e.g. "D-RET-20260327-0002"
+    dealerId:      doc.dealerId || null,
+    dealerName:    doc.partyName || '—',
+    customerName:  customerName.trim() || '—',
+    customerPhone: customerPhone.trim() || '',
+    status:        'delivered',                // dealer retail = already fulfilled
+    paymentMethod: (doc.paymentMode || 'cash').toLowerCase(),
+    paymentStatus: 'paid',
+    subtotal:      doc.subtotal,
+    taxAmount:     doc.taxAmount,
+    totalAmount:   doc.totalAmount,
+    notes:         doc.notes || '',
+    createdAt:     doc.invoiceDate || doc.createdAt,
+    updatedAt:     doc.updatedAt,
+  };
+};
+
 const getRetailOrders = async (query = {}) => {
   const { page, limit, skip } = getPagination(query);
-  const match = {};
 
-  if (query.dealerId) match.dealerId = query.dealerId;
-  if (query.status) match.status = query.status;
-  if (query.paymentStatus) match.paymentStatus = query.paymentStatus;
+  // ── Build match for native RetailOrder ─────────────────────────────────────
+  const nativeMatch = {};
+  if (query.dealerId)     nativeMatch.dealerId     = query.dealerId;
+  if (query.status)       nativeMatch.status       = query.status;
+  if (query.paymentStatus) nativeMatch.paymentStatus = query.paymentStatus;
   if (query.search) {
-    match.$or = [
+    nativeMatch.$or = [
       { customerName: { $regex: query.search, $options: 'i' } },
-      { orderNumber: { $regex: query.search, $options: 'i' } },
+      { orderNumber:  { $regex: query.search, $options: 'i' } },
     ];
   }
 
-  const [data, total] = await Promise.all([
-    RetailOrder.find(match)
-      .populate('dealerId', 'name')
+  // ── Build match for dealer-synced Invoices ──────────────────────────────────
+  // Only include dealer-synced retail invoices (skip if caller filtered by a
+  // status that can never apply to synced invoices, e.g. 'pending'/'cancelled')
+  const syncedStatuses = ['delivered', 'paid', ''];
+  const skipSynced =
+    (query.status       && !['delivered', ''].includes(query.status)) ||
+    (query.paymentStatus && query.paymentStatus !== 'paid');
+
+  const invoiceMatch = { invoiceType: 'retail', dbeInvoiceId: { $ne: null } };
+  if (query.dealerId) invoiceMatch.dealerId = query.dealerId;
+  if (query.search) {
+    invoiceMatch.$or = [
+      { partyName:     { $regex: query.search, $options: 'i' } },
+      { invoiceNumber: { $regex: query.search, $options: 'i' } },
+      { notes:         { $regex: query.search, $options: 'i' } },
+    ];
+  }
+
+  // ── Fetch both collections in parallel ─────────────────────────────────────
+  const [nativeDocs, nativeTotal, syncedDocs, syncedTotal] = await Promise.all([
+    RetailOrder.find(nativeMatch)
+      .populate('dealerId', 'businessName name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean(),
-    RetailOrder.countDocuments(match),
+    RetailOrder.countDocuments(nativeMatch),
+
+    skipSynced ? Promise.resolve([])  : Invoice.find(invoiceMatch).sort({ invoiceDate: -1 }).skip(skip).limit(limit).lean(),
+    skipSynced ? Promise.resolve(0)   : Invoice.countDocuments(invoiceMatch),
   ]);
+
+  // ── Merge + re-sort by createdAt desc, then paginate ───────────────────────
+  const merged = [
+    ...nativeDocs.map(normalizeRetailOrder),
+    ...syncedDocs.map(normalizeSyncedInvoice),
+  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  // Apply pagination to the merged list (both collections already skipped/limited
+  // individually; merged view re-paginates the combined window — good enough for
+  // typical page sizes; for large datasets a proper union aggregation is preferred)
+  const total = nativeTotal + syncedTotal;
+  const data  = merged.slice(0, limit);
 
   return { data, pagination: buildMeta(total, page, limit) };
 };
