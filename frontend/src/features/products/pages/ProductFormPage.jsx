@@ -9,11 +9,12 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import Modal from '../../../components/ui/Modal';
 
-// filePath on disk → browser-loadable URL
+// filePath on disk → browser-loadable URL (proxied via Vite → S-BE /uploads)
 const toPreviewUrl = (filePath) => {
   if (!filePath) return null;
   if (filePath.startsWith('http')) return filePath;
-  return '/' + filePath.replace(/\\/g, '/');
+  const clean = filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+  return '/' + clean;
 };
 
 // ─── Image Upload Component ───────────────────────────────────────────────────

@@ -34,9 +34,15 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       paymentMode,
     } = req.body;
 
-    // 2. Prevent duplicate — idempotent based on dbeInvoiceId
-    const existing = await Invoice.findOne({ dbeInvoiceId });
+    // 2. Prevent duplicate — idempotent based on dbeInvoiceId OR invoiceNumber
+    const existing = await Invoice.findOne({
+      $or: [
+        { dbeInvoiceId },
+        { invoiceNumber: `D-${invoiceNumber}` },
+      ],
+    });
     if (existing) {
+      console.warn(`[Webhook] Already synced, returning existing: D-${invoiceNumber}`);
       return res.json({ success: true, message: 'Already synced', data: existing });
     }
 
@@ -66,39 +72,47 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       discountValue: 0,
     }));
 
-    // 5. Create invoice in Sup-BE using existing Invoice model
-    const invoice = await Invoice.create({
-      invoiceType:   'retail',
-      dbeInvoiceId,
-
-      // D- prefix distinguishes dealer-originated invoice numbers from supplier ones
-      invoiceNumber: `D-${invoiceNumber}`,
-
-      dealerId:   dealer?._id || undefined,
-      partyName:  dealerName  || 'Unknown Dealer',
-      partyPhone: dealerPhone || '',
-
-      // Customer info stored in notes (customer is not a DB entity in Sup-BE)
-      notes: `Retail sale to: ${customerName}${customerPhone ? ' | ' + customerPhone : ''}`,
-
-      lineItems,
-      subtotal:    Number(subtotal),
-      taxAmount:   Number(taxAmount),
-      totalAmount: Number(totalAmount),
-      discountAmt: 0,
-
-      amountPaid: Number(totalAmount), // retail = fully paid at point of sale
-      balance:    0,
-
-      paymentMode:  paymentMode || 'Cash',
-      invoiceDate:  invoiceDate ? new Date(invoiceDate) : new Date(),
-      status:       'paid',
-      issuedAt:     new Date(),
-    });
+    // 5. Create invoice — catch E11000 in case of race condition / D-BE retry after timeout
+    let invoice;
+    try {
+      invoice = await Invoice.create({
+        invoiceType:   'retail',
+        dbeInvoiceId,
+        invoiceNumber: `D-${invoiceNumber}`,
+        dealerId:      dealer?._id || undefined,
+        partyName:     dealerName  || 'Unknown Dealer',
+        partyPhone:    dealerPhone || '',
+        notes: `Retail sale to: ${customerName}${customerPhone ? ' | ' + customerPhone : ''}`,
+        lineItems,
+        subtotal:    Number(subtotal),
+        taxAmount:   Number(taxAmount),
+        totalAmount: Number(totalAmount),
+        discountAmt: 0,
+        amountPaid:  Number(totalAmount),
+        balance:     0,
+        paymentMode:  paymentMode || 'Cash',
+        invoiceDate:  invoiceDate ? new Date(invoiceDate) : new Date(),
+        status:       'paid',
+        issuedAt:     new Date(),
+      });
+    } catch (createErr) {
+      // Duplicate key — D-BE retried after a timeout but invoice was already saved
+      if (createErr.code === 11000) {
+        const saved = await Invoice.findOne({
+          $or: [
+            { dbeInvoiceId },
+            { invoiceNumber: `D-${invoiceNumber}` },
+          ],
+        });
+        console.warn(`[Webhook] Duplicate on create, returning existing: D-${invoiceNumber}`);
+        return res.status(200).json({ success: true, message: 'Already synced', data: saved });
+      }
+      throw createErr;
+    }
 
     console.log(`[Webhook] Retail invoice synced: ${invoice.invoiceNumber} for dealer: ${dealerName}`);
-
     return res.status(201).json({ success: true, data: invoice });
+
   } catch (err) {
     console.error('[Webhook] dealer-retail-invoice error:', err.message);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });

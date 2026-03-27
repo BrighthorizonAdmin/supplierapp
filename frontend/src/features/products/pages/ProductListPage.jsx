@@ -6,11 +6,15 @@ import Pagination from '../../../components/ui/Pagination';
 import { Plus, Search, Upload, Package, Pencil } from 'lucide-react';
 
 // filePath stored as "uploads/products/uuid.jpg" → browser URL "/uploads/products/uuid.jpg"
+// Handles Windows backslashes and leading "./" from multer on Windows
 // For old records with no filePath, fall back to building URL from fileName
 const getImageSrc = (product) => {
   const img = product.images?.find((i) => i.isPrimary) || product.images?.[0];
   if (!img) return null;
-  if (img.filePath) return '/' + img.filePath.replace(/\\/g, '/');
+  if (img.filePath) {
+    const clean = img.filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+    return '/' + clean;
+  }
   if (img.fileName) return '/uploads/products/' + img.fileName;
   return null;
 };
