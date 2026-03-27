@@ -16,20 +16,18 @@ const hasPermission = (permissions, required) => {
 };
 
 /**
- * authorize(...permissions)  [AND logic]
+ * Middleware factory: authorize('dealer:write')
  *
- * All listed permissions must be present.
- * Permissions are read from req.user.permissions (embedded in JWT at login — no DB query).
- * Super-admin (role === 'super-admin') bypasses all checks.
+ * Permissions are read directly from req.user.permissions, which is embedded
+ * in the JWT at login time. No DB query is needed on every request.
  *
- * Usage:
- *   router.get('/',     authorize('orders:read'),  listOrders)
- *   router.post('/',    authorize('orders:write'), createOrder)
+ * Super-admin (role === 'super-admin') bypasses all permission checks.
  */
 const authorize = (...permissions) => {
   return (req, res, next) => {
     const { role, permissions: userPerms = [] } = req.user;
 
+    // Super-admin has unrestricted access
     if (role === 'super-admin') return next();
 
     const allowed = permissions.every((perm) => hasPermission(userPerms, perm));
@@ -40,31 +38,4 @@ const authorize = (...permissions) => {
   };
 };
 
-/**
- * authorizeAny(...permissions)  [OR logic]
- *
- * At least ONE of the listed permissions must be present.
- * Super-admin bypasses all checks.
- *
- * Use when a route is meaningful for multiple distinct roles that share no
- * common permission — e.g. a summary endpoint accessible to both
- * dashboard:read and audit:read users.
- *
- * Usage:
- *   router.get('/summary', authorizeAny('dashboard:read', 'audit:read'), handler)
- */
-const authorizeAny = (...permissions) => {
-  return (req, res, next) => {
-    const { role, permissions: userPerms = [] } = req.user;
-
-    if (role === 'super-admin') return next();
-
-    const allowed = permissions.some((perm) => hasPermission(userPerms, perm));
-    if (!allowed) {
-      return error(res, 'Forbidden: You do not have permission to perform this action.', 403);
-    }
-    next();
-  };
-};
-
-module.exports = { authorize, authorizeAny, hasPermission };
+module.exports = { authorize, hasPermission };

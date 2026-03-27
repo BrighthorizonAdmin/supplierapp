@@ -3,31 +3,25 @@ const asyncHandler = require('../../utils/asyncHandler');
 const { success } = require('../../utils/response');
 
 const getKPIs = asyncHandler(async (req, res) => {
-  const kpis = await dashboardService.getKPIs(req.user);
+  const kpis = await dashboardService.getKPIs();
   return success(res, kpis, 'Dashboard KPIs fetched');
 });
 
 const getRecentActivity = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 10;
-  const activity = await dashboardService.getRecentActivity(limit, req.user);
+  const activity = await dashboardService.getRecentActivity(limit);
   return success(res, activity, 'Recent activity fetched');
 });
 
 const getSalesChart = asyncHandler(async (req, res) => {
-  const data = await dashboardService.getSalesChart(req.query.period, req.user);
+  const data = await dashboardService.getSalesChart(req.query.period);
   return success(res, data, 'Sales chart data fetched');
 });
 
 const getTopDealers = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 5;
-  const data = await dashboardService.getTopDealers(limit, req.user);
+  const data = await dashboardService.getTopDealers(limit);
   return success(res, data, 'Top dealers fetched');
 });
 
-const getRecentOrders = asyncHandler(async (req, res) => {
-  const limit = parseInt(req.query.limit, 10) || 6;
-  const data = await dashboardService.getRecentOrders(limit);
-  return success(res, data, 'Recent orders fetched');
-});
-
-module.exports = { getKPIs, getRecentActivity, getSalesChart, getTopDealers, getRecentOrders };
+module.exports = { getKPIs, getRecentActivity, getSalesChart, getTopDealers };

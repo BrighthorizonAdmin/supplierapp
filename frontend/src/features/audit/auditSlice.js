@@ -10,42 +10,42 @@ export const fetchAuditLogs = createAsyncThunk('audit/fetchAll', async (params, 
 
 export const fetchAnalyticsKPIs = createAsyncThunk('audit/analyticsKPIs', async (_, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/audit/analytics/kpis');
+    const { data } = await api.get('/dashboard/kpis');
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
 export const fetchAnalyticsSalesChart = createAsyncThunk('audit/analyticsSalesChart', async (period = 'year', { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/audit/analytics/sales-chart', { params: { period } });
+    const { data } = await api.get('/dashboard/sales-chart', { params: { period } });
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
 export const fetchAnalyticsInventoryStats = createAsyncThunk('audit/analyticsInventoryStats', async (_, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/audit/analytics/inventory-stats');
+    const { data } = await api.get('/inventory/stats');
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
 export const fetchAnalyticsTopProducts = createAsyncThunk('audit/analyticsTopProducts', async (_, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/audit/analytics/top-products', { params: { limit: 7 } });
+    const { data } = await api.get('/inventory', { params: { limit: 7 } });
     return data.data || [];
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
 export const fetchAnalyticsDeliveredOrders = createAsyncThunk('audit/analyticsDeliveredOrders', async (_, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/audit/analytics/delivered-orders');
-    return data.data?.total || 0;
+    const { data } = await api.get('/orders', { params: { status: 'delivered', limit: 1 } });
+    return data.pagination?.total || 0;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
 export const fetchRetailAnalytics = createAsyncThunk('audit/retailAnalytics', async (_, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/audit/analytics/retail');
+    const { data } = await api.get('/retail-orders/analytics');
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });

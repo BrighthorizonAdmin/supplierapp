@@ -31,8 +31,8 @@ export const fetchTopDealers = createAsyncThunk('dashboard/topDealers', async (_
 
 export const fetchRecentOrders = createAsyncThunk('dashboard/recentOrders', async (_, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/dashboard/recent-orders', { params: { limit: 6 } });
-    return data.data || [];
+    const { data } = await api.get('/orders', { params: { limit: 6, sort: '-createdAt' } });
+    return data.data?.orders || data.data || [];
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 

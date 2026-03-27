@@ -7,19 +7,10 @@ const AuditLog = require('../audit/model/AuditLog.model');
 const Transaction = require('../finance/model/Transaction.model');
 const { emitToAll } = require('../../websocket/socket');
 const { KPI_UPDATE } = require('../../websocket/events');
-const { hasPermission } = require('../../middlewares/rbac.middleware');
 
-/**
- * Returns only the KPIs the user is permitted to see, based on their role and permissions.
- * Super-admin sees everything; all other roles are filtered by their permission set.
- */
-const getKPIs = async (user = {}) => {
-  const { role, permissions = [] } = user;
+const getKPIs = async () => {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  const isSuperAdmin = role === 'super-admin';
-  const can = (perm) => isSuperAdmin || hasPermission(permissions, perm);
 
   const [
     totalDealers,
@@ -31,37 +22,37 @@ const getKPIs = async (user = {}) => {
     lowStockAlerts,
     pendingReturns,
   ] = await Promise.all([
-    can('dealer:read') ? Dealer.countDocuments() : Promise.resolve(undefined),
-    can('dealer:read') ? Dealer.countDocuments({ status: 'active' }) : Promise.resolve(undefined),
-    can('dealer:read') ? Dealer.countDocuments({ status: 'pending' }) : Promise.resolve(undefined),
-    can('orders:read') ? Order.countDocuments({ status: { $in: ['confirmed', 'processing', 'shipped'] } }) : Promise.resolve(undefined),
-    can('finance:read')
-      ? Transaction.aggregate([
-          { $match: { type: 'debit', 'ref.refType': 'order', createdAt: { $gte: monthStart } } },
-          { $group: { _id: null, total: { $sum: '$amount' } } },
-        ])
-      : Promise.resolve(undefined),
-    can('finance:read') || can('invoices:read')
-      ? Invoice.countDocuments({ status: { $in: ['issued', 'partial'] }, dueDate: { $lt: now } })
-      : Promise.resolve(undefined),
-    can('inventory:read')
-      ? Inventory.countDocuments({
-          $expr: { $lte: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] },
-        })
-      : Promise.resolve(undefined),
-    can('returns:read') ? Return.countDocuments({ status: { $in: ['requested', 'approved'] } }) : Promise.resolve(undefined),
+    Dealer.countDocuments(),
+    Dealer.countDocuments({ status: 'active' }),
+    Dealer.countDocuments({ status: 'pending' }),
+    Order.countDocuments({ status: { $in: ['confirmed', 'processing', 'shipped'] } }),
+    Transaction.aggregate([
+      { $match: { type: 'debit', 'ref.refType': 'order', createdAt: { $gte: monthStart } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]),
+    Invoice.countDocuments({
+      status: { $in: ['issued', 'partial'] },
+      dueDate: { $lt: now },
+    }),
+    Inventory.countDocuments({
+      $expr: { $lte: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] },
+    }),
+    Return.countDocuments({ status: { $in: ['requested', 'approved'] } }),
   ]);
 
-  const kpis = { updatedAt: new Date() };
-  if (totalDealers !== undefined) kpis.totalDealers = totalDealers;
-  if (activeDealers !== undefined) kpis.activeDealers = activeDealers;
-  if (pendingApprovals !== undefined) kpis.pendingApprovals = pendingApprovals;
-  if (activeOrders !== undefined) kpis.activeOrders = activeOrders;
-  if (monthRevenue !== undefined) kpis.monthRevenue = monthRevenue[0]?.total || 0;
-  if (overdueInvoices !== undefined) kpis.overdueInvoices = overdueInvoices;
-  if (lowStockAlerts !== undefined) kpis.lowStockAlerts = lowStockAlerts;
-  if (pendingReturns !== undefined) kpis.pendingReturns = pendingReturns;
+  const kpis = {
+    totalDealers,
+    activeDealers,
+    pendingApprovals,
+    activeOrders,
+    monthRevenue: monthRevenue[0]?.total || 0,
+    overdueInvoices,
+    lowStockAlerts,
+    pendingReturns,
+    updatedAt: new Date(),
+  };
 
+  // Broadcast updated KPIs
   try {
     emitToAll(KPI_UPDATE, kpis);
   } catch {}
@@ -69,30 +60,15 @@ const getKPIs = async (user = {}) => {
   return kpis;
 };
 
-/**
- * Users with audit:read see all activity. Others see only their own actions.
- */
-const getRecentActivity = async (limit = 10, user = {}) => {
-  const { role, id: userId, permissions = [] } = user;
-  const canSeeAll = role === 'super-admin' || hasPermission(permissions, 'audit:read');
-
-  const filter = canSeeAll ? {} : { performedBy: userId };
-
-  return AuditLog.find(filter)
+const getRecentActivity = async (limit = 10) => {
+  return AuditLog.find()
     .populate('performedBy', 'name role')
     .sort({ createdAt: -1 })
     .limit(limit)
     .lean();
 };
 
-/**
- * Returns sales chart data. Returns empty array if user lacks finance:read.
- */
-const getSalesChart = async (period = 'month', user = {}) => {
-  const { role, permissions = [] } = user;
-  const isSuperAdmin = role === 'super-admin';
-  if (!isSuperAdmin && !hasPermission(permissions, 'finance:read')) return [];
-
+const getSalesChart = async (period = 'month') => {
   const now = new Date();
   let startDate, groupFormat;
 
@@ -130,14 +106,7 @@ const getSalesChart = async (period = 'month', user = {}) => {
   ]);
 };
 
-/**
- * Returns top dealers by revenue. Returns empty array if user lacks dealer:read.
- */
-const getTopDealers = async (limit = 5, user = {}) => {
-  const { role, permissions = [] } = user;
-  const isSuperAdmin = role === 'super-admin';
-  if (!isSuperAdmin && !hasPermission(permissions, 'dealer:read')) return [];
-
+const getTopDealers = async (limit = 5) => {
   return Order.aggregate([
     { $match: { status: { $in: ['confirmed', 'processing', 'shipped', 'delivered'] } } },
     { $group: { _id: '$dealerId', totalOrders: { $sum: 1 }, totalRevenue: { $sum: '$netAmount' } } },
@@ -164,18 +133,4 @@ const getTopDealers = async (limit = 5, user = {}) => {
   ]);
 };
 
-/**
- * Returns the most recent orders for the dashboard widget.
- * Gated by dashboard:read only — callers do NOT need orders:read.
- * Returns a slim projection (no line-item details, no internal pricing).
- */
-const getRecentOrders = async (limit = 6) => {
-  return Order.find()
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .populate('dealerId', 'businessName dealerCode')
-    .select('orderNumber dealerId createdAt netAmount status')
-    .lean();
-};
-
-module.exports = { getKPIs, getRecentActivity, getSalesChart, getTopDealers, getRecentOrders };
+module.exports = { getKPIs, getRecentActivity, getSalesChart, getTopDealers };
