@@ -15,6 +15,7 @@ import {
 import KPICard from '../../../components/ui/KPICard';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { format } from 'date-fns';
+import { usePermission } from '../../../routes/ProtectedRoute';
 
 const CHART_PERIODS = [
   { value: 'week', label: 'Last 7 days' },
@@ -38,11 +39,13 @@ const DashboardPage = () => {
   const { kpis, salesChart, topDealers, recentOrders, loading, chartPeriod } = useSelector(
     (s) => s.dashboard
   );
+  const {hasPermission} = usePermission()
 
   useEffect(() => {
     dispatch(fetchKPIs());
     dispatch(fetchSalesChart(chartPeriod));
     dispatch(fetchTopDealers());
+   if (!hasPermission('orders:read')) return;
     dispatch(fetchRecentOrders());
   }, [dispatch, chartPeriod]);
 

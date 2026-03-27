@@ -14,6 +14,8 @@ import auditReducer from '../features/audit/auditSlice';
 import settingsReducer from '../features/notifications/settingsSlice';
 import marketingReducer from '../features/Marketing/marketingSlice';
 import uiReducer from './uiSlice';
+import roleReducer from '../features/usermanagement/roleSlice';
+import userReducer from '../features/usermanagement/userSlice';
 
 const store = configureStore({
   reducer: {
@@ -32,6 +34,8 @@ const store = configureStore({
     settings: settingsReducer,
     marketing: marketingReducer,
     ui: uiReducer,
+    roles:roleReducer,
+    users: userReducer
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

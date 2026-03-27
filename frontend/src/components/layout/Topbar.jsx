@@ -81,7 +81,8 @@ const Topbar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const roleLabel = ROLE_LABELS[user?.role] || user?.role || 'Admin';
+  const roleArray = Array.isArray(user?.role) ? user.role : [user?.role].filter(Boolean);
+  const roleLabel = roleArray.map((r) => ROLE_LABELS[r] || r).join(', ') || 'Admin';
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
