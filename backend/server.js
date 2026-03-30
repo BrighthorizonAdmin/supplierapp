@@ -42,7 +42,15 @@ app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP to allow frontend assets to load
 }));
 
-// CORS
+// Static uploads are public assets (product images) — allow any origin to fetch them.
+// This must come BEFORE the restricted CORS middleware below so the open policy
+// applies to /uploads and the API routes stay protected.
+app.use('/uploads', cors({ origin: '*' }), (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
+
+// CORS — API routes are restricted to the supplier frontend only
 app.use(
   cors({
     origin: env.FRONTEND_URL,
@@ -83,9 +91,6 @@ app.use(mongoSanitize());
 if (env.isDev) {
   app.use(morgan('dev'));
 }
-
-// Static file serving for uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));

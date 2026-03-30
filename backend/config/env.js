@@ -16,6 +16,8 @@ module.exports = {
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '8h',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5001',
+  SERVER_URL: process.env.SERVER_URL || 'http://localhost:3001',
+
   MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE, 10) || 5 * 1024 * 1024,
   UPLOAD_PATH: process.env.UPLOAD_PATH || './uploads',
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',

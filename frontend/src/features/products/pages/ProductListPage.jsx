@@ -28,7 +28,7 @@ const ProductCard = ({ product, onEdit }) => {
     <div className="card overflow-hidden group hover:shadow-md transition-shadow">
       {/* Image area */}
       <div className="relative bg-slate-100 h-44 flex items-center justify-center">
-        <span className="absolute top-3 left-3 text-[10px] font-bold bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide">
+        <span className="absolute top-3 right-3 text-[10px] font-bold text-green-400 bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide">
           {product.isActive ? 'Instock' : 'outofstock'}
         </span>
 
@@ -46,7 +46,7 @@ const ProductCard = ({ product, onEdit }) => {
 
       {/* Card body */}
       <div className="p-3">
-        <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">
+        <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest mb-1">
           {product.category || 'GENERAL'}
         </p>
         <h3 className="font-bold text-slate-900 text-sm leading-snug mb-1 line-clamp-1">
