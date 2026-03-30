@@ -7,7 +7,7 @@ const STATUS_MAP = {
   verified: 'badge-green',
   // Orders — solid Figma style
   draft: 'badge-solid-gray',
-  confirmed: 'badge-solid-blue',
+  order_confirmed: 'badge-solid-blue',
   processing: 'badge-solid-purple',
   shipped: 'badge-solid-blue',
   delivered: 'badge-solid-green',
