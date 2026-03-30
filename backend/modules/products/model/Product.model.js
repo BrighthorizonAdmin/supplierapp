@@ -4,6 +4,7 @@ const imageSchema = new mongoose.Schema(
   {
     fileName: { type: String },
     filePath: { type: String },
+    url:      { type: String }, 
     isPrimary: { type: Boolean, default: false },
   },
   { _id: false }

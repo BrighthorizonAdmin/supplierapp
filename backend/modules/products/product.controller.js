@@ -3,6 +3,21 @@ const asyncHandler = require('../../utils/asyncHandler');
 const { success, paginated } = require('../../utils/response');
 const { AppError } = require('../../middlewares/error.middleware');
 
+const buildImageUrl = (url) => {
+  if (!url) return url;
+  if (url.startsWith('http')) return url;
+  const base = (process.env.SERVER_URL || 'http://localhost:3001').replace(/\/$/, '');
+  return `${base}/${url}`;
+};
+
+const rewriteImages = (product) => {
+  if (!product) return product;
+  if (product.images) {
+    product.images = product.images.map(img => ({ ...img, url: buildImageUrl(img.url) }));
+  }
+  return product;
+};
+
 const createProduct = asyncHandler(async (req, res) => {
   const product = await productService.createProduct(req.body, req.user.id);
   return success(res, product, 'Product created', 201);
@@ -10,12 +25,12 @@ const createProduct = asyncHandler(async (req, res) => {
 
 const getProducts = asyncHandler(async (req, res) => {
   const { data, pagination } = await productService.getProducts(req.query);
-  return paginated(res, data, pagination, 'Products fetched');
+  return paginated(res, data.map(rewriteImages), pagination, 'Products fetched');
 });
 
 const getProductById = asyncHandler(async (req, res) => {
   const product = await productService.getProductById(req.params.id);
-  return success(res, product, 'Product fetched');
+  return success(res, rewriteImages(product), 'Product fetched');
 });
 
 const updateProduct = asyncHandler(async (req, res) => {
