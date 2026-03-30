@@ -1,67 +1,36 @@
 const { error } = require('../utils/response');
 
-const PERMISSIONS = {
-  'super-admin': ['*'],
-  admin: [
-    'dealer:read', 'dealer:write', 'documents:read', 'documents:write',
-    'inventory:read', 'inventory:write', 'products:read', 'products:write',
-    'warehouse:read', 'warehouse:write', 'orders:read', 'orders:write',
-    'retailOrders:read', 'retailOrders:write', 'returns:read', 'returns:write',
-    'payments:read', 'payments:write', 'invoices:read', 'invoices:write',
-    'notifications:read', 'notifications:write', 'audit:read', 'dashboard:read',
-    'finance:read', 'marketing:read', 'marketing:write',
-  ],
-  finance: [
-    'finance:read', 'finance:write', 'payments:read', 'payments:write',
-    'invoices:read', 'invoices:write', 'returns:read', 'dealer:read',
-    'orders:read', 'dashboard:read',
-  ],
-  'inventory-manager': [
-    'inventory:read', 'inventory:write', 'products:read', 'products:write',
-    'warehouse:read', 'warehouse:write', 'returns:read', 'returns:write',
-    'orders:read', 'dashboard:read',
-  ],
-  'onboarding-manager': [
-    'dealer:read', 'dealer:write', 'documents:read', 'documents:write',
-    'audit:read', 'dashboard:read', 'marketing:read', 'marketing:write',
-  ],
-  marketing: [
-    'marketing:read', 'marketing:write', 'dashboard:read',
-  ],
-  support: [
-    'dealer:read', 'orders:read', 'retailOrders:read', 'returns:read',
-    'notifications:read', 'dashboard:read',
-  ],
-  'read-only': [
-    'dealer:read', 'orders:read', 'retailOrders:read', 'inventory:read',
-    'products:read', 'finance:read', 'payments:read', 'invoices:read',
-    'returns:read', 'dashboard:read',
-  ],
-};
-
 /**
- * Checks if a role has a given permission.
- * Supports wildcard '*' and resource-level wildcards like 'dealer:*'.
+ * Checks whether a permissions array grants the required permission.
+ * Supports exact match, resource-level wildcard (resource:*), and global wildcard (*).
  */
-const hasPermission = (role, required) => {
-  const perms = PERMISSIONS[role] || [];
-  if (perms.includes('*')) return true;
+const hasPermission = (permissions, required) => {
+  if (!Array.isArray(permissions)) return false;
+  if (permissions.includes('*')) return true;
 
-  const [resource, action] = required.split(':');
+  const [resource] = required.split(':');
   return (
-    perms.includes(required) ||
-    perms.includes(`${resource}:*`) ||
-    perms.includes('*')
+    permissions.includes(required) ||
+    permissions.includes(`${resource}:*`)
   );
 };
 
 /**
  * Middleware factory: authorize('dealer:write')
+ *
+ * Permissions are read directly from req.user.permissions, which is embedded
+ * in the JWT at login time. No DB query is needed on every request.
+ *
+ * Super-admin (role === 'super-admin') bypasses all permission checks.
  */
 const authorize = (...permissions) => {
   return (req, res, next) => {
-    const { role } = req.user;
-    const allowed = permissions.every((perm) => hasPermission(role, perm));
+    const { role, permissions: userPerms = [] } = req.user;
+
+    // Super-admin has unrestricted access
+    if (role === 'super-admin') return next();
+
+    const allowed = permissions.every((perm) => hasPermission(userPerms, perm));
     if (!allowed) {
       return error(res, 'Forbidden: You do not have permission to perform this action.', 403);
     }
@@ -69,4 +38,4 @@ const authorize = (...permissions) => {
   };
 };
 
-module.exports = { authorize, hasPermission, PERMISSIONS };
+module.exports = { authorize, hasPermission };
