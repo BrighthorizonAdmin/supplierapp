@@ -5,6 +5,20 @@ const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const auditService = require('../audit/audit.service');
 
+// Recompute image url from filePath so the full server URL is always returned,
+// regardless of what was stored (handles legacy records missing the base URL).
+const resolveImageUrl = (img) => {
+  if (!img.filePath) return img;
+  const clean = img.filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+  const baseUrl = process.env.SERVER_URL || 'http://localhost:3001';
+  return { ...img, url: `${baseUrl}/${clean}` };
+};
+
+const withResolvedImages = (product) => {
+  if (!product) return product;
+  return { ...product, images: (product.images || []).map(resolveImageUrl) };
+};
+
 const createProduct = async (data, userId) => {
   // Seed currentStockQty from openingStockQty so live stock starts at the opening value
   const payload = { ...data, createdBy: userId };
@@ -37,13 +51,13 @@ const getProducts = async (query = {}) => {
     Product.countDocuments(match),
   ]);
 
-  return { data, pagination: buildMeta(total, page, limit) };
+  return { data: data.map(withResolvedImages), pagination: buildMeta(total, page, limit) };
 };
 
 const getProductById = async (id) => {
   const product = await Product.findById(id).lean();
   if (!product) throw new AppError('Product not found', 404);
-  return product;
+  return withResolvedImages(product);
 };
 
 const updateProduct = async (id, updates, userId) => {
@@ -76,7 +90,9 @@ const addProductImage = async (id, file, userId) => {
 
   const isPrimary = product.images.length === 0;
   const normalizedPath = file.path.replace(/\\/g, '/').replace(/^\.\//, '');
-  product.images.push({ fileName: file.filename, filePath: normalizedPath, url: normalizedPath, isPrimary });
+  const baseUrl = process.env.SERVER_URL || 'http://localhost:3001';
+  const url = `${baseUrl}/${normalizedPath}`;
+  product.images.push({ fileName: file.filename, filePath: normalizedPath, url, isPrimary });
 
   await product.save();
   return product;
