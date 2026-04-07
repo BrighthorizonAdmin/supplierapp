@@ -61,7 +61,7 @@ const invoiceSchema = new mongoose.Schema({
 
   // Party (Dealer)
   dealerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Dealer' },
-  partyName: { type: String, required: true },
+  partyName: { type: String, required: false },
   partyAddress: { type: String },
   partyGST: { type: String },
   partyPhone: { type: String },
@@ -135,9 +135,8 @@ invoiceSchema.pre('save', async function () {
 });
 
 // Keep balance in sync
-invoiceSchema.pre('save', function (next) {
+invoiceSchema.pre('save', async function () {
   this.balance = Math.max(0, this.totalAmount - this.amountPaid);
-  next();
 });
 
 invoiceSchema.index({ dealerId: 1 });
