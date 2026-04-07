@@ -36,14 +36,14 @@ const OrderDetailPage = () => {
           </div>
           <p className="text-slate-500 text-sm">{order.dealerId?.businessName || order.dealerId?.name} · {format(new Date(order.createdAt), 'dd MMM yyyy, hh:mm a')}</p>
         </div>
-        <div className="flex gap-2">
-          {order.status === 'draft' && (
+         <div className="flex gap-2">
+          {['draft', 'pending'].includes(order.status) && (
             <>
               <button onClick={() => dispatch(confirmOrder(id))} disabled={loading} className="btn-primary flex items-center gap-2">
-                <CheckCircle size={16} /> Confirm Order
+                <CheckCircle size={16} /> Accept Order
               </button>
-              <button onClick={() => dispatch(cancelOrder({ id, reason: 'Cancelled by admin' }))} className="btn-danger flex items-center gap-2">
-                <XCircle size={16} /> Cancel
+              <button onClick={() => dispatch(cancelOrder({ id, reason: 'Rejected by supplier' }))} className="btn-danger flex items-center gap-2">
+                <XCircle size={16} /> Reject Order
               </button>
             </>
           )}
