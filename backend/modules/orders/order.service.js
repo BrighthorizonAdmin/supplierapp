@@ -72,7 +72,7 @@ const confirmOrder = async (orderId, userId) => {
   return withTransaction(async (session) => {
     const order = await Order.findById(orderId).session(session);
     if (!order) throw new AppError('Order not found', 404);
-    if (order.status !== 'draft') throw new AppError(`Order is already ${order.status}`, 400);
+    if (!['draft', 'pending'].includes(order.status)) throw new AppError(`Order is already ${order.status}`, 400);
 
     const dealer = await Dealer.findById(order.dealerId).session(session);
     if (!dealer) throw new AppError('Dealer not found', 404);
@@ -146,7 +146,7 @@ const confirmOrder = async (orderId, userId) => {
     }], { session });
 
     await auditService.log('order', orderId, 'confirm', userId, {
-      before: { status: 'draft' },
+      before: { status: order.status },
       after: { status: 'confirmed', invoiceId: invoice[0]._id },
     });
 

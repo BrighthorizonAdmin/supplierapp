@@ -22,7 +22,7 @@ const TYPE_TABS = [
 // ─── Status filter tabs ───────────────────────────────────────────────────────
 const STATUS_TABS = [
   { id: '', label: 'All' },
-  { id: 'draft', label: 'New Orders' },
+  { id: 'pending', label: 'New Orders' },
   { id: 'confirmed', label: 'Confirmed' },
   { id: 'processing', label: 'Processing' },
   { id: 'shipped', label: 'Shipped' },
@@ -64,11 +64,11 @@ const STATUS_CLS = {
   cancelled:  'badge-solid-red',
 };
 const StatusCell = ({ order, onView, onReject }) => {
-  if (order.status === 'draft') {
+  if (order.status === 'pending') {
     return (
       <div className="flex flex-col gap-0.5">
         <button
-          onClick={() => onView(order._id)}
+          onClick={() => onView(order)}
           className="text-xs font-semibold text-primary-600 hover:underline text-left"
         >
           Accept Order
@@ -140,7 +140,7 @@ const OrderListPage = () => {
   const [exporting,   setExporting]   = useState(false);
   const [counts,      setCounts]      = useState({
     confirmed: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0,
-    total: 0, draft: 0,
+    total: 0, pending: 0,
   });
 
   const handleSearchKeyDown = (e) => {
@@ -165,7 +165,7 @@ const OrderListPage = () => {
     shipped: 0,
     delivered: 0,
     cancelled: 0,
-    draft: 0,
+    pending: 0,
     total: arr.length,
   };
 
@@ -388,7 +388,7 @@ const filteredOrders = useMemo(() => {
                 }`}
               >
                 {t.label}
-                {t.id === 'draft' && counts.draft > 0 ? `(${counts.draft})` : ''}
+                {t.id === 'pending' && counts.pending > 0 ? `(${counts.pending})` : ''}
               </button>
             ))}
           </div>
