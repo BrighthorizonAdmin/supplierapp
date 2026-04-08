@@ -51,12 +51,25 @@ app.use('/uploads', cors({ origin: '*' }), (req, res, next) => {
 }, express.static(path.join(__dirname, 'uploads')));
 
 // CORS — API routes are restricted to the supplier frontend only
+// With this multi-origin version:
+// AFTER:
+const ALLOWED_ORIGINS = (env.FRONTEND_URL || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: env.FRONTEND_URL,
+    origin: (origin, callback) => {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-webhook-secret'],
   })
 );
 
