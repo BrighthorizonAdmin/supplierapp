@@ -36,14 +36,16 @@ const adjustStock = async (productId, warehouseId, quantity, type = 'add', userI
 
   if (!inv) throw new AppError('Insufficient stock for this operation', 400);
 
-  // Low stock check
-  if (inv.quantityAvailable <= inv.reorderLevel) {
+  // Low stock check — percentage-based: alert when available drops to ≤20% of opening stock
+  const product = await Product.findById(productId, 'openingStockQty').lean();
+  const threshold = (product?.openingStockQty || 0) * 0.2;
+  if (inv.quantityOnHand > 0 && inv.quantityAvailable <= threshold) {
     try {
       emitToRole('inventory-manager', LOW_STOCK_ALERT, {
         productId,
         warehouseId,
         quantityAvailable: inv.quantityAvailable,
-        reorderLevel: inv.reorderLevel,
+        threshold,
       });
     } catch {}
   }
@@ -143,13 +145,18 @@ const getInventory = async (query = {}) => {
       },
     },
 
-    // Compute isLowStock from product-level stock fields
+    // Compute isLowStock: quantityAvailable <= 20% of openingStockQty
     {
       $addFields: {
         isLowStock: {
           $and: [
-            { $gt: ['$currentStockQty', 0] },
-            { $lt: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.2] }] },
+            { $gt: ['$quantityOnHand', 0] },
+            {
+              $lte: [
+                { $subtract: ['$quantityOnHand', '$quantityAllocated'] },
+                { $multiply: ['$openingStockQty', 0.2] },
+              ],
+            },
           ],
         },
       },
@@ -206,7 +213,7 @@ const getInventory = async (query = {}) => {
       : query.status === 'out-of-stock'
       ? [{ $match: { quantityOnHand: { $not: { $gt: 0 } } } }]
       : query.status === 'high-stock'
-      ? [{ $match: { isLowStock: false, currentStockQty: { $gt: 0 } } }]
+      ? [{ $match: { isLowStock: false, quantityOnHand: { $gt: 0 } } }]
       : []),
   ];
 
@@ -238,9 +245,9 @@ const getInventoryStats = async () => {
     { $unwind: { path: '$invRecords', preserveNullAndEmptyArrays: true } },
     {
       $addFields: {
-        _qoh:    { $ifNull: ['$invRecords.quantityOnHand',    { $ifNull: ['$openingStockQty', 0] }] },
-        _qalloc: { $ifNull: ['$invRecords.quantityAllocated', 0] },
-        _rl:     { $ifNull: ['$invRecords.reorderLevel',      10] },
+        _qoh:       { $ifNull: ['$invRecords.quantityOnHand',    { $ifNull: ['$openingStockQty', 0] }] },
+        _qalloc:    { $ifNull: ['$invRecords.quantityAllocated', 0] },
+        _threshold: { $multiply: [{ $ifNull: ['$openingStockQty', 0] }, 0.2] },
       },
     },
     {
@@ -251,8 +258,8 @@ const getInventoryStats = async () => {
     {
       $group: {
         _id: null,
-        inStock:    { $sum: { $cond: [{ $and: [{ $gt: ['$_qoh', 0] }, { $gt:  ['$_qavail', '$_rl'] }] }, 1, 0] } },
-        lowStock:   { $sum: { $cond: [{ $and: [{ $gt: ['$_qoh', 0] }, { $lte: ['$_qavail', '$_rl'] }] }, 1, 0] } },
+        inStock:    { $sum: { $cond: [{ $and: [{ $gt: ['$_qoh', 0] }, { $gt:  ['$_qavail', '$_threshold'] }] }, 1, 0] } },
+        lowStock:   { $sum: { $cond: [{ $and: [{ $gt: ['$_qoh', 0] }, { $lte: ['$_qavail', '$_threshold'] }] }, 1, 0] } },
         outOfStock: { $sum: { $cond: [{ $lte: ['$_qoh', 0] }, 1, 0] } },
       },
     },
