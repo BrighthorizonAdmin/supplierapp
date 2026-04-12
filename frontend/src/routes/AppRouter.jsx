@@ -32,11 +32,12 @@ import RoleManagementPage from '../features/usermanagement/pages/RoleManagement'
 import UserManagementPage from '../features/usermanagement/pages/UserManagement';
 import InvoiceFormPage from '../features/payments/pages/InvoiceFormPage';
 import InvoiceDetailPage from '../features/payments/pages/InvoiceDetailPage';
-
 import ChangePassword from '../features/usermanagement/pages/ChangePassword';
+import SupportDetailPage from '../features/support/pages/SupportDetailPage';
+import SupportListPage from '../features/support/pages/SupportListPage';
 
 const AppRouter = () => {
-  const { isAuthenticated} = useSelector((s) => s.auth);
+  const { isAuthenticated } = useSelector((s) => s.auth);
 
   return (
     <HashRouter >
@@ -160,18 +161,18 @@ const AppRouter = () => {
             <ProtectedRoute permission='marketing:read'>
               <MarketingPage />
             </ProtectedRoute>
-            } />
+          } />
           <Route path="marketing-leads/new" element={
             <ProtectedRoute permission="marketing:write">
               <AddMarketingLeadPage />
             </ProtectedRoute>
-            } />
+          } />
           <Route path="marketing-leads/:id" element={
             <ProtectedRoute permission="marketing:read">
               <MarketingLeadDetailPage />
             </ProtectedRoute>
-            } />
-          
+          } />
+
           <Route path="rolemanagement" element={
             <ProtectedRoute permission="users:manage">
               <RoleManagementPage />
@@ -180,6 +181,16 @@ const AppRouter = () => {
           <Route path="usermanagement" element={
             <ProtectedRoute permission="users:manage">
               <UserManagementPage />
+            </ProtectedRoute>
+          } />
+          <Route path="support" element={
+            <ProtectedRoute permission="support:read">
+              <SupportListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="support/:id" element={
+            <ProtectedRoute permission="support:read">
+              <SupportDetailPage />
             </ProtectedRoute>
           } />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />

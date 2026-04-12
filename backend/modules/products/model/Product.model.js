@@ -1,10 +1,22 @@
 const mongoose = require('mongoose');
 
+// Each variant is a selectable option (e.g. "USB+LAN", "USB+LAN+Serial")
+// with its own price. If a product has no variants, basePrice is used directly.
+const variantSchema = new mongoose.Schema(
+  {
+    label:     { type: String, required: true, trim: true }, // e.g. "USB+LAN"
+    price:     { type: Number, required: true, min: 0 },     // variant-specific dealer price
+    sku:       { type: String, trim: true },                  // optional suffix e.g. "BVS-GL-A2-USB"
+    isDefault: { type: Boolean, default: false },             // pre-selected in dealer app
+  },
+  { _id: false }
+);
+
 const imageSchema = new mongoose.Schema(
   {
     fileName: { type: String },
     filePath: { type: String },
-    url:      { type: String }, 
+    url:      { type: String },
     isPrimary: { type: Boolean, default: false },
   },
   { _id: false }
@@ -68,8 +80,8 @@ const productSchema = new mongoose.Schema(
     // Pricing by tier
     pricingTiers: {
       standard: { type: Number, min: 0 },
-      silver: { type: Number, min: 0 },
-      gold: { type: Number, min: 0 },
+      silver:   { type: Number, min: 0 },
+      gold:     { type: Number, min: 0 },
       platinum: { type: Number, min: 0 },
     },
     taxRate: {
@@ -104,6 +116,14 @@ const productSchema = new mongoose.Schema(
       color:      { type: String, trim: true },
     },
     images: [imageSchema],
+
+    // ── Variants ──────────────────────────────────────────────────────────────
+    // Optional. When present, dealer must select one before adding to cart.
+    // variantLabel is the group heading shown in the dealer app (e.g. "Interface").
+    variantLabel: { type: String, trim: true },
+    variants: [variantSchema],
+    // ─────────────────────────────────────────────────────────────────────────
+
     tags: [{ type: String, trim: true, lowercase: true }],
     isActive: {
       type: Boolean,
@@ -143,10 +163,8 @@ productSchema.methods.getPriceForTier = function (tier) {
   return this.basePrice;
 };
 
-// productSchema.index({ productCode: 1 }, { unique: true });
 productSchema.index({ category: 1 });
 productSchema.index({ isActive: 1 });
 productSchema.index({ name: 'text', description: 'text', tags: 'text' });
-// productSchema.index({ sku: 1 }, { sparse: true });
 
 module.exports = mongoose.model('Product', productSchema);

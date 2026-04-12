@@ -57,6 +57,10 @@ const ALL_PERMISSIONS = [
   // Admin
   { key: 'admin:read',          label: 'View Users & Roles',     group: 'Admin' },
   { key: 'admin:write',         label: 'Manage Users & Roles',   group: 'Admin' },
+
+  // Support
+  { key: 'support:read',        label: 'View Support Tickets',   group: 'Support' },
+  { key: 'support:write',       label: 'Manage Support Tickets', group: 'Support' },
 ];
 
 /**
@@ -86,6 +90,7 @@ const DEFAULT_ROLES = [
       'retailOrders:read', 'retailOrders:write', 'returns:read', 'returns:write',
       'payments:read', 'payments:write', 'invoices:read', 'invoices:write',
       'notifications:read', 'audit:read', 'finance:read', 'admin:read', 'admin:write',
+      'support:read', 'support:write',
     ],
     isSystem: true,
   },

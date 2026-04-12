@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useState } from 'react';
 import { ShieldCheck, X, KeyRound } from 'lucide-react';
 import {
-  LayoutDashboard, Users, Package, Boxes, ShoppingCart,
+  LayoutDashboard, Users, Package, Boxes, ShoppingCart, Headphones,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
   UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText,
 } from 'lucide-react';
@@ -26,8 +26,9 @@ const NAV_ITEMS = [
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
   { to: '/audit', icon: BarChart2, label: 'Analytics', perm: 'audit:read' },
   { to: '/notifications', icon: Settings, label: 'Settings', perm: 'notifications:read' },
-{ to: '/rolemanagement', icon: ShieldCheck, label: 'Role Permissions', perm: 'users:manage' },
-{ to: '/usermanagement', icon: Users, label: 'User Management', perm: 'users:manage' }
+  { to: '/rolemanagement', icon: ShieldCheck, label: 'Role Permissions', perm: 'users:manage' },
+  { to: '/usermanagement', icon: Users, label: 'User Management', perm: 'users:manage' },
+  { to: '/support', icon: Headphones, label: 'Support Tickets', perm: 'support:read' },
 ];
 
 const Sidebar = () => {
@@ -50,9 +51,8 @@ const Sidebar = () => {
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full  text-white z-30 flex flex-col transition-all duration-200 ${
-        sidebarOpen ? 'w-64' : 'w-16'
-      }`}
+      className={`fixed left-0 top-0 h-full  text-white z-30 flex flex-col transition-all duration-200 ${sidebarOpen ? 'w-64' : 'w-16'
+        }`}
     >
       {/* Logo / Brand */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10 flex-shrink-0">
@@ -76,17 +76,16 @@ const Sidebar = () => {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
         {NAV_ITEMS.map(({ to, icon: Icon, label, perm, end }) => {
-         if (perm && !hasPermission(perm)) return null;
+          if (perm && !hasPermission(perm)) return null;
           return (
             <NavLink
               key={`${to}-${label}`}
               to={to}
               end={end !== false}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-blue-600  hover:bg-white/10'
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-blue-600  hover:bg-white/10'
                 }`
               }
             >
@@ -99,37 +98,36 @@ const Sidebar = () => {
 
       {/* Need Help card */}
       {/* Need Help card */}
-{sidebarOpen && showHelpCard && (
-  <div className="mx-3 mb-3 p-3 bg-blue-600/90 rounded-2xl relative flex-shrink-0">
-    
-    {/* Close Button */}
-    <button
-      onClick={() => setShowHelpCard(false)}
-      className="absolute top-2 right-2 text-blue-200 hover:text-white transition-colors"
-    >
-      <X size={14} />
-    </button>
+      {sidebarOpen && showHelpCard && (
+        <div className="mx-3 mb-3 p-3 bg-blue-600/90 rounded-2xl relative flex-shrink-0">
 
-    <div className="flex items-center gap-2 mb-1">
-      <HelpCircle size={15} className="text-blue-100 flex-shrink-0" />
-      <span className="text-sm font-semibold text-white">Need Help?</span>
-    </div>
+          {/* Close Button */}
+          <button
+            onClick={() => setShowHelpCard(false)}
+            className="absolute top-2 right-2 text-blue-200 hover:text-white transition-colors"
+          >
+            <X size={14} />
+          </button>
 
-    <p className="text-xs text-blue-200 mb-2 leading-relaxed">
-      Contact our support team for assistance.
-    </p>
+          <div className="flex items-center gap-2 mb-1">
+            <HelpCircle size={15} className="text-blue-100 flex-shrink-0" />
+            <span className="text-sm font-semibold text-white">Need Help?</span>
+          </div>
 
-    <button className="w-full text-xs bg-white text-blue-700 font-semibold py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
-      Contact Support
-    </button>
-  </div>
-)}
+          <p className="text-xs text-blue-200 mb-2 leading-relaxed">
+            Contact our support team for assistance.
+          </p>
+
+          <button className="w-full text-xs bg-white text-blue-700 font-semibold py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+            Contact Support
+          </button>
+        </div>
+      )}
 
       {/* User profile */}
       <div
-        className={`border-t border-white/10 px-3 py-3 flex items-center gap-3 flex-shrink-0 ${
-          !sidebarOpen ? 'justify-center' : ''
-        }`}
+        className={`border-t border-white/10 px-3 py-3 flex items-center gap-3 flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''
+          }`}
       >
         <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
           {initials}
