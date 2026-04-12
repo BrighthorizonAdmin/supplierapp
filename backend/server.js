@@ -123,8 +123,6 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/marketing-leads', marketingLeadRoutes);
-app.use('/api/support',  supportRoutes);
-app.use('/api/webhooks', supportRoutes);
 
 // Frontend routing - serve index.html for all non-API routes (React Router support)
 app.get('*', (req, res, next) => {
