@@ -16,6 +16,8 @@ import marketingReducer from '../features/Marketing/marketingSlice';
 import uiReducer from './uiSlice';
 import roleReducer from '../features/usermanagement/roleSlice';
 import userReducer from '../features/usermanagement/userSlice';
+import supportReducer from '../features/support/supportSlice';
+
 
 const store = configureStore({
   reducer: {
@@ -35,7 +37,8 @@ const store = configureStore({
     marketing: marketingReducer,
     ui: uiReducer,
     roles:roleReducer,
-    users: userReducer
+    users: userReducer,
+    support: supportReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

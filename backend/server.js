@@ -34,6 +34,7 @@ const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
 const settingsRoutes = require('./modules/settings/settings.routes');
 const roleRoutes = require('./modules/roles/role.routes');
 const marketingLeadRoutes = require('./modules/marketingLeads/marketingLead.routes');
+const { router: supportRoutes, whRouter: supportWebhookRoutes } = require('./modules/support/support.routes');
 
 const app = express();
 
@@ -102,6 +103,8 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/webhooks', supportWebhookRoutes);
+app.use('/api/support',  supportRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);
@@ -120,6 +123,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/marketing-leads', marketingLeadRoutes);
+app.use('/api/support',  supportRoutes);
+app.use('/api/webhooks', supportRoutes);
 
 // Frontend routing - serve index.html for all non-API routes (React Router support)
 app.get('*', (req, res, next) => {
