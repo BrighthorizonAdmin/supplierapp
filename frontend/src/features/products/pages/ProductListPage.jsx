@@ -3,45 +3,109 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchProducts, fetchCategories } from '../productSlice';
 import Pagination from '../../../components/ui/Pagination';
-import { Plus, Search, Upload, Package, Pencil } from 'lucide-react';
+import { Plus, Search, Upload, Package, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 
-// filePath stored as "uploads/products/uuid.jpg" → browser URL "/uploads/products/uuid.jpg"
-// Handles Windows backslashes and leading "./" from multer on Windows
-// For old records with no filePath, fall back to building URL from fileName
-const getImageSrc = (product) => {
-  const img = product.images?.find((i) => i.isPrimary) || product.images?.[0];
+// Build a URL from a single image object (handles Windows backslashes, leading "./")
+const buildSrc = (img) => {
   if (!img) return null;
   if (img.filePath) {
     const clean = img.filePath.replace(/\\/g, '/').replace(/^\.\//, '');
     return '/' + clean;
   }
   if (img.fileName) return '/uploads/products/' + img.fileName;
+  if (img.url) return img.url;
   return null;
+};
+
+// Returns all valid image URLs for a product (images is an array in the schema)
+const getImageSrcs = (product) => {
+  const images = product.images;
+  if (!Array.isArray(images) || images.length === 0) return [];
+  // Put primary image first
+  const sorted = [...images].sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+  return sorted.map(buildSrc).filter(Boolean);
+};
+
+const ImageCarousel = ({ srcs, name }) => {
+  const [idx, setIdx] = useState(0);
+  const [errors, setErrors] = useState(new Set());
+
+  const validSrcs = srcs.filter((_, i) => !errors.has(i));
+  const safeIdx = validSrcs.length > 0 ? idx % validSrcs.length : 0;
+
+  if (srcs.length === 0 || validSrcs.length === 0) {
+    return <Package size={52} strokeWidth={1.2} className="text-slate-300" />;
+  }
+
+  const prev = (e) => {
+    e.stopPropagation();
+    setIdx((i) => (i - 1 + validSrcs.length) % validSrcs.length);
+  };
+  const next = (e) => {
+    e.stopPropagation();
+    setIdx((i) => (i + 1) % validSrcs.length);
+  };
+
+  return (
+    <div className="relative w-full h-full">
+      <img
+        key={validSrcs[safeIdx]}
+        src={validSrcs[safeIdx]}
+        alt={`${name} ${safeIdx + 1}`}
+        className="w-full h-full object-cover"
+        onError={() => {
+          const originalIdx = srcs.indexOf(validSrcs[safeIdx]);
+          setErrors((prev) => new Set([...prev, originalIdx]));
+        }}
+      />
+
+      {validSrcs.length > 1 && (
+        <>
+          <button
+            onClick={prev}
+            className="absolute left-1 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            onClick={next}
+            className="absolute right-1 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+          >
+            <ChevronRight size={14} />
+          </button>
+
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1 z-10">
+            {validSrcs.map((_, i) => (
+              <button
+                key={i}
+                onClick={(e) => { e.stopPropagation(); setIdx(i); }}
+                className={`rounded-full transition-all ${
+                  i === safeIdx
+                    ? 'w-3 h-1.5 bg-white'
+                    : 'w-1.5 h-1.5 bg-white/60 hover:bg-white/90'
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 };
 
 // ─── Product Card ─────────────────────────────────────────────────────────────
 const ProductCard = ({ product, onEdit }) => {
-  const [imgError, setImgError] = useState(false);
-  const src = getImageSrc(product);
+  const srcs = getImageSrcs(product);
 
   return (
     <div className="card overflow-hidden group hover:shadow-md transition-shadow">
       {/* Image area */}
-      <div className="relative bg-slate-100 h-44 flex items-center justify-center">
-        <span className="absolute top-3 right-3 text-[10px] font-bold text-green-400 bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide">
+      <div className="relative bg-slate-100 h-44 flex items-center justify-center overflow-hidden">
+        <span className="absolute top-3 right-3 text-[10px] font-bold text-green-400 bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide z-10">
           {product.isActive ? 'Instock' : 'outofstock'}
         </span>
 
-        {src && !imgError ? (
-          <img
-            src={src}
-            alt={product.name}
-            className="w-full h-full object-cover"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <Package size={52} strokeWidth={1.2} className="text-slate-300" />
-        )}
+        <ImageCarousel srcs={srcs} name={product.name} />
       </div>
 
       {/* Card body */}
