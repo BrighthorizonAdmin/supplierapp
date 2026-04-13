@@ -51,6 +51,11 @@ app.use('/uploads', cors({ origin: '*' }), (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'uploads')));
 
+app.use('/api/webhooks', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
+
 // CORS — API routes are restricted to the supplier frontend only
 app.use(
   cors({
@@ -85,6 +90,10 @@ app.use('/api', apiLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// ✅ Register webhooks BEFORE mongoSanitize so payload isn't mutated
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/webhooks', supportWebhookRoutes);
+
 // NoSQL injection sanitization
 app.use(mongoSanitize());
 
@@ -102,8 +111,6 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/webhooks', webhookRoutes);
-app.use('/api/webhooks', supportWebhookRoutes);
 app.use('/api/support',  supportRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);

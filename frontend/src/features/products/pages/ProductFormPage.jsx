@@ -20,8 +20,8 @@ const toPreviewUrl = (filePath) => {
 // ─── Image Upload Component ───────────────────────────────────────────────────
 const ImageUploader = ({ images, onChange, onDeleteExisting, onSetPrimaryExisting }) => {
   const fileInputRef = useRef(null);
-  const [dragging, setDragging]   = useState(false);
-  const [deleting, setDeleting]   = useState(null);
+  const [dragging, setDragging] = useState(false);
+  const [deleting, setDeleting] = useState(null);
 
   const processFiles = useCallback(
     (files) => {
@@ -149,78 +149,117 @@ const ImageUploader = ({ images, onChange, onDeleteExisting, onSetPrimaryExistin
   );
 };
 
-// ─── Variant Manager Component ────────────────────────────────────────────────
-const VariantManager = ({ variantLabel, onVariantLabelChange, variants, onVariantsChange }) => {
-  const [newLabel, setNewLabel] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-  const [newSku,   setNewSku]   = useState('');
-  const [error,    setError]    = useState('');
-
-  const addVariant = () => {
-    setError('');
-    if (!newLabel.trim()) { setError('Variant label is required.'); return; }
-    const price = parseFloat(newPrice);
-    if (!newPrice || isNaN(price) || price <= 0) { setError('Enter a valid price.'); return; }
-    if (variants.some(v => v.label.toLowerCase() === newLabel.trim().toLowerCase())) {
-      setError('A variant with this label already exists.'); return;
+// ─── Interface Option Row (inside a group) ────────────────────────────────────
+const InterfaceOptionRow = ({ option, isDefault, onSetDefault, onRemove }) => (
+  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-sm
+    ${isDefault ? 'border-primary-400 bg-primary-50' : 'border-gray-200 bg-white'}`}
+  >
+    <button type="button" title="Set as default" onClick={onSetDefault}
+      className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors
+        ${isDefault ? 'border-primary-500 bg-primary-500' : 'border-gray-300 hover:border-primary-400'}`}
+    />
+    <span className="font-medium text-gray-800 flex-1">{option.label}</span>
+    {option.additionalPrice > 0
+      ? <span className="text-green-700 font-semibold text-xs">+₹{option.additionalPrice.toLocaleString('en-IN')}</span>
+      : <span className="text-gray-400 text-xs">No extra cost</span>
     }
-    const variant = {
-      label:     newLabel.trim(),
-      price,
-      sku:       newSku.trim() || '',
-      isDefault: variants.length === 0, // first variant auto-set as default
+    {option.sku && <span className="text-xs text-gray-400">SKU: {option.sku}</span>}
+    {isDefault && (
+      <span className="text-xs bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded font-semibold">Default</span>
+    )}
+    <button type="button" onClick={onRemove}
+      className="text-gray-400 hover:text-red-500 transition-colors ml-1" title="Remove">
+      ✕
+    </button>
+  </div>
+);
+
+// ─── Single Interface Group Editor ────────────────────────────────────────────
+const InterfaceGroupEditor = ({ group, onUpdate, onRemoveGroup }) => {
+  const [newLabel,           setNewLabel]           = useState('');
+  const [newAdditionalPrice, setNewAdditionalPrice] = useState('');
+  const [newSku,             setNewSku]             = useState('');
+  const [error,              setError]              = useState('');
+
+  const addOption = () => {
+    setError('');
+    if (!newLabel.trim()) { setError('Option label is required.'); return; }
+    const price = parseFloat(newAdditionalPrice);
+    if (newAdditionalPrice === '' || isNaN(price) || price < 0) {
+      setError('Enter a valid additional price (0 for no extra cost).'); return;
+    }
+    if (group.options.some(o => o.label.toLowerCase() === newLabel.trim().toLowerCase())) {
+      setError('An option with this label already exists in this group.'); return;
+    }
+    const option = {
+      label:           newLabel.trim(),
+      additionalPrice: price,
+      sku:             newSku.trim() || '',
+      isDefault:       group.options.length === 0,
     };
-    onVariantsChange([...variants, variant]);
-    setNewLabel(''); setNewPrice(''); setNewSku('');
+    onUpdate({ ...group, options: [...group.options, option] });
+    setNewLabel(''); setNewAdditionalPrice(''); setNewSku('');
   };
 
-  const removeVariant = (idx) => {
-    const updated = variants.filter((_, i) => i !== idx);
-    // If removed variant was default and others remain, make first the default
-    if (variants[idx].isDefault && updated.length > 0) updated[0].isDefault = true;
-    onVariantsChange(updated);
+  const removeOption = (idx) => {
+    const updated = group.options.filter((_, i) => i !== idx);
+    if (group.options[idx].isDefault && updated.length > 0) updated[0] = { ...updated[0], isDefault: true };
+    onUpdate({ ...group, options: updated });
   };
 
   const setDefault = (idx) => {
-    onVariantsChange(variants.map((v, i) => ({ ...v, isDefault: i === idx })));
+    onUpdate({ ...group, options: group.options.map((o, i) => ({ ...o, isDefault: i === idx })) });
   };
 
   return (
-    <div className="space-y-3">
-      {/* Group label */}
-      <div>
-        <label className="label">
-          Variant Group Label
-          <span className="text-xs font-normal text-gray-400 ml-2">e.g. Interface, Color, Size</span>
-        </label>
-        <input
-          type="text"
-          className="input"
-          placeholder="e.g. Interface"
-          value={variantLabel}
-          onChange={e => onVariantLabelChange(e.target.value)}
-        />
+    <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-white shadow-sm">
+      {/* Group header */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <label className="label text-xs mb-1">
+            Interface Group Name
+            <span className="text-xs font-normal text-gray-400 ml-2">e.g. Magnetic Stripe Reader</span>
+          </label>
+          <input
+            type="text"
+            className="input"
+            placeholder="e.g. Magnetic Stripe Reader"
+            value={group.name}
+            onChange={e => onUpdate({ ...group, name: e.target.value })}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onRemoveGroup}
+          title="Remove this group"
+          className="mt-5 p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
       </div>
 
-      {/* Add variant row */}
+      {/* Add option row */}
       <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add Variant</p>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add Option</p>
         <div className="grid grid-cols-3 gap-2">
           <input
             type="text"
             className="input col-span-1"
-            placeholder="Label *  e.g. USB+LAN"
+            placeholder="Label *  e.g. With MSR"
             value={newLabel}
             onChange={e => { setNewLabel(e.target.value); setError(''); }}
           />
           <input
             type="number"
             className="input col-span-1"
-            placeholder="Price *"
+            placeholder="Additional Price * (0 = free)"
             min="0"
             step="0.01"
-            value={newPrice}
-            onChange={e => { setNewPrice(e.target.value); setError(''); }}
+            value={newAdditionalPrice}
+            onChange={e => { setNewAdditionalPrice(e.target.value); setError(''); }}
           />
           <input
             type="text"
@@ -231,51 +270,85 @@ const VariantManager = ({ variantLabel, onVariantLabelChange, variants, onVarian
           />
         </div>
         {error && <p className="text-red-500 text-xs">{error}</p>}
-        <button
-          type="button"
-          onClick={addVariant}
-          className="btn-primary text-sm py-1.5 px-4"
-        >
-          + Add Variant
+        <button type="button" onClick={addOption} className="btn-primary text-sm py-1.5 px-4">
+          + Add Option
         </button>
       </div>
 
-      {/* Variant list */}
-      {variants.length > 0 && (
+      {/* Options list */}
+      {group.options.length > 0 && (
         <div className="space-y-1.5">
-          {variants.map((v, idx) => (
-            <div key={idx}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-sm
-                ${v.isDefault ? 'border-primary-400 bg-primary-50' : 'border-gray-200 bg-white'}`}
-            >
-              {/* Default radio */}
-              <button
-                type="button"
-                title="Set as default"
-                onClick={() => setDefault(idx)}
-                className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors
-                  ${v.isDefault ? 'border-primary-500 bg-primary-500' : 'border-gray-300 hover:border-primary-400'}`}
-              />
-              <span className="font-medium text-gray-800 flex-1">{v.label}</span>
-              <span className="text-primary-700 font-semibold">₹{v.price.toLocaleString('en-IN')}</span>
-              {v.sku && <span className="text-xs text-gray-400">SKU: {v.sku}</span>}
-              {v.isDefault && (
-                <span className="text-xs bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded font-semibold">
-                  Default
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => removeVariant(idx)}
-                className="text-gray-400 hover:text-red-500 transition-colors ml-1"
-                title="Remove"
-              >
-                ✕
-              </button>
-            </div>
+          {group.options.map((opt, idx) => (
+            <InterfaceOptionRow
+              key={idx}
+              option={opt}
+              isDefault={opt.isDefault}
+              onSetDefault={() => setDefault(idx)}
+              onRemove={() => removeOption(idx)}
+            />
           ))}
           <p className="text-xs text-gray-400">
-            · The default variant is pre-selected in the dealer app.
+            · "Additional Price" adds on top of the product base price. Use 0 for the standard option.
+            <br />· The default option is pre-selected in the dealer app.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Multi-Interface Groups Manager ──────────────────────────────────────────
+const InterfaceGroupsManager = ({ interfaceGroups, onInterfaceGroupsChange }) => {
+  const addGroup = () => {
+    onInterfaceGroupsChange([...interfaceGroups, { name: '', options: [] }]);
+  };
+
+  const updateGroup = (idx, updated) => {
+    onInterfaceGroupsChange(interfaceGroups.map((g, i) => (i === idx ? updated : g)));
+  };
+
+  const removeGroup = (idx) => {
+    onInterfaceGroupsChange(interfaceGroups.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="space-y-4">
+      {interfaceGroups.length === 0 && (
+        <div className="text-center py-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+          <p className="text-sm text-gray-500 mb-1">No interface groups added yet.</p>
+          <p className="text-xs text-gray-400">
+            Add groups like "Magnetic Stripe Reader" or "Second Display", each with their own options.
+          </p>
+        </div>
+      )}
+
+      {interfaceGroups.map((group, idx) => (
+        <InterfaceGroupEditor
+          key={idx}
+          group={group}
+          onUpdate={(updated) => updateGroup(idx, updated)}
+          onRemoveGroup={() => removeGroup(idx)}
+        />
+      ))}
+
+      <button
+        type="button"
+        onClick={addGroup}
+        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border-2 border-dashed
+          border-primary-300 text-primary-600 text-sm font-semibold hover:bg-primary-50 transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        Add Interface Group
+      </button>
+
+      {interfaceGroups.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700 space-y-1">
+          <p className="font-semibold">How pricing works with multiple interfaces:</p>
+          <p>Final price = Base Price + additional price from each selected option</p>
+          <p className="text-blue-500">
+            Example: Base ₹40,000 + MSR ₹500 + 11.6" Screen ₹1,200 = <strong>₹41,700</strong>
           </p>
         </div>
       )}
@@ -290,9 +363,8 @@ const ProductFormPage = () => {
   const navigate  = useNavigate();
   const { selected, loading } = useSelector((s) => s.product);
 
-  const [productImages, setProductImages] = useState([]);
-  const [variants,      setVariants]      = useState([]);
-  const [variantLabel,  setVariantLabel]  = useState('');
+  const [productImages,   setProductImages]   = useState([]);
+  const [interfaceGroups, setInterfaceGroups] = useState([]);
 
   const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm();
 
@@ -326,9 +398,7 @@ const ProductFormPage = () => {
         }))
       );
 
-      // Load existing variants
-      setVariants(selected.variants || []);
-      setVariantLabel(selected.variantLabel || '');
+      setInterfaceGroups(selected.interfaceGroups || []);
     }
   }, [selected, isEdit, reset]);
 
@@ -380,18 +450,14 @@ const ProductFormPage = () => {
       color:      specColor      || '',
     };
 
-    // ── Include variants in payload ──
-    productData.variantLabel = variantLabel.trim() || '';
-    productData.variants     = variants;
+    productData.interfaceGroups = interfaceGroups;
 
-    // Step 1 — save product fields
     const action = isEdit ? updateProduct({ id, ...productData }) : createProduct(productData);
     const res    = await dispatch(action);
     if (res.error) return;
 
     const productId = isEdit ? id : res.payload._id;
 
-    // Step 2 — upload any new images
     if (newFiles.length > 0) {
       const uploadRes = await dispatch(uploadProductImages({
         id:    productId,
@@ -517,19 +583,17 @@ const ProductFormPage = () => {
 
         </div>
 
-        {/* ── Variants Section (full width below the two columns) ── */}
+        {/* ── Interface Groups Section (full width) ── */}
         <div className="border-t border-gray-100 pt-5">
-          <div className="flex items-center gap-2 mb-3">
-            <h3 className="text-sm font-semibold text-gray-700">Product Variants</h3>
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-sm font-semibold text-gray-700">Product Interfaces</h3>
             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-              Optional — e.g. different interface options with different prices
+              Optional — add multiple selectable interface groups (e.g. MSR, Second Display)
             </span>
           </div>
-          <VariantManager
-            variantLabel={variantLabel}
-            onVariantLabelChange={setVariantLabel}
-            variants={variants}
-            onVariantsChange={setVariants}
+          <InterfaceGroupsManager
+            interfaceGroups={interfaceGroups}
+            onInterfaceGroupsChange={setInterfaceGroups}
           />
         </div>
 
