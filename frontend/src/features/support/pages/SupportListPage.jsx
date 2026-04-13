@@ -5,11 +5,11 @@ import { fetchTickets } from '../supportSlice';
 import { Headphones, Wrench, Clock, AlertCircle, CheckCircle2, Loader2, Search } from 'lucide-react';
 
 const STATUS_COLOR = {
-  OPEN:           'bg-yellow-100 text-yellow-800',
-  IN_PROGRESS:    'bg-blue-100 text-blue-800',
-  AWAITING_DEALER:'bg-purple-100 text-purple-800',
-  RESOLVED:       'bg-green-100 text-green-800',
-  CLOSED:         'bg-gray-100 text-gray-600',
+  OPEN: 'bg-yellow-100 text-yellow-800',
+  IN_PROGRESS: 'bg-blue-100 text-blue-800',
+  AWAITING_DEALER: 'bg-purple-100 text-purple-800',
+  RESOLVED: 'bg-green-100 text-green-800',
+  CLOSED: 'bg-gray-100 text-gray-600',
 };
 
 const PRIORITY_COLOR = {
@@ -18,8 +18,8 @@ const PRIORITY_COLOR = {
 };
 
 export default function SupportListPage() {
-  const dispatch   = useDispatch();
-  const navigate   = useNavigate();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { tickets, pagination, meta, loading } = useSelector(s => s.support);
 
   const [filters, setFilters] = useState({ status: '', type: '', search: '', page: 1 });
@@ -113,18 +113,23 @@ export default function SupportListPage() {
                   </td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-800">
-                      {t.dealerName || (t.type === 'GENERAL' && t.name) || '—'}
+                      {t.dealerName || t.name || '—'}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {t.dealerPhone || (t.type === 'GENERAL' && t.phone) || t.dealerEmail || ''}
+                      {t.dealerPhone || t.dealerEmail || ''}
                     </p>
+                    {t.type !== 'SERVICE_REQUEST' && t.name && (
+                      <p className="text-xs text-blue-500">
+                        Submitted by: {t.name} {t.phone ? `· ${t.phone}` : ''}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3 max-w-xs">
                     <p className="font-medium text-gray-800 truncate">
-                      {t.type === 'GENERAL' ? (t.topic || 'General') : (t.issueType?.replace(/_/g, ' ') || 'Service')}
+                      {t.type === 'SERVICE_REQUEST' ? (t.issueType?.replace(/_/g, ' ') || 'Service') : (t.topic || 'General Support')}
                     </p>
                     <p className="text-xs text-gray-400 truncate">
-                      {t.type === 'GENERAL' ? t.message : t.productName}
+                      {t.type === 'SERVICE_REQUEST' ? t.productName : t.message}
                     </p>
                   </td>
                   <td className="px-4 py-3">
@@ -138,7 +143,7 @@ export default function SupportListPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
-                    {new Date(t.createdAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}
+                    {new Date(t.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
                 </tr>
               ))}
