@@ -98,6 +98,13 @@ export const deleteInvoice = createAsyncThunk('payment/deleteInvoice', async (id
   }
 });
 
+export const fetchSettings = createAsyncThunk('payment/fetchSettings', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/settings');
+    return data.data;
+  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+});
+
 // ── Slice ─────────────────────────────────────────────────────────────────────
 
 const paymentSlice = createSlice({

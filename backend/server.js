@@ -34,6 +34,7 @@ const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
 const settingsRoutes = require('./modules/settings/settings.routes');
 const roleRoutes = require('./modules/roles/role.routes');
 const marketingLeadRoutes = require('./modules/marketingLeads/marketingLead.routes');
+const { router: supportRoutes, whRouter: supportWebhookRoutes } = require('./modules/support/support.routes');
 
 const app = express();
 
@@ -50,13 +51,18 @@ app.use('/uploads', cors({ origin: '*' }), (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'uploads')));
 
+app.use('/api/webhooks', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
+
 // CORS — API routes are restricted to the supplier frontend only
 app.use(
   cors({
     origin: env.FRONTEND_URL,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-webhook-secret'],
   })
 );
 
@@ -84,6 +90,10 @@ app.use('/api', apiLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// ✅ Register webhooks BEFORE mongoSanitize so payload isn't mutated
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/webhooks', supportWebhookRoutes);
+
 // NoSQL injection sanitization
 app.use(mongoSanitize());
 
@@ -101,7 +111,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/webhooks', webhookRoutes);
+app.use('/api/support',  supportRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);
