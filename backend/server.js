@@ -51,10 +51,17 @@ app.use('/uploads', cors({ origin: '*' }), (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'uploads')));
 
-app.use('/api/webhooks', (req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  next();
+// ─── WEBHOOK CORS (server-to-server — bypass all origin restrictions) ──────────
+// All webhook endpoints are called by D-BE backend, not a browser.
+// They need: x-webhook-secret (retail invoice, support) and x-api-key (dealership apply).
+// Must be registered BEFORE the general CORS middleware below so it isn't overridden.
+const webhookCors = cors({
+  origin: '*',
+  methods: ['POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-webhook-secret', 'x-api-key'],
 });
+app.use('/api/webhooks', webhookCors);
+app.use('/api/dealers/webhook', webhookCors); // dealership application webhook uses this path
 
 // CORS — API routes are restricted to the supplier frontend only
 app.use(
@@ -62,7 +69,7 @@ app.use(
     origin: env.FRONTEND_URL,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-webhook-secret'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-webhook-secret', 'x-api-key'],
   })
 );
 
