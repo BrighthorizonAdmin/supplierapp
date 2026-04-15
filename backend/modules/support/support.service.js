@@ -3,11 +3,21 @@ const notificationService = require('../notifications/notification.service');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const axios  = require('axios');
 
-const DEALER_API_URL        = process.env.DEALER_API_URL        || 'http://localhost:5000';
-const DEALER_WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET || '';
+// NOTE: DEALER_API_URL and DEALER_WEBHOOK_SECRET are intentionally read from
+// process.env inside the function — not captured as module-level constants —
+// so they always reflect the actual loaded env values on the server.
 
 // Notify dealer backend when supplier updates a ticket
 async function notifyDealerBackend(dbeId, type, status, adminNotes, resolvedAt) {
+  // Read fresh on every call
+  const DEALER_API_URL        = process.env.DEALER_API_URL;
+  const DEALER_WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET || '';
+
+  if (!DEALER_API_URL) {
+    console.error('[Support] DEALER_API_URL is not set — cannot notify dealer backend');
+    return;
+  }
+
   try {
     await axios.post(
       `${DEALER_API_URL}/api/support/webhook/status-update`,
@@ -17,8 +27,11 @@ async function notifyDealerBackend(dbeId, type, status, adminNotes, resolvedAt) 
         timeout: 8000,
       }
     );
+    console.log(`[Support] Dealer webhook status-update success for dbeId: ${dbeId}`);
   } catch (err) {
     console.error('[Support] Dealer webhook status-update failed:', err.message);
+    console.error('[Support] URL attempted:', `${DEALER_API_URL}/api/support/webhook/status-update`);
+    console.error('[Support] Response:', JSON.stringify(err.response?.data));
   }
 }
 
