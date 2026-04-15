@@ -8,8 +8,7 @@ const axios  = require('axios');
 // so they always reflect the actual loaded env values on the server.
 
 // Notify dealer backend when supplier updates a ticket
-async function notifyDealerBackend(dbeId, type, status, adminNotes, resolvedAt) {
-  // Read fresh on every call
+async function notifyDealerBackend(dbeId, type, status, adminNotes, priority, resolvedAt) {
   const DEALER_API_URL        = process.env.DEALER_API_URL;
   const DEALER_WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET || '';
 
@@ -21,7 +20,7 @@ async function notifyDealerBackend(dbeId, type, status, adminNotes, resolvedAt) 
   try {
     await axios.post(
       `${DEALER_API_URL}/api/support/webhook/status-update`,
-      { type, dbeId, status, adminNotes, resolvedAt },
+      { type, dbeId, status, adminNotes, priority, resolvedAt },
       {
         headers: { 'x-webhook-secret': DEALER_WEBHOOK_SECRET, 'Content-Type': 'application/json' },
         timeout: 8000,
@@ -72,17 +71,25 @@ const updateStatus = async (id, { status, adminNotes, priority, assignedTo }, up
   if (!ticket) throw Object.assign(new Error('Ticket not found'), { statusCode: 404 });
 
   const prevStatus = ticket.status;
-  if (status)     ticket.status     = status;
+  if (status)                   ticket.status     = status;
   if (adminNotes !== undefined) ticket.adminNotes = adminNotes;
-  if (priority)   ticket.priority   = priority;
-  if (assignedTo) ticket.assignedTo = assignedTo;
+  if (priority)                 ticket.priority   = priority;
+  if (assignedTo)               ticket.assignedTo = assignedTo;
   if (status === 'RESOLVED' || status === 'CLOSED') ticket.resolvedAt = new Date();
   await ticket.save();
 
   // Push status update back to dealer backend (non-blocking)
-  if (ticket.dbeTicketId && status && status !== prevStatus) {
+  // Notify whenever dbeTicketId exists — status, adminNotes, or priority may have changed
+  if (ticket.dbeTicketId) {
     const dbeType = ticket.type === 'SERVICE_REQUEST' ? 'SERVICE_REQUEST' : 'SUPPORT_TICKET';
-    notifyDealerBackend(ticket.dbeTicketId, dbeType, status, adminNotes, ticket.resolvedAt);
+    notifyDealerBackend(
+      ticket.dbeTicketId,
+      dbeType,
+      ticket.status,
+      adminNotes,
+      priority,
+      ticket.resolvedAt
+    );
   }
 
   // Notify all supplier users with support permission via socket
