@@ -31,13 +31,15 @@ const PAYMENT_TERMS = [
 ];
 
 const UPDATE_FIELDS = [
-  'GST Certificate',
-  'PAN Card Copy',
-  'Shop Establishment Certificate',
-  'Bank Details',
-  'Business Address',
-  'Owner Identity Proof',
-  'Other',
+  { label: 'GST Certificate', value: 'gst' },
+  { label: 'PAN Card Copy', value: 'pan' },
+  { label: 'Bank Statement', value: 'bank' },
+  { label: 'Business Name', value: 'businessName' },
+  { label: 'Business Address / City', value: 'city' },
+  { label: 'Contact Name', value: 'contactName' },
+  { label: 'Phone Number', value: 'phone' },
+  { label: 'GST Number', value: 'gstNumber' },
+  { label: 'Other', value: 'other' },
 ];
 
 const REJECTION_REASONS = [
@@ -125,7 +127,7 @@ const DealerOnboardingPage = () => {
 
   // Request update modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [requestField, setRequestField] = useState('');
+  const [requestFields, setRequestFields] = useState([]);
   const [requestInstructions, setRequestInstructions] = useState('');
 
   // Approve modal state
@@ -136,6 +138,12 @@ const DealerOnboardingPage = () => {
     pricingTier: '',
     assignedManager: '',
   });
+
+  useEffect(() => {
+    if (list.length > 0 && !selected) {
+      setSelected(list[0]);
+    }
+  }, [list]);
 
   useEffect(() => {
     setSelected(null);
@@ -190,16 +198,17 @@ const DealerOnboardingPage = () => {
   };
 
   const handleSendRequest = () => {
-    if (!selected || !requestField) return;
+    if (!selected || requestFields.length === 0) return;
     dispatch(requestDealerUpdate({
       id: selected._id,
-      field: requestField,
+      fields: requestFields,
+      updateFields: requestFields,
       instructions: requestInstructions,
     })).then((res) => {
       if (!res.error) {
         setSelected(null);
         setShowRequestModal(false);
-        setRequestField('');
+        setRequestFields([]);
         setRequestInstructions('');
       }
     });
@@ -226,8 +235,8 @@ const DealerOnboardingPage = () => {
                 key={tab.value}
                 onClick={() => setActiveTab(tab.value)}
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${isActive
-                    ? 'border border-blue-600 text-blue-600 bg-white'
-                    : 'text-slate-500 hover:text-slate-800'
+                  ? 'border border-blue-600 text-blue-600 bg-white'
+                  : 'text-slate-500 hover:text-slate-800'
                   }`}
               >
                 {tab.label}
@@ -274,6 +283,11 @@ const DealerOnboardingPage = () => {
                   </div>
                   <p className="text-xs text-slate-500 truncate mb-1.5">{dealer.businessName}</p>
                   <StatusPill status={dealer.status} />
+                  {dealer.status === 'pending' && dealer.lastResubmittedAt && (
+                    <span className="mt-1 inline-block text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                      Resubmitted
+                    </span>
+                  )}
                 </div>
               </button>
             ))}
@@ -318,6 +332,12 @@ const DealerOnboardingPage = () => {
                   <Hash size={14} className="text-slate-400" />
                   App ID: {appId}
                 </span>
+                {selected.lastResubmittedAt && (
+                  <span className="flex items-center gap-1.5 text-amber-600 font-medium">
+                    <AlertTriangle size={13} className="text-amber-500" />
+                    Resubmitted {format(new Date(selected.lastResubmittedAt), 'MMM d, yyyy h:mm a')}
+                  </span>
+                )}
               </div>
 
               {/* Contact Information */}
@@ -375,35 +395,125 @@ const DealerOnboardingPage = () => {
                 )}
               </div>
 
+              {/* Previously Requested Updates — shown when supplier flagged fields or dealer resubmitted */}
+              {(selected.updateRequestedFields?.length > 0 || selected.lastResubmittedAt) && (
+                <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle size={15} className="text-amber-500 flex-shrink-0" />
+                    <h3 className="text-sm font-semibold text-amber-800">
+                      {selected.lastResubmittedAt ? 'Update Request — Dealer Resubmitted' : 'Update Requested from Dealer'}
+                    </h3>
+                  </div>
+
+                  {/* Which fields were flagged */}
+                  {selected.updateRequestedFields?.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-amber-700 font-medium mb-1.5">Fields flagged for update:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selected.updateRequestedFields.map((f) => {
+                          const fieldLabels = {
+                            gst: 'GST Certificate', pan: 'PAN Card Copy', bank: 'Bank Statement',
+                            businessName: 'Business Name', city: 'City / Address',
+                            contactName: 'Contact Name', phone: 'Phone Number',
+                            gstNumber: 'GST Number', other: 'Other',
+                          };
+                          return (
+                            <span key={f} className="text-xs bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-medium">
+                              {fieldLabels[f] || f}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Supplier's own instructions they sent to the dealer */}
+                  {selected.notes && selected.notes.startsWith('[Update Requested]') && (
+                    <div className="bg-white rounded-lg border border-amber-200 px-3 py-2.5">
+                      <p className="text-xs text-slate-400 mb-0.5">Instructions sent to dealer</p>
+                      <p className="text-xs text-slate-700 leading-relaxed">
+                        {selected.notes.replace(/^\[Update Requested\]\s*[^:]*:\s*/, '')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Submitted Documents from dealer app — visible once dealer uploads and resubmits */}
+              {selected?.submittedDocuments &&
+                Object.values(selected.submittedDocuments).some((d) => d?.fileUrl) && (
+                  <div className="bg-white rounded-xl border border-amber-200 p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <h3 className="text-sm font-semibold text-slate-800">Submitted Documents</h3>
+                      {selected.lastResubmittedAt && (
+                        <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                          Resubmitted
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      {['gst', 'pan', 'bank'].map((key) => {
+                        const doc = selected.submittedDocuments[key];
+                        if (!doc?.fileUrl) return null;
+                        // Use the /dealer-uploads Vite proxy which rewrites to D-BE /uploads
+                        const rawPath = doc.fileUrl.replace(/^\/uploads/, '');
+                        const url = doc.fileUrl.startsWith('http')
+                          ? doc.fileUrl
+                          : `/dealer-uploads${rawPath}`;
+                        const labels = { gst: 'GST Certificate', pan: 'PAN Card', bank: 'Bank Statement' };
+                        return (
+                          <a
+                            key={key}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center gap-2 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-center group"
+                          >
+                            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                              <FileText size={20} className="text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-slate-700">{labels[key]}</p>
+                              <p className="text-xs text-slate-400 truncate max-w-[80px]" title={doc.fileName}>
+                                {doc.fileName}
+                              </p>
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
               {/* Approval Actions */}
               {(selected.status === 'pending' || selected.status === 'updates-required') && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="text-sm font-semibold text-slate-800 mb-4">Approval Actions</h3>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowRejectModal(true)}
-                    className="px-5 py-2 border border-red-300 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 transition-colors"
-                  >
-                    Reject Application
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowRequestModal(true)}
-                    className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-                  >
-                    Request Changes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowApproveModal(true)}
-                    className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <CheckCircle size={15} />
-                    Approve Dealer
-                  </button>
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-4">Approval Actions</h3>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowRejectModal(true)}
+                      className="px-5 py-2 border border-red-300 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 transition-colors"
+                    >
+                      Reject Application
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowRequestModal(true)}
+                      className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
+                    >
+                      Request Changes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowApproveModal(true)}
+                      className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      <CheckCircle size={15} />
+                      Approve Dealer
+                    </button>
+                  </div>
                 </div>
-              </div>
               )}
             </div>
 
@@ -478,13 +588,31 @@ const DealerOnboardingPage = () => {
         </div>
 
         <div className="mb-4">
-          <label className="text-sm font-semibold text-slate-800 mb-2 block">What need to be updated?</label>
-          <SelectField
-            value={requestField}
-            onChange={setRequestField}
-            placeholder="Select a Selection..."
-            options={UPDATE_FIELDS}
-          />
+          <label className="text-sm font-semibold text-slate-800 mb-2 block">
+            What needs to be updated? <span className="text-red-500">*</span>
+          </label>
+          <div className="space-y-2 max-h-44 overflow-y-auto border border-slate-200 rounded-lg p-3">
+            {UPDATE_FIELDS.map((f) => (
+              <label key={f.value} className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={requestFields.includes(f.value)}
+                  onChange={(e) =>
+                    setRequestFields((prev) =>
+                      e.target.checked ? [...prev, f.value] : prev.filter((x) => x !== f.value)
+                    )
+                  }
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-slate-700">{f.label}</span>
+              </label>
+            ))}
+          </div>
+          {requestFields.length > 0 && (
+            <p className="text-xs text-blue-600 mt-1.5">
+              {requestFields.length} item{requestFields.length > 1 ? 's' : ''} selected
+            </p>
+          )}
         </div>
 
         <div className="mb-6">
@@ -500,14 +628,15 @@ const DealerOnboardingPage = () => {
 
         <div className="flex items-center justify-end gap-3">
           <button
-            onClick={() => { setShowRequestModal(false); setRequestField(''); setRequestInstructions(''); }}
+            onClick={() => { setShowRequestModal(false); setRequestFields([]); setRequestInstructions(''); }}
             className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSendRequest}
-            className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            disabled={requestFields.length === 0}
+            className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Send Request
           </button>

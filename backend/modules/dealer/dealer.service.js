@@ -168,24 +168,31 @@ const rejectDealer = async (dealerId, reason, userId) => {
   return dealer;
 };
 
-const requestUpdate = async (dealerId, { field, instructions }, userId) => {
+const requestUpdate = async (dealerId, { field, fields, updateFields, instructions }, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
-  if (!['pending', 'updates-required'].includes(dealer.status)) throw new AppError('Can only request update on a pending or updates-required application', 400);
+  if (!['pending', 'updates-required'].includes(dealer.status))
+    throw new AppError('Can only request update on a pending or updates-required application', 400);
+
+  // Normalise: accept updateFields array, fields array, or legacy single field string
+  const resolvedFields = updateFields || fields || (field ? [field] : []);
+  const fieldsArray    = Array.isArray(resolvedFields) ? resolvedFields : [resolvedFields];
 
   const before = { status: dealer.status };
-  dealer.status = 'updates-required';
-  dealer.notes = `[Update Requested] ${field}: ${instructions}`;
+  dealer.status               = 'updates-required';
+  dealer.notes                = `[Update Requested] ${fieldsArray.join(', ')}: ${instructions}`;
+  dealer.updateRequestedFields = fieldsArray;
+
   await dealer.save();
 
   await auditService.log('dealer', dealerId, 'request_update', userId, {
     before,
-    after: { status: 'updates-required', field, instructions },
+    after: { status: 'updates-required', fields: fieldsArray, instructions },
   });
 
   await syncToDealerApp(dealer.applicationId, 'REQUEST_UPDATE', {
     supplierFeedback: instructions,
-    updateFields: [field],
+    updateFields:     fieldsArray,
   });
 
   return dealer;

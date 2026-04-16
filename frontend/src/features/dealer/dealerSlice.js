@@ -62,9 +62,15 @@ export const rejectDealer = createAsyncThunk('dealer/reject', async ({ id, reaso
 
 export const requestDealerUpdate = createAsyncThunk(
   'dealer/requestUpdate',
-  async ({ id, field, instructions }, { rejectWithValue }) => {
+  async ({ id, field, fields, updateFields, instructions }, { rejectWithValue }) => {
     try {
-      const { data } = await api.patch(`/dealers/${id}/request-update`, { field, instructions });
+      // Normalise to array — support legacy single field and new multi-field
+      const resolvedFields = updateFields || fields || (field ? [field] : []);
+      const { data } = await api.patch(`/dealers/${id}/request-update`, {
+        fields:       resolvedFields,
+        updateFields: resolvedFields,
+        instructions,
+      });
       toast.success('Update request sent to dealer');
       return data.data;
     } catch (err) { return rejectWithValue(err.response?.data?.message); }
