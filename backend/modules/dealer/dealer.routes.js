@@ -29,10 +29,10 @@ router.post('/webhook/application', async (req, res) => {
     // Sanitize email — lowercase trim
     if (body.email) body.email = body.email.toLowerCase().trim();
 
-    const dealer = await require('./dealer.service').createDealer(body, null);
+    const dealer = await require('./dealer.service').createFromWebhook(body);
     return res.status(201).json({ success: true, data: dealer });
   } catch (err) {
-    console.error('[Webhook] createDealer failed:', err.message);
+    console.error('[Webhook] createFromWebhook failed:', err.message);
     return res.status(500).json({ success: false, message: err.message });
   }
 });

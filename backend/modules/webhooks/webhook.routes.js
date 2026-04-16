@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const Invoice = require('../payments/model/Invoice.model');
 const Dealer  = require('../dealer/model/Dealer.model');
+const notificationService = require('../notifications/notification.service');
 
 const WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET || '';
 
@@ -115,6 +116,46 @@ router.post('/dealer-retail-invoice', async (req, res) => {
 
   } catch (err) {
     console.error('[Webhook] dealer-retail-invoice error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-order
+// Called by D-BE whenever a dealer places a new order
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-order', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      console.warn('[Webhook] Unauthorized order webhook attempt from:', req.ip);
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { dbeOrderId, orderNumber, dealerName, dealerPhone, items, netAmount, paymentMethod } = req.body;
+
+    // Notify all active admin/supplier users
+    try {
+      const User = require('../auth/model/User.model');
+      const admins = await User.find({ isActive: true }).lean();
+      const itemCount = Array.isArray(items) ? items.length : 0;
+      for (const admin of admins) {
+        await notificationService.create({
+          recipientId: admin._id,
+          title:       `New Order: ${orderNumber}`,
+          message:     `${dealerName || 'A dealer'} placed an order for ${itemCount} item(s) — ₹${netAmount} via ${paymentMethod}`,
+          type:        'order',
+          relatedEntity: { entityType: 'Order', entityId: dbeOrderId },
+        });
+      }
+      console.log(`[Webhook] Order ${orderNumber} — notified ${admins.length} admin(s)`);
+    } catch (notifErr) {
+      console.error('[Webhook] dealer-order notification failed:', notifErr.message);
+    }
+
+    return res.status(200).json({ success: true, message: 'Order notification processed' });
+  } catch (err) {
+    console.error('[Webhook] dealer-order error:', err.message);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
