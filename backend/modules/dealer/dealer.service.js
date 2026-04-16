@@ -4,7 +4,7 @@ const { getPagination, buildMeta } = require('../../utils/pagination');
 const auditService = require('../audit/audit.service');
 const notificationService = require('../notifications/notification.service');
 const { emitToRole, emitToAll } = require('../../websocket/socket');
-const { DEALER_APPROVED, DEALER_REJECTED, DEALER_SUSPENDED } = require('../../websocket/events');
+const { DEALER_APPLICATION, DEALER_APPROVED, DEALER_REJECTED, DEALER_SUSPENDED } = require('../../websocket/events');
 const axios = require('axios');
 
 const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5001';
@@ -32,6 +32,43 @@ const syncToDealerApp = async (applicationId, action, payload = {}) => {
 const createDealer = async (data, userId) => {
   const dealer = await Dealer.create({ ...data, onboardedBy: userId });
   await auditService.log('dealer', dealer._id, 'create', userId, { after: dealer.toObject() });
+  return dealer;
+};
+
+// Called from dealer app webhook — creates dealer record then notifies all admins
+const createFromWebhook = async (data) => {
+  // Idempotent: skip if application already registered
+  if (data.applicationId) {
+    const existing = await Dealer.findOne({ applicationId: data.applicationId }).lean();
+    if (existing) return existing;
+  }
+
+  const dealer = await createDealer(data, null);
+
+  // Notify all active supplier admin users (same pattern as support.service.js)
+  try {
+    const User = require('../auth/model/User.model');
+    const admins = await User.find({ isActive: true }).lean();
+    for (const admin of admins) {
+      await notificationService.create({
+        recipientId: admin._id,
+        title: `New Dealership Application: ${dealer.applicationId || dealer.dealerCode}`,
+        message: `${dealer.businessName} (${dealer.ownerName}) has applied for dealership`,
+        type: 'dealer',
+        relatedEntity: { entityType: 'Dealer', entityId: dealer._id },
+      });
+    }
+    // Real-time broadcast to all admin sockets
+    emitToRole('admin', DEALER_APPLICATION, {
+      dealerId: dealer._id,
+      dealerCode: dealer.dealerCode,
+      businessName: dealer.businessName,
+      applicationId: dealer.applicationId,
+    });
+  } catch (err) {
+    console.error('[DealerWebhook] Notify admins failed:', err.message);
+  }
+
   return dealer;
 };
 
@@ -226,7 +263,7 @@ const getDealerStats = async (dealerId) => {
 };
 
 module.exports = {
-  createDealer, getDealers, getDealerById, approveDealer,
+  createDealer, createFromWebhook, getDealers, getDealerById, approveDealer,
   rejectDealer, suspendDealer, reactivateDealer, updateDealer, getDealerStats,
   requestUpdate,
 };

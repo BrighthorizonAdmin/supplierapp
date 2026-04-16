@@ -1,4 +1,5 @@
 module.exports = {
+  DEALER_APPLICATION: 'dealer:application',
   DEALER_APPROVED: 'dealer:approved',
   DEALER_REJECTED: 'dealer:rejected',
   DEALER_SUSPENDED: 'dealer:suspended',

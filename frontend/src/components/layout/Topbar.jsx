@@ -5,11 +5,12 @@ import { logout } from '../../features/auth/authSlice';
 import {
   fetchNotifications,
   markNotificationRead,
+  fetchUnreadCount,
   markAllNotificationsRead,
 } from '../../features/notifications/notificationSlice';
 import toast from 'react-hot-toast';
 import { useState, useRef, useEffect } from 'react';
-
+ 
 const ROLE_LABELS = {
   'super-admin': 'Super Admin',
   admin: 'Admin',
@@ -19,7 +20,7 @@ const ROLE_LABELS = {
   support: 'Support',
   'read-only': 'Read Only',
 };
-
+ 
 const TYPE_COLORS = {
   order: 'bg-blue-100 text-blue-700',
   payment: 'bg-green-100 text-green-700',
@@ -29,6 +30,15 @@ const TYPE_COLORS = {
   default: 'bg-slate-100 text-slate-600',
 };
 
+const getNotificationRoute = (n) => {
+  const entityType = n.relatedEntity?.entityType?.toLowerCase();
+  const type = n.type?.toLowerCase();
+  if (entityType === 'supportticket' || entityType === 'support_ticket' || type === 'info' || type === 'support') return '/support';
+  if (entityType === 'dealer' || type === 'dealer') return '/onboarding';
+  if (entityType === 'Order' || type === 'order') return '/orders';
+  return null;
+};
+ 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -38,26 +48,27 @@ function timeAgo(dateStr) {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
-
+ 
 const Topbar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user } = useSelector((s) => s.auth);
   const { unreadCount, list: notifications, loading } = useSelector((s) => s.notification);
-
+ 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-
+ 
   const dropdownRef = useRef(null);
   const notifRef = useRef(null);
-
+ 
+ 
   const handleLogout = () => {
     setDropdownOpen(false);
     dispatch(logout());
     toast.success('Logged out successfully');
     navigate('/login');
   };
-
+ 
   const handleBellClick = () => {
     const next = !notifOpen;
     setNotifOpen(next);
@@ -66,7 +77,7 @@ const Topbar = () => {
       dispatch(fetchNotifications({ limit: 10, page: 1 }));
     }
   };
-
+ 
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -80,20 +91,24 @@ const Topbar = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
+ 
+  useEffect(() => {
+    dispatch(fetchUnreadCount()); // ✅ THIS FIXES YOUR ISSUE
+  }, [dispatch]);
+ 
   const roleArray = Array.isArray(user?.role) ? user.role : [user?.role].filter(Boolean);
   const roleLabel = roleArray.map((r) => ROLE_LABELS[r] || r).join(', ') || 'Admin';
-
+ 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
     : 'SU';
-
+ 
   const userId = user?._id ? user._id.slice(-6).toUpperCase() : '885857';
-
+ 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0 shadow-sm">
       <div />
-
+ 
       <div className="flex items-center gap-3">
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>
@@ -103,12 +118,12 @@ const Topbar = () => {
           >
             <Bell size={20} />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center leading-none font-semibold">
+              <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] rounded-full min-w-[16px] h-4 px-[4px] flex items-center justify-center leading-none font-semibold">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
-
+ 
           {/* Notification dropdown */}
           {notifOpen && (
             <div className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-lg border border-slate-200 z-50 overflow-hidden">
@@ -133,7 +148,7 @@ const Topbar = () => {
                   </button>
                 )}
               </div>
-
+ 
               {/* List */}
               <div className="max-h-80 overflow-y-auto">
                 {loading ? (
@@ -152,10 +167,12 @@ const Topbar = () => {
                     return (
                       <div
                         key={n._id}
-                        onClick={() => !n.isRead && dispatch(markNotificationRead(n._id))}
-                        className={`flex gap-3 px-4 py-3 border-b border-slate-50 transition-colors ${
-                          n.isRead ? 'bg-white' : 'bg-blue-50/50 cursor-pointer hover:bg-blue-50'
-                        }`}
+                        onClick={() => {
+                          if (!n.isRead) dispatch(markNotificationRead(n._id));
+                          const route = getNotificationRoute(n);
+                          if (route) { setNotifOpen(false); navigate(route); }
+                        }}
+                        className={`flex gap-3 px-4 py-3 border-b border-slate-50 transition-colors cursor-pointer ${n.isRead ? 'bg-white hover:bg-slate-50' : 'bg-blue-50/50 hover:bg-blue-50'}`}
                       >
                         <span className={`mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase flex-shrink-0 h-fit ${colorClass}`}>
                           {n.type || 'info'}
@@ -174,12 +191,12 @@ const Topbar = () => {
                   })
                 )}
               </div>
-
+ 
               {/* Footer */}
               {notifications.length > 0 && (
                 <div className="px-4 py-2.5 border-t border-slate-100">
                   <button
-                    onClick={() => { setNotifOpen(false); navigate('/notifications'); }}
+                    onClick={() => { setNotifOpen(false); navigate('/notifications/all'); }}
                     className="w-full text-center text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
                   >
                     View all notifications
@@ -189,15 +206,15 @@ const Topbar = () => {
             </div>
           )}
         </div>
-
+ 
         {/* Supplier View button */}
         <button className="px-4 py-1.5 border border-blue-600 text-blue-600 text-sm font-semibold rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap">
           Supplier View
         </button>
-
+ 
         {/* Divider */}
         <div className="h-8 w-px bg-slate-200" />
-
+ 
         {/* User info + avatar */}
         <div className="relative flex items-center gap-3" ref={dropdownRef}>
           <div className="text-right hidden sm:block">
@@ -214,7 +231,7 @@ const Topbar = () => {
           >
             {initials}
           </button>
-
+ 
           {/* Profile dropdown */}
           {dropdownOpen && (
             <div className="absolute right-0 top-12 w-64 bg-white rounded-xl shadow-lg border border-slate-200 z-50 overflow-hidden">
@@ -228,7 +245,7 @@ const Topbar = () => {
                   <p className="text-xs text-blue-100 truncate">{roleLabel}</p>
                 </div>
               </div>
-
+ 
               {/* Details */}
               <div className="px-4 py-3 space-y-2 border-b border-slate-100">
                 <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -244,7 +261,7 @@ const Topbar = () => {
                   <span>ID: #{userId}</span>
                 </div>
               </div>
-
+ 
               {/* Logout */}
               <button
                 onClick={handleLogout}
@@ -260,5 +277,5 @@ const Topbar = () => {
     </header>
   );
 };
-
+ 
 export default Topbar;
