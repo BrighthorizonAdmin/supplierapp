@@ -37,6 +37,78 @@ router.post('/webhook/application', async (req, res) => {
   }
 });
 
+/**
+ * @route  POST /api/dealers/webhook/application-updated
+ * @desc   Called by Dealer-BE when a dealer resubmits after an UPDATE_REQUESTED.
+ *         Resets the supplier-side dealer record back to 'pending' so it
+ *         reappears in the Pending tab with a "Resubmitted" badge.
+ * @access Webhook (x-api-key)
+ */
+router.post('/webhook/application-updated', async (req, res) => {
+  const apiKey = req.headers['x-api-key'];
+  if (apiKey !== process.env.DEALER_WEBHOOK_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  try {
+    const {
+      applicationId, businessName, ownerName, email,
+      phone, gstNumber, address, documents,
+    } = req.body;
+
+    if (!applicationId) {
+      return res.status(400).json({ success: false, message: 'applicationId is required' });
+    }
+
+    const Dealer = require('./model/Dealer.model');
+    const dealer = await Dealer.findOne({ applicationId });
+
+    if (!dealer) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Dealer record not found for this applicationId' });
+    }
+
+    // Update core fields from the resubmission payload
+    if (businessName) dealer.businessName = businessName;
+    if (ownerName)    dealer.ownerName    = ownerName;
+    if (email)        dealer.email        = email.toLowerCase().trim();
+    if (gstNumber)    dealer.gstNumber    = gstNumber;
+    if (phone) {
+      const digits = phone.replace(/\D/g, '');
+      dealer.phone = digits.length >= 10 ? digits.slice(-10) : digits;
+    }
+    if (address?.city) {
+      dealer.address = {
+        ...(dealer.address?.toObject ? dealer.address.toObject() : dealer.address || {}),
+        city: address.city,
+      };
+    }
+
+    // Store the updated documents so the supplier can review them inline
+    if (documents && typeof documents === 'object') {
+      dealer.submittedDocuments = {
+        gst:  documents.gst  || dealer.submittedDocuments?.gst,
+        pan:  documents.pan  || dealer.submittedDocuments?.pan,
+        bank: documents.bank || dealer.submittedDocuments?.bank,
+      };
+    }
+
+    // Reset to pending so the application reappears in the Pending tab
+    dealer.status            = 'pending';
+    dealer.kycStatus         = 'pending';
+    dealer.lastResubmittedAt = new Date();
+
+    await dealer.save();
+
+    console.log(`[Webhook] application-updated: ${applicationId} reset to pending`);
+    return res.status(200).json({ success: true, data: dealer });
+  } catch (err) {
+    console.error('[Webhook] application-updated failed:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.use(authenticate);
 
 router.get('/', authorize('dealer:read'), getDealers);

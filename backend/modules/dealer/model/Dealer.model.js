@@ -157,6 +157,16 @@ const dealerSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    // Documents submitted by the dealer via the dealer app
+    submittedDocuments: {
+      gst:  { fileName: String, fileUrl: String, uploadedAt: Date },
+      pan:  { fileName: String, fileUrl: String, uploadedAt: Date },
+      bank: { fileName: String, fileUrl: String, uploadedAt: Date },
+    },
+    // Fields the supplier flagged for update (array of keys: gst, pan, bank, businessName, etc.)
+    updateRequestedFields: [{ type: String }],
+    // Timestamp of dealer's last resubmission after an update request
+    lastResubmittedAt: { type: Date },
   },
   {
     timestamps: true,
