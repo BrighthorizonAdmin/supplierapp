@@ -28,9 +28,11 @@ const rejectDealer = asyncHandler(async (req, res) => {
 });
 
 const requestUpdate = asyncHandler(async (req, res) => {
+  // Accept both old single-field format and new multi-field array format
+  const { field, fields, updateFields, instructions } = req.body;
   const dealer = await dealerService.requestUpdate(
     req.params.id,
-    { field: req.body.field, instructions: req.body.instructions },
+    { field, fields, updateFields, instructions },
     req.user.id
   );
   return success(res, dealer, 'Update requested from dealer');

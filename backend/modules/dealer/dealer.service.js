@@ -4,7 +4,7 @@ const { getPagination, buildMeta } = require('../../utils/pagination');
 const auditService = require('../audit/audit.service');
 const notificationService = require('../notifications/notification.service');
 const { emitToRole, emitToAll } = require('../../websocket/socket');
-const { DEALER_APPROVED, DEALER_REJECTED, DEALER_SUSPENDED } = require('../../websocket/events');
+const { DEALER_APPLICATION, DEALER_APPROVED, DEALER_REJECTED, DEALER_SUSPENDED } = require('../../websocket/events');
 const axios = require('axios');
 
 const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5001';
@@ -32,6 +32,43 @@ const syncToDealerApp = async (applicationId, action, payload = {}) => {
 const createDealer = async (data, userId) => {
   const dealer = await Dealer.create({ ...data, onboardedBy: userId });
   await auditService.log('dealer', dealer._id, 'create', userId, { after: dealer.toObject() });
+  return dealer;
+};
+
+// Called from dealer app webhook — creates dealer record then notifies all admins
+const createFromWebhook = async (data) => {
+  // Idempotent: skip if application already registered
+  if (data.applicationId) {
+    const existing = await Dealer.findOne({ applicationId: data.applicationId }).lean();
+    if (existing) return existing;
+  }
+
+  const dealer = await createDealer(data, null);
+
+  // Notify all active supplier admin users (same pattern as support.service.js)
+  try {
+    const User = require('../auth/model/User.model');
+    const admins = await User.find({ isActive: true }).lean();
+    for (const admin of admins) {
+      await notificationService.create({
+        recipientId: admin._id,
+        title: `New Dealership Application: ${dealer.applicationId || dealer.dealerCode}`,
+        message: `${dealer.businessName} (${dealer.ownerName}) has applied for dealership`,
+        type: 'dealer',
+        relatedEntity: { entityType: 'Dealer', entityId: dealer._id },
+      });
+    }
+    // Real-time broadcast to all admin sockets
+    emitToRole('admin', DEALER_APPLICATION, {
+      dealerId: dealer._id,
+      dealerCode: dealer.dealerCode,
+      businessName: dealer.businessName,
+      applicationId: dealer.applicationId,
+    });
+  } catch (err) {
+    console.error('[DealerWebhook] Notify admins failed:', err.message);
+  }
+
   return dealer;
 };
 
@@ -131,24 +168,31 @@ const rejectDealer = async (dealerId, reason, userId) => {
   return dealer;
 };
 
-const requestUpdate = async (dealerId, { field, instructions }, userId) => {
+const requestUpdate = async (dealerId, { field, fields, updateFields, instructions }, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
-  if (!['pending', 'updates-required'].includes(dealer.status)) throw new AppError('Can only request update on a pending or updates-required application', 400);
+  if (!['pending', 'updates-required'].includes(dealer.status))
+    throw new AppError('Can only request update on a pending or updates-required application', 400);
+
+  // Normalise: accept updateFields array, fields array, or legacy single field string
+  const resolvedFields = updateFields || fields || (field ? [field] : []);
+  const fieldsArray    = Array.isArray(resolvedFields) ? resolvedFields : [resolvedFields];
 
   const before = { status: dealer.status };
-  dealer.status = 'updates-required';
-  dealer.notes = `[Update Requested] ${field}: ${instructions}`;
+  dealer.status               = 'updates-required';
+  dealer.notes                = `[Update Requested] ${fieldsArray.join(', ')}: ${instructions}`;
+  dealer.updateRequestedFields = fieldsArray;
+
   await dealer.save();
 
   await auditService.log('dealer', dealerId, 'request_update', userId, {
     before,
-    after: { status: 'updates-required', field, instructions },
+    after: { status: 'updates-required', fields: fieldsArray, instructions },
   });
 
   await syncToDealerApp(dealer.applicationId, 'REQUEST_UPDATE', {
     supplierFeedback: instructions,
-    updateFields: [field],
+    updateFields:     fieldsArray,
   });
 
   return dealer;
@@ -189,7 +233,7 @@ const updateDealer = async (dealerId, updates, userId) => {
 
   const before = dealer.toObject();
   Object.assign(dealer, updates);
-  await dealer.save();
+  await dealer.save({ validateModifiedOnly: true });
 
   await auditService.log('dealer', dealerId, 'update', userId, { before, after: dealer.toObject() });
   return dealer;
@@ -226,7 +270,7 @@ const getDealerStats = async (dealerId) => {
 };
 
 module.exports = {
-  createDealer, getDealers, getDealerById, approveDealer,
+  createDealer, createFromWebhook, getDealers, getDealerById, approveDealer,
   rejectDealer, suspendDealer, reactivateDealer, updateDealer, getDealerStats,
   requestUpdate,
 };

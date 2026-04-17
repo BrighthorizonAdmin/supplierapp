@@ -54,7 +54,7 @@ export default function SupportDetailPage() {
   const isService = ticket.type === 'SERVICE_REQUEST';
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-5">
+    <div className="p-6 w-full px-6 space-y-5">
       {/* Back */}
       <button onClick={() => navigate('/support')}
         className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">

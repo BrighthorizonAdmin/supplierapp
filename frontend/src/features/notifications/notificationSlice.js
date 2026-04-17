@@ -39,10 +39,13 @@ const notificationSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(fetchNotifications.pending, (state) => { state.loading = true; })
       .addCase(fetchNotifications.fulfilled, (state, action) => {
         state.list = action.payload.data;
         state.pagination = action.payload.pagination;
+        state.loading = false;
       })
+      .addCase(fetchNotifications.rejected, (state) => { state.loading = false; })
       .addCase(fetchUnreadCount.fulfilled, (state, action) => { state.unreadCount = action.payload; })
       .addCase(markNotificationRead.fulfilled, (state, action) => {
         const idx = state.list.findIndex((n) => n._id === action.payload._id);

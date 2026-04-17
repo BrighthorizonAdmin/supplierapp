@@ -15,6 +15,12 @@ export default defineConfig({
         target: 'http://34.131.27.112:3001',
         changeOrigin: true,
       },
+      // Proxy dealer-app document files 
+      '/dealer-uploads': {
+        target: 'http://136.110.133.115:5000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/dealer-uploads/, '/uploads'),
+      },
     },
   },
 })

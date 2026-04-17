@@ -25,6 +25,7 @@ import ReturnListPage from '../features/returns/pages/ReturnListPage';
 import FinancePage from '../features/finance/pages/FinancePage';
 import AuditPage from '../features/audit/pages/AuditPage';
 import NotificationPage from '../features/notifications/pages/NotificationPage';
+import AllNotificationsPage from '../features/notifications/pages/AllNotificationsPage';
 import MarketingPage from '../features/Marketing/pages/MarketingPage';
 import AddMarketingLeadPage from '../features/Marketing/pages/AddMarketingLeadPage';
 import MarketingLeadDetailPage from '../features/Marketing/pages/MarketingLeadDetailPage';
@@ -155,6 +156,11 @@ const AppRouter = () => {
           <Route path="notifications" element={
             <ProtectedRoute permission='notifications:read'>
               <NotificationPage />
+            </ProtectedRoute>
+          } />
+          <Route path="notifications/all" element={
+            <ProtectedRoute permission='notifications:read'>
+              <AllNotificationsPage />
             </ProtectedRoute>
           } />
           <Route path="marketing-leads" element={
