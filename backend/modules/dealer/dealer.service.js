@@ -233,7 +233,7 @@ const updateDealer = async (dealerId, updates, userId) => {
 
   const before = dealer.toObject();
   Object.assign(dealer, updates);
-  await dealer.save();
+  await dealer.save({ validateModifiedOnly: true });
 
   await auditService.log('dealer', dealerId, 'update', userId, { before, after: dealer.toObject() });
   return dealer;

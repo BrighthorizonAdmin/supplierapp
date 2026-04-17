@@ -18,7 +18,7 @@ const TYPE_COLORS = {
 };
 
 const TYPE_FILTERS = [
-  { label: 'All', value: '' },
+  // { label: 'All', value: '' },
   // { label: 'Unread', value: 'unread' },
   // { label: 'Order', value: 'order' },
   // { label: 'Payment', value: 'payment' },
@@ -135,7 +135,7 @@ const AllNotificationsPage = () => {
 
       {/* Filter tabs */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1">
-        <Filter size={14} className="text-slate-400 flex-shrink-0 mr-1" />
+        {/* <Filter size={14} className="text-slate-400 flex-shrink-0 mr-1" /> */}
         {TYPE_FILTERS.map((f) => (
           <button
             key={f.value}
