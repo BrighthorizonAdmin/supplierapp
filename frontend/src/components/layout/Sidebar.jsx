@@ -97,11 +97,8 @@ const Sidebar = () => {
       </nav>
 
       {/* Need Help card */}
-      {/* Need Help card */}
-      {sidebarOpen && showHelpCard && (
+      {/* {sidebarOpen && showHelpCard && (
         <div className="mx-3 mb-3 p-3 bg-blue-600/90 rounded-2xl relative flex-shrink-0">
-
-          {/* Close Button */}
           <button
             onClick={() => setShowHelpCard(false)}
             className="absolute top-2 right-2 text-blue-200 hover:text-white transition-colors"
@@ -122,7 +119,7 @@ const Sidebar = () => {
             Contact Support
           </button>
         </div>
-      )}
+      )} */}
 
       {/* User profile */}
       <div

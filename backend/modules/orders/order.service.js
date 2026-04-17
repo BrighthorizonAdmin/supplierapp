@@ -234,6 +234,7 @@ const getOrders = async (query = {}) => {
 
   if (query.status) match.status = query.status;
   if (query.orderType) match.orderType = query.orderType;
+  if (query.dealerId) match.dealerId = query.dealerId;
 
   // Date filter
   if (query.startDate || query.endDate) {
