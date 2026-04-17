@@ -92,18 +92,43 @@ const ImageCarousel = ({ srcs, name }) => {
     </div>
   );
 };
-
 // ─── Product Card ─────────────────────────────────────────────────────────────
+
+// Stock thresholds:
+//   No Stock  → currentStockQty <= 0
+//   Low Stock → > 0 but ≤ 25% of openingStockQty (or ≤ 10 when no opening qty set)
+//   In Stock  → everything else
+const getStockStatus = (cur = 0, open = 0) => {
+  if (cur <= 0) return 'no-stock';
+  if (open > 0 && cur <= open * 0.25) return 'low-stock';
+  if (open === 0 && cur <= 10) return 'low-stock';
+  return 'in-stock';
+};
+
+const StockBadge = ({ product }) => {
+  const cur  = product.currentStockQty ?? 0;
+  const open = product.openingStockQty ?? 0;
+  const status = getStockStatus(cur, open);
+
+  const label = status === 'no-stock' ? 'No Stock' : status === 'low-stock' ? 'Low Stock' : 'In Stock';
+  const cls   = status === 'no-stock' ? 'badge-red' : status === 'low-stock' ? 'badge-yellow' : 'badge-green';
+
+  return <span className={cls}>{label}</span>;
+};
+
 const ProductCard = ({ product, onEdit }) => {
   const srcs = getImageSrcs(product);
+  const cur  = product.currentStockQty ?? 0;
+  const open = product.openingStockQty ?? 0;
+  const status = getStockStatus(cur, open);
 
   return (
     <div className="card overflow-hidden group hover:shadow-md transition-shadow">
       {/* Image area */}
       <div className="relative bg-slate-100 h-44 flex items-center justify-center overflow-hidden">
-        <span className="absolute top-3 right-3 text-[10px] font-bold text-green-400 bg-white border border-slate-200 rounded-full px-2.5 py-0.5 text-slate-500 shadow-sm tracking-wide z-10">
-          {product.isActive ? 'Instock' : 'outofstock'}
-        </span>
+        <div className="absolute top-2 right-2 z-10">
+          <StockBadge product={product} />
+        </div>
 
         <ImageCarousel srcs={srcs} name={product.name} />
       </div>
@@ -116,11 +141,24 @@ const ProductCard = ({ product, onEdit }) => {
         <h3 className="font-bold text-slate-900 text-sm leading-snug mb-1 line-clamp-1">
           {product.name}
         </h3>
-        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-3 min-h-[2.5rem]">
+        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-2 min-h-[2.5rem]">
           {product.description || product.brand
             ? `${product.description || ''}${product.description && product.brand ? ' · ' : ''}${product.brand || ''}`
             : 'No description available.'}
         </p>
+
+        {/* Stock quantity row */}
+        <div className="flex items-center gap-1.5 mb-3">
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+            status === 'in-stock' ? 'bg-green-500' : status === 'low-stock' ? 'bg-amber-400' : 'bg-red-500'
+          }`} />
+          <span className="text-[11px] text-slate-500">
+            {cur > 0
+              ? <>{cur} <span className="text-slate-400">/ {open} units</span></>
+              : <span className="text-red-500 font-medium">Out of stock</span>
+            }
+          </span>
+        </div>
 
         {/* Price row */}
         <div className="flex items-center justify-between">
