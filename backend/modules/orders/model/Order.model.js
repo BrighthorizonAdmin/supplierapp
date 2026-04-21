@@ -125,6 +125,9 @@ const orderSchema = new mongoose.Schema(
     shippingCost: { type: Number, default: 0, min: 0 },
     paymentMethod: { type: String },
     paymentStatus: { type: String },
+    // Link back to the originating dealer-side order (set when order arrives via webhook)
+    dbeOrderId:        { type: String, default: null },   // dealer's MongoDB _id
+    dealerOrderNumber: { type: String, default: null },   // dealer's orderNumber (e.g. ORD-xxx)
     deliveryAddress: {
       label: { type: String },
       fullAddress: { type: String },
@@ -152,8 +155,9 @@ orderSchema.pre('save', async function () {
 orderSchema.index({ dealerId: 1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ orderType: 1 });
-orderSchema.index({ orderNumber: 1 }, { unique: true });
+orderSchema.index({ orderNumber: 1 }, { unique: true, sparse: true });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ dealerId: 1, status: 1 });
+orderSchema.index({ dbeOrderId: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('Order', orderSchema);
