@@ -24,15 +24,8 @@ const LoginPage = () => {
   const res = await dispatch(login(data));
 
   if (res.meta.requestStatus === 'fulfilled') {
-    const { permissions, isFirstLogin } = res.payload;
-    console.log(isFirstLogin)
-    // 🔐 FIRST LOGIN
-    if (isFirstLogin) {
-      navigate('/changePassword');
-      return;
-    }
-
-    // 🔥 RBAC REDIRECT
+    const { permissions } = res.payload;
+   
     if (permissions.includes('*') || permissions.includes('dashboard:read')) {
       navigate('/dashboard');
     } else if (permissions.includes('audit:read')) {
