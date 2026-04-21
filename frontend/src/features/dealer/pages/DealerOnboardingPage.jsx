@@ -133,7 +133,7 @@ const DealerOnboardingPage = () => {
   // Approve modal state
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [approveForm, setApproveForm] = useState({
-    creditLimit: 2500000,
+    creditLimit: '',
     paymentTerms: '',
     pricingTier: '',
     assignedManager: '',
@@ -178,7 +178,7 @@ const DealerOnboardingPage = () => {
         // so deselect and clear — list will visually update on next filter change
         setSelected(null);
         setShowApproveModal(false);
-        setApproveForm({ creditLimit: 2500000, paymentTerms: '', pricingTier: '', assignedManager: '' });
+        setApproveForm({ creditLimit: '', paymentTerms: '', pricingTier: '', assignedManager: '' });
       }
     });
   };
@@ -661,6 +661,7 @@ const DealerOnboardingPage = () => {
             <input
               type="number"
               value={approveForm.creditLimit}
+              placeholder="Enter credit limit (e.g. 2500000)"
               onChange={(e) => setApproveForm((f) => ({ ...f, creditLimit: e.target.value }))}
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -670,7 +671,7 @@ const DealerOnboardingPage = () => {
             <SelectField
               value={approveForm.paymentTerms}
               onChange={(v) => setApproveForm((f) => ({ ...f, paymentTerms: v }))}
-              placeholder="Net 45 Days"
+              placeholder="Select payment terms"
               options={PAYMENT_TERMS}
             />
           </div>
@@ -681,7 +682,7 @@ const DealerOnboardingPage = () => {
           <SelectField
             value={approveForm.pricingTier}
             onChange={(v) => setApproveForm((f) => ({ ...f, pricingTier: v }))}
-            placeholder="Standard Wholesale"
+            placeholder="Select pricing tier"
             options={PRICING_TIERS}
           />
         </div>
@@ -691,7 +692,7 @@ const DealerOnboardingPage = () => {
           <SelectField
             value={approveForm.assignedManager}
             onChange={(v) => setApproveForm((f) => ({ ...f, assignedManager: v }))}
-            placeholder="Select a Selection..."
+            placeholder="Select manager"
             options={[]}
           />
         </div>

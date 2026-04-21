@@ -63,6 +63,8 @@ const DealerDetailPage = () => {
   const [editPricingTier, setEditPricingTier] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
+  const [showFullscreen, setShowFullscreen] = useState(false);
+
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [msgChannel, setMsgChannel] = useState('email'); // 'email' | 'sms'
   const [msgSubject, setMsgSubject] = useState('');
@@ -201,8 +203,7 @@ const DealerDetailPage = () => {
   }
 
   return (
-    <div className="space-y-5">
-
+    <div className="space-y-5 h-[calc(100vh-80px)] overflow-hidden flex flex-col relative">
       {/* ── Breadcrumb ── */}
       <div className="flex items-center gap-2 text-sm text-slate-500">
         <button onClick={() => navigate('/dealers')} className="hover:text-primary-600 transition-colors">
@@ -290,10 +291,10 @@ const DealerDetailPage = () => {
       </div>
 
       {/* ── Two-column layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 flex-1 min-h-0">
 
         {/* ── Left column ── */}
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4 min-h-0 h-full">
 
           {/* Contact Details — read-only, no Edit button */}
           <div className="card p-4">
@@ -321,7 +322,7 @@ const DealerDetailPage = () => {
           </div>
 
           {/* KYC Documents */}
-          <div className="card p-4">
+          <div className="card p-4 flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-slate-800 text-sm">KYC Documents</h3>
               {hasMoreDocs ? (
@@ -377,10 +378,9 @@ const DealerDetailPage = () => {
         </div>
 
         {/* ── Right column ── */}
-        <div className="lg:col-span-2 card overflow-hidden">
-
+        <div className="lg:col-span-2 card flex flex-col min-h-0">
           {/* Tab headers */}
-          <div className="flex border-b border-slate-200 px-4 pt-3 gap-1">
+          <div className="flex items-center border-b border-slate-200 px-4 pt-3 gap-1 sticky top-0 bg-white z-10">
             {TABS.map((tab) => (
               <button
                 key={tab}
@@ -393,23 +393,30 @@ const DealerDetailPage = () => {
                 {tab === 'Orders' ? `Orders(${totalOrders})` : tab}
               </button>
             ))}
+            <div className="ml-auto pb-1">
+              <button
+                onClick={() => setShowFullscreen(true)}
+                className="px-3 py-1 text-xs text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50 transition-colors"
+              >
+                See All
+              </button>
+            </div>
           </div>
 
           {/* ── Orders tab ── */}
           {activeTab === 'Orders' && (
-            <div className="p-4 space-y-3">
+            <div className="flex flex-col h-full min-h-0">
               {/* Filter bar */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative flex-1 min-w-[160px]">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search Orders..."
-                    value={orderSearch}
-                    onChange={(e) => setOrderSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-400"
-                  />
-                </div>
+              <div className="flex flex-wrap items-center gap-2 sticky top-[48px] bg-white z-10 p-4">                <div className="relative flex-1 min-w-[160px]">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search Orders..."
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-400"
+                />
+              </div>
                 <div className="flex gap-1 flex-wrap">
                   {ORDER_FILTER_TABS.map((f) => (
                     <button
@@ -437,7 +444,7 @@ const DealerDetailPage = () => {
               ) : filteredOrders.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-sm">No orders found</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-auto flex-1 px-4 pb-4">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-100">
@@ -482,7 +489,7 @@ const DealerDetailPage = () => {
 
           {/* ── Invoices tab ── */}
           {activeTab === 'Invoices' && (
-            <div className="p-4">
+            <div className="flex flex-col h-full min-h-0">
               {paymentsLoading ? (
                 <div className="flex justify-center py-8">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
@@ -490,7 +497,7 @@ const DealerDetailPage = () => {
               ) : payments.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-sm">No invoices found for this dealer</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-auto flex-1 px-4 pb-4">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-100">
@@ -535,6 +542,121 @@ const DealerDetailPage = () => {
           )}
         </div>
       </div>
+
+      {/* ════════════════════════════════════════
+          FULLSCREEN: Table overlay
+      ════════════════════════════════════════ */}
+      {showFullscreen && (
+        <div className="absolute inset-0 bg-white z-50 flex flex-col rounded-xl shadow-lg">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+            <div className="flex items-center gap-4">
+              <h2 className="text-base font-semibold text-slate-900">
+                {activeTab === 'Orders' ? `Orders (${totalOrders})` : activeTab}
+              </h2>
+              <span className="text-sm text-slate-400">{dealer.businessName}</span>
+            </div>
+            <button
+              onClick={() => setShowFullscreen(false)}
+              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Orders fullscreen */}
+          {activeTab === 'Orders' && (
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="flex flex-wrap items-center gap-2 px-6 py-3 border-b border-slate-100 flex-shrink-0">
+                <div className="relative flex-1 min-w-[180px] max-w-xs">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search Orders..."
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-400"
+                  />
+                </div>
+                <div className="flex gap-1 flex-wrap">
+                  {ORDER_FILTER_TABS.map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setOrderFilter(f)}
+                      className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${orderFilter === f
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'border-slate-200 text-slate-500 hover:border-primary-300'
+                        }`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="overflow-auto flex-1 px-6 pb-6">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b border-slate-100">
+                      {['Order ID', 'Date', 'Amount', 'Payment Status', 'Fulfillment'].map((h) => (
+                        <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-500">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {filteredOrders.map((o) => (
+                      <tr key={o._id} className="hover:bg-slate-50 cursor-pointer" onClick={() => { setShowFullscreen(false); navigate(`/orders/${o._id}`); }}>
+                        <td className="px-3 py-3">
+                          <p className="font-semibold text-slate-800 text-xs">Order #{o.orderNumber || o._id?.slice(-4)}</p>
+                          <p className="text-xs text-slate-400">{o.items?.length ?? 0} items</p>
+                        </td>
+                        <td className="px-3 py-3 text-xs text-slate-500">{o.createdAt ? format(new Date(o.createdAt), 'yyyy-MM-dd') : '—'}</td>
+                        <td className="px-3 py-3 text-xs font-semibold text-slate-800">₹{(o.netAmount || 0).toLocaleString('en-IN')}</td>
+                        <td className="px-3 py-3"><StatusBadge status={o.paymentStatus || 'pending'} /></td>
+                        <td className="px-3 py-3"><StatusBadge status={o.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Invoices fullscreen */}
+          {activeTab === 'Invoices' && (
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="overflow-auto flex-1 px-6 pb-6">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b border-slate-100">
+                      {['Invoice #', 'Date', 'Party', 'Amount', 'Balance', 'Status'].map((h) => (
+                        <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-500">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {payments.map((inv) => (
+                      <tr key={inv._id} className="hover:bg-slate-50 cursor-pointer" onClick={() => { setShowFullscreen(false); navigate(`/invoices/${inv._id}`); }}>
+                        <td className="px-3 py-3 text-xs font-mono font-semibold text-primary-600">{inv.invoiceNumber || '—'}</td>
+                        <td className="px-3 py-3 text-xs text-slate-500">{inv.invoiceDate ? format(new Date(inv.invoiceDate), 'dd MMM yyyy') : '—'}</td>
+                        <td className="px-3 py-3 text-xs text-slate-600">{inv.partyName || inv.dealerId?.businessName || '—'}</td>
+                        <td className="px-3 py-3 text-xs font-semibold text-slate-800">₹{(inv.totalAmount || 0).toLocaleString('en-IN')}</td>
+                        <td className="px-3 py-3 text-xs text-slate-600">₹{(inv.balance || 0).toLocaleString('en-IN')}</td>
+                        <td className="px-3 py-3"><StatusBadge status={inv.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Activity Logs' && (
+            <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+              Activity logs coming soon
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ════════════════════════════════════════
           MODAL: Edit Profile (Credit Limit + Tier)
