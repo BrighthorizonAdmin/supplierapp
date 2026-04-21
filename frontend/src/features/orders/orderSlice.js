@@ -53,6 +53,32 @@ export const cancelOrder = createAsyncThunk('order/cancel', async ({ id, reason 
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// updateOrderStatus — advances an order through the fulfillment pipeline:
+//   confirmed → processing → shipped → out_for_delivery → delivered
+// On 'delivered' S-BE will push a webhook to D-BE which credits DealerInventory.
+// ─────────────────────────────────────────────────────────────────────────────
+export const updateOrderStatus = createAsyncThunk(
+  'order/updateStatus',
+  async ({ id, status }, { rejectWithValue }) => {
+    try {
+      const { data } = await api.patch(`/orders/${id}/status`, { status });
+      const labels = {
+        processing:       'Order marked as Processing',
+        shipped:          'Order marked as Shipped',
+        out_for_delivery: 'Order is Out for Delivery',
+        delivered:        'Order marked as Delivered — dealer inventory updated',
+      };
+      toast.success(labels[status] || `Status updated to ${status}`);
+      return data.data;
+    } catch (err) {
+      const msg = err.response?.data?.message || `Failed to update status to ${status}`;
+      toast.error(msg);
+      return rejectWithValue(msg);
+    }
+  }
+);
+
 const orderSlice = createSlice({
   name: 'order',
   initialState: {
@@ -90,6 +116,19 @@ const orderSlice = createSlice({
         const idx = state.list.findIndex((o) => o._id === normalized._id);
         if (idx !== -1) state.list[idx] = normalized;
         if (state.selected?._id === normalized._id) state.selected = normalized;
+      })
+      // ── updateOrderStatus ──────────────────────────────────────────────
+      .addCase(updateOrderStatus.pending, (state) => { state.loading = true; })
+      .addCase(updateOrderStatus.fulfilled, (state, action) => {
+        state.loading = false;
+        const normalized = normalizeOrder(action.payload);
+        const idx = state.list.findIndex((o) => o._id === normalized._id);
+        if (idx !== -1) state.list[idx] = normalized;
+        if (state.selected?._id === normalized._id) state.selected = normalized;
+      })
+      .addCase(updateOrderStatus.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });

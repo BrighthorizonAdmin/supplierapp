@@ -12,6 +12,70 @@ const Transaction = require('../finance/model/Transaction.model');
 const { emitToAll } = require('../../websocket/socket');
 const { ORDER_CONFIRMED, ORDER_CANCELLED } = require('../../websocket/events');
 const { addDays } = require('date-fns');
+const axios = require('axios');
+const mongoose = require('mongoose');
+
+// ── DealerInventory — shared DB, so we access it directly ─────────────────────
+// Both S-BE and D-BE use the same MongoDB (dealer_app), so we can write
+// to dealerinventories without any HTTP roundtrip.
+const dealerInventorySchema = new mongoose.Schema({
+  dealerId:      { type: mongoose.Schema.Types.ObjectId },
+  productId:     { type: mongoose.Schema.Types.ObjectId },
+  productName:   String,
+  sku:           String,
+  imageUrl:      String,
+  purchasePrice: { type: Number, default: 0 },
+  receivedQty:   { type: Number, default: 0 },
+  currentQty:    { type: Number, default: 0 },
+  soldQty:       { type: Number, default: 0 },
+  threshold:     { type: Number, default: 2 },
+}, { strict: false, timestamps: true });
+
+// Re-use existing model if already registered (hot-reload safety)
+const DealerInventory = mongoose.models.DealerInventory
+  || mongoose.model('DealerInventory', dealerInventorySchema, 'dealerinventories');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notify the dealer backend of an order status change (fire-and-forget)
+// Uses dbeOrderId (dealer's MongoDB _id) as the primary lookup key,
+// falls back to dealerOrderNumber if dbeOrderId not stored yet.
+// ─────────────────────────────────────────────────────────────────────────────
+async function notifyDealerOrderStatus(order, status, extraFields = {}) {
+  const DEALER_API_URL = process.env.DEALER_API_URL;
+  const WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET;
+  if (!DEALER_API_URL || !WEBHOOK_SECRET) {
+    console.warn('[notifyDealer] DEALER_API_URL or DEALER_WEBHOOK_SECRET not set — skipping');
+    return;
+  }
+
+  // Must have either dbeOrderId or dealerOrderNumber to identify the order on dealer side
+  const dbeOrderId        = order.dbeOrderId;
+  const dealerOrderNumber = order.dealerOrderNumber;
+  if (!dbeOrderId && !dealerOrderNumber) {
+    console.warn(`[notifyDealer] Order ${order.orderNumber} has no dbeOrderId or dealerOrderNumber — cannot notify dealer`);
+    return;
+  }
+
+  try {
+    const payload = {
+      ...(dbeOrderId        ? { dbeOrderId }        : {}),
+      ...(dealerOrderNumber ? { orderNumber: dealerOrderNumber } : {}),
+      status,
+      ...extraFields,
+    };
+    await axios.post(
+      `${DEALER_API_URL}/api/orders/webhook/status-update`,
+      payload,
+      {
+        headers: { 'x-webhook-secret': WEBHOOK_SECRET, 'Content-Type': 'application/json' },
+        timeout: 8000,
+      }
+    );
+    console.log(`[notifyDealer] Order ${order.orderNumber} (dbe: ${dbeOrderId}) → status: ${status} ✓`);
+  } catch (err) {
+    console.error(`[notifyDealer] Failed for order ${order.orderNumber}:`, err.response?.data || err.message);
+  }
+}
 
 const createOrder = async ({ dealerId, items, notes, orderType }, userId) => {
   const dealer = await Dealer.findById(dealerId).lean({ virtuals: true });
@@ -131,9 +195,13 @@ const confirmOrder = async (orderId, userId) => {
     order.creditUsed = order.netAmount;
     await order.save({ session });
 
-    // Update dealer creditUsed
-    dealer.creditUsed += order.netAmount;
-    await dealer.save({ session });
+    // Update dealer creditUsed — use $inc to avoid triggering full schema validation
+    // on dealer documents created by the dealer app (may have mismatched field shapes)
+    await Dealer.findByIdAndUpdate(
+      order.dealerId,
+      { $inc: { creditUsed: order.netAmount } },
+      { session }
+    );
 
     // Create transaction record
     await Transaction.create([{
@@ -151,6 +219,10 @@ const confirmOrder = async (orderId, userId) => {
     });
 
     emitToAll(ORDER_CONFIRMED, { orderId, orderNumber: order.orderNumber, dealerId: order.dealerId });
+
+    // Notify D-BE so the dealer's order status updates to 'confirmed'
+    notifyDealerOrderStatus(order, 'confirmed');
+
     return order;
   });
 };
@@ -178,10 +250,14 @@ const cancelOrder = async (orderId, reason, userId) => {
       }
 
       // Reverse creditUsed
-      const dealer = await Dealer.findById(order.dealerId).session(session);
+      const dealer = await Dealer.findById(order.dealerId).session(session).lean();
       if (dealer) {
-        dealer.creditUsed = Math.max(0, dealer.creditUsed - order.netAmount);
-        await dealer.save({ session });
+        const decrement = Math.min(dealer.creditUsed, order.netAmount);
+        await Dealer.findByIdAndUpdate(
+          order.dealerId,
+          { $inc: { creditUsed: -decrement } },
+          { session }
+        );
       }
 
       // Cancel invoice
@@ -212,12 +288,18 @@ const cancelOrder = async (orderId, reason, userId) => {
     });
 
     emitToAll(ORDER_CANCELLED, { orderId, orderNumber: order.orderNumber });
+
+    // Notify D-BE so the dealer's order status updates to 'cancelled'
+    notifyDealerOrderStatus(order, 'cancelled');
+
     return order;
   });
 };
 
 const getOrderStats = async () => {
   const results = await Order.aggregate([
+    // Exclude D-BE-native orders that share the same collection
+    { $match: { orderNumber: { $not: { $regex: /^ORD-\d{13}-\d+$/ } } } },
     { $group: { _id: '$status', count: { $sum: 1 } } },
   ]);
   const counts = { draft: 0, confirmed: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0, total: 0 };
@@ -230,7 +312,14 @@ const getOrderStats = async () => {
 
 const getOrders = async (query = {}) => {
   const { page, limit, skip } = getPagination(query);
-  const match = {};
+
+  // Both D-BE and S-BE share the same MongoDB `orders` collection.
+  // D-BE orders have orderNumber like ORD-{13-digit-timestamp}-{4-digits}.
+  // S-BE orders (webhook + manual) have orderNumber like ORD-{8-digit-date}-{seq}.
+  // Exclude D-BE-native documents so they never appear in the supplier order list.
+  const match = {
+    orderNumber: { $not: /^ORD-\d{13}-\d+$/ },
+  };
 
   if (query.status) match.status = query.status;
   if (query.orderType) match.orderType = query.orderType;
@@ -301,8 +390,14 @@ const getOrderById = async (id) => {
   return { ...order, items };
 };
 
-const updateOrderStatus = async (orderId, status, userId) => {
-  const allowed = { processing: ['confirmed'], shipped: ['processing'], delivered: ['shipped'] };
+const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
+  const allowed = {
+    confirmed:        ['pending', 'draft'],
+    processing:       ['confirmed'],
+    shipped:          ['processing', 'confirmed'],
+    out_for_delivery: ['shipped', 'processing'],
+    delivered:        ['shipped', 'out_for_delivery', 'processing'],
+  };
   const order = await Order.findById(orderId);
   if (!order) throw new AppError('Order not found', 404);
 
@@ -313,11 +408,58 @@ const updateOrderStatus = async (orderId, status, userId) => {
 
   const before = { status: order.status };
   order.status = status;
-  if (status === 'shipped') order.shippedAt = new Date();
-  if (status === 'delivered') order.deliveredAt = new Date();
+  if (status === 'shipped')          order.shippedAt   = new Date();
+  if (status === 'delivered')        order.deliveredAt = new Date();
+  if (extraFields.trackingId)        order.trackingId  = extraFields.trackingId;
+  if (extraFields.carrier)           order.carrier     = extraFields.carrier;
   await order.save();
 
   await auditService.log('order', orderId, 'update', userId, { before, after: { status } });
+
+  // ── On delivered: write directly to DealerInventory (shared DB — no HTTP needed) ──
+  if (status === 'delivered') {
+    try {
+      // Resolve embedded items or separate OrderItems
+      const items = order.items?.length
+        ? order.items
+        : await OrderItem.find({ orderId: order._id }).lean();
+
+      for (const item of items) {
+        const pid = item.productId;
+        if (!pid) continue;
+
+        const product = await Product.findById(pid).lean();
+        const purchasePrice = item.basePrice || item.unitPrice || product?.basePrice || product?.price || 0;
+        const imageUrl      = item.image || product?.images?.find(i => i.isPrimary)?.url || product?.images?.[0]?.url || '';
+        const qty           = Number(item.quantity) || 0;
+        const threshold     = Math.max(2, Math.ceil(qty * 0.2));
+
+        await DealerInventory.findOneAndUpdate(
+          { dealerId: order.dealerId, productId: pid },
+          {
+            $inc: { receivedQty: qty, currentQty: qty },
+            $setOnInsert: {
+              productName:   item.name || item.productName || product?.name || '',
+              sku:           item.sku  || item.productCode || product?.sku  || '',
+              imageUrl,
+              purchasePrice,
+              soldQty:   0,
+              threshold,
+            },
+          },
+          { upsert: true, new: true }
+        );
+      }
+      console.log(`[updateOrderStatus] Inventory credited for order ${order.orderNumber} (${items.length} item(s))`);
+    } catch (invErr) {
+      // Never block the status update if inventory write fails — log and continue
+      console.error(`[updateOrderStatus] Inventory write failed for order ${order.orderNumber}:`, invErr.message);
+    }
+  }
+
+  // Keep the HTTP notify as a best-effort fallback (updates timeline/notifications on dealer side)
+  notifyDealerOrderStatus(order, status, extraFields);
+
   return order;
 };
 

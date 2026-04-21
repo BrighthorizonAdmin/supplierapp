@@ -18,6 +18,19 @@ const connectDB = async () => {
 
     logger.info(`MongoDB connected: ${conn.connection.host} [${NODE_ENV}]`);
 
+    // Ensure all schema-defined indexes (including the dbeOrderId unique sparse index
+    // on the Order model) are created in MongoDB. Without this call, indexes added
+    // after the collection was first created are never applied to the live DB.
+    mongoose.connection.once('open', async () => {
+      try {
+        const Order = require('../modules/orders/model/Order.model');
+        await Order.syncIndexes();
+        logger.info('Order indexes synced');
+      } catch (syncErr) {
+        logger.warn(`Order index sync failed (non-fatal): ${syncErr.message}`);
+      }
+    });
+
     mongoose.connection.on('error', (err) => {
       logger.error(`MongoDB connection error: ${err.message}`);
     });

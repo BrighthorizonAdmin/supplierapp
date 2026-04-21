@@ -122,7 +122,10 @@ router.post('/dealer-retail-invoice', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-order
-// Called by D-BE whenever a dealer places a new order
+// Called by D-BE whenever a dealer places a new order.
+// Creates (or idempotently updates) a supplier-side Order record that carries
+// dbeOrderId + dealerOrderNumber — this is the critical link that lets
+// updateOrderStatus → notifyDealerOrderStatus reach back to the dealer.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/dealer-order', async (req, res) => {
   try {
@@ -132,11 +135,77 @@ router.post('/dealer-order', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const { dbeOrderId, orderNumber, dealerName, dealerPhone, items, netAmount, paymentMethod } = req.body;
+    const {
+      dbeOrderId, orderNumber, dealerId: dealerRef,
+      dealerName, dealerPhone,
+      items, subtotal, taxAmount, netAmount, paymentMethod,
+    } = req.body;
 
-    // Notify all active admin/supplier users
+    const Order = require('../orders/model/Order.model');
+    const { generateCode } = require('../../utils/autoCode');
+
+    // ── 1. Resolve the supplier-side Dealer record ──
+    const Dealer = require('../dealer/model/Dealer.model');
+    let supplierDealer = null;
+    if (dealerPhone) supplierDealer = await Dealer.findOne({ phone: dealerPhone }).lean();
+    if (!supplierDealer && dealerName) {
+      supplierDealer = await Dealer.findOne({
+        businessName: { $regex: dealerName.trim(), $options: 'i' },
+      }).lean();
+    }
+
+    // ── 1b. Skip if dealer could not be resolved ──
+    if (!supplierDealer) {
+      console.warn(`[Webhook] dealer-order: could not resolve dealer (phone=${dealerPhone}, name=${dealerName}) — order not created in supplier DB`);
+    } else {
+      // ── 2. Build embedded items from the dealer payload ──
+      const embeddedItems = (items || []).map(item => ({
+        productId:   item.productId || undefined,
+        sku:         item.sku       || item.productCode || '',
+        name:        item.name      || item.productName || '',
+        image:       item.image     || '',
+        unitPrice:   Number(item.basePrice || item.unitPrice || 0),
+        quantity:    Number(item.quantity  || 0),
+        moq:         Number(item.moq       || 1),
+        lineTotal:   Number(item.lineTotal || 0),
+      }));
+
+      // ── 3. Atomic upsert — findOneAndUpdate with upsert:true on dbeOrderId ──
+      // findOneAndUpdate does NOT fire Mongoose pre('save') hooks, so we must
+      // generate orderNumber explicitly here rather than relying on the pre-save hook.
+      const supplierOrderNumber = await generateCode(Order, 'ORD', 'orderNumber', 'yyyyMMdd');
+
+      const result = await Order.findOneAndUpdate(
+        { dbeOrderId },
+        {
+          $setOnInsert: {
+            orderNumber:       supplierOrderNumber,
+            dealerId:          supplierDealer._id,
+            status:            'pending',
+            dbeOrderId,
+            dealerOrderNumber: orderNumber,
+            items:             embeddedItems,
+            subtotal:          Number(subtotal  || 0),
+            taxAmount:         Number(taxAmount || 0),
+            netAmount:         Number(netAmount || 0),
+            paymentMethod:     paymentMethod || '',
+            paymentStatus:     'pending',
+            notes: `Dealer order: ${orderNumber}`,
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      if (result.__v === undefined || result.createdAt?.getTime() === result.updatedAt?.getTime()) {
+        console.log(`[Webhook] Created supplier order linked to dbeOrderId=${dbeOrderId}`);
+      } else {
+        console.log(`[Webhook] dealer-order already linked (upsert no-op): dbeOrderId=${dbeOrderId}`);
+      }
+    }
+
+    // ── 5. Notify all active admins ──
     try {
       const User = require('../auth/model/User.model');
+      const notificationService = require('../notifications/notification.service');
       const admins = await User.find({ isActive: true }).lean();
       const itemCount = Array.isArray(items) ? items.length : 0;
       for (const admin of admins) {
