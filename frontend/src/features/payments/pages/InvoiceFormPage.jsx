@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { createInvoice, updateInvoice, fetchInvoiceById } from '../paymentSlice';
 import { fetchDealers } from '../../dealer/dealerSlice';
 import { fetchProducts } from '../../products/productSlice';
@@ -101,6 +101,7 @@ export default function InvoiceFormPage() {
   const isEdit   = Boolean(id);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { list: dealers  = [] } = useSelector((s) => s.dealer);
   const { list: products = [] } = useSelector((s) => s.product);
@@ -211,6 +212,56 @@ export default function InvoiceFormPage() {
     if (!invoiceDate) return;
     try { setDueDate(format(addDays(parseISO(invoiceDate), toNum(paymentDays)), 'yyyy-MM-dd')); } catch (_) {}
   }, [invoiceDate, paymentDays]);
+
+  // ── Pre-fill from order (navigated via Order Detail → Invoice button) ──────
+  useEffect(() => {
+    const fromOrder = location.state?.fromOrder;
+    if (!fromOrder || isEdit) return;
+    // Dealer
+    if (fromOrder.dealerId && typeof fromOrder.dealerId === 'object') {
+      setDealer(fromOrder.dealerId);
+      setDealerSearch(fromOrder.dealerId.businessName || fromOrder.dealerId.name || '');
+    }
+    // Line items
+    if (fromOrder.items?.length > 0) {
+      setItems(
+        fromOrder.items.map((item) =>
+          calcItem({
+            ...EMPTY_ITEM,
+            productId:   item.productId || '',
+            productName: item.productName || item.name || '',
+            hsnCode:     item.hsnCode || '',
+            quantity:    item.quantity || 1,
+            unit:        item.unit || 'PCS',
+            unitPrice:   item.unitPrice || 0,
+            taxRate:     item.taxRate || 0,
+          })
+        )
+      );
+    }
+    // Notes
+    setNotes(`Ref: Order ${fromOrder.orderNumber || fromOrder._id?.slice(-6).toUpperCase()}`);
+    setShowNotes(true);
+    // Shipping address from delivery address
+    if (fromOrder.deliveryAddress) {
+      const addr = {
+        id: 'order',
+        label: fromOrder.dealerId?.businessName || 'Delivery Address',
+        street: fromOrder.deliveryAddress.fullAddress || fromOrder.deliveryAddress.street || '',
+        city:   fromOrder.deliveryAddress.city || '',
+        state:  fromOrder.deliveryAddress.state || '',
+        pincode: fromOrder.deliveryAddress.postalCode || '',
+      };
+      setShipAddresses([addr]);
+      setSelectedShipId('order');
+      setShipAddress(addr);
+    }
+    // Payment terms
+    if (fromOrder.paymentTerms) {
+      const days = parseInt(fromOrder.paymentTerms.replace(/\D/g, ''), 10);
+      if (!isNaN(days)) setPaymentDays(days);
+    }
+  }, [location.state, isEdit]);
 
   // ── Build ship addresses when dealer changes ──────────────────────────────
   useEffect(() => {
