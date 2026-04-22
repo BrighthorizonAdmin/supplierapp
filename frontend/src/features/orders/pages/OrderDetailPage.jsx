@@ -86,6 +86,116 @@ const OrderDetailPage = () => {
   const [attempted, setAttempted]         = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
 
+  const handlePrint = () => {
+    const printContent = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<title>Order ${order.orderNumber || `#${order._id?.slice(-6).toUpperCase()}`}</title>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;font-size:13px;color:#222;}
+  @media print{body{padding:0;}@page{margin:10mm;size:A4;}}
+  .header{border-bottom:2px solid #BE474B;padding-bottom:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;}
+  .order-title{font-size:22px;font-weight:bold;color:#BE474B;}
+  .badge{display:inline-block;padding:3px 10px;border-radius:12px;background:#f3f3f3;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+  .section-title{font-weight:bold;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#BE474B;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:8px;}
+  .label{color:#888;font-size:11px;}
+  .value{font-weight:500;margin-bottom:4px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{background:#f5f5f5;padding:8px 10px;text-align:left;font-weight:bold;border:1px solid #ddd;}
+  td{padding:8px 10px;border:1px solid #eee;vertical-align:top;}
+  .text-right{text-align:right;}
+  .text-center{text-align:center;}
+  .totals-wrap{display:flex;justify-content:flex-end;margin-top:12px;}
+  .totals-table{width:280px;}
+  .totals-table td{border:none;padding:4px 8px;}
+  .totals-table td:last-child{text-align:right;font-weight:500;}
+  .total-final td{border-top:2px solid #333;font-weight:bold;padding-top:8px;}
+  .timeline{margin-top:16px;}
+  .timeline-item{display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;}
+  .dot{width:10px;height:10px;border-radius:50%;background:#BE474B;flex-shrink:0;margin-top:3px;}
+  .footer{margin-top:24px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#888;text-align:center;}
+</style>
+</head><body>
+<div class="header">
+  <div>
+    <div class="order-title">Order ${order.orderNumber || `#${order._id?.slice(-6).toUpperCase()}`}</div>
+    <div style="color:#666;font-size:12px;margin-top:4px;">Placed on ${format(new Date(order.createdAt), 'dd MMM yyyy')}</div>
+    <span class="badge">${(order.status || '').replace(/_/g, ' ')}</span>
+  </div>
+  <div style="text-align:right;font-size:11px;color:#888;">Printed on ${format(new Date(), 'dd MMM yyyy, hh:mm a')}</div>
+</div>
+
+<div class="grid2">
+  <div>
+    <div class="section-title">Customer Details</div>
+    <div class="label">Name</div><div class="value">${order.dealerId?.businessName || order.dealerId?.name || '—'}</div>
+    <div class="label">Email</div><div class="value">${order.dealerId?.email || order.email || '—'}</div>
+    <div class="label">Phone</div><div class="value">${order.dealerId?.phone || order.phone || '—'}</div>
+    <div class="label">Shipping Address</div>
+    <div class="value">${[order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode, order.deliveryAddress?.country].filter(Boolean).join(', ') || order.dealerId?.address || '—'}</div>
+  </div>
+  <div>
+    <div class="section-title">Payment & Shipping</div>
+    <div class="label">Payment Status</div><div class="value">${order.paymentStatus || 'Pending'}</div>
+    <div class="label">Payment Method</div><div class="value">${order.paymentMethod || 'Credit Card'}</div>
+    <div class="label">Credit Terms</div><div class="value">${order.paymentTerms || 'Net 30'}</div>
+    <div class="label">Carrier</div><div class="value">${order.shippingMethod || order.deliveryMethod || '—'}</div>
+    <div class="label">Tracking No.</div><div class="value">${order.trackingNumber || 'Pending'}</div>
+  </div>
+</div>
+
+<div class="section-title">Order Items</div>
+<table>
+  <thead>
+    <tr>
+      <th>Product</th>
+      <th>SKU</th>
+      <th class="text-center">Qty</th>
+      <th class="text-right">Unit Price</th>
+      <th class="text-right">Line Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${(order.items || []).map(item => `
+    <tr>
+      <td><strong>${item.productName || item.name || '—'}</strong></td>
+      <td style="color:#666">${item.sku || '—'}</td>
+      <td class="text-center">${item.quantity}</td>
+      <td class="text-right">₹${(item.unitPrice || 0).toLocaleString('en-IN')}</td>
+      <td class="text-right"><strong>₹${(item.lineTotal || 0).toLocaleString('en-IN')}</strong></td>
+    </tr>`).join('')}
+  </tbody>
+</table>
+
+<div class="totals-wrap">
+  <table class="totals-table">
+    <tbody>
+      <tr><td style="color:#666">Subtotal</td><td>₹${(order.subtotal || 0).toLocaleString('en-IN')}</td></tr>
+      <tr><td style="color:#666">Tax</td><td>₹${(order.taxAmount || 0).toLocaleString('en-IN')}</td></tr>
+      <tr><td style="color:#666">Shipping</td><td>₹${(order.shippingAmount || 0).toLocaleString('en-IN')}</td></tr>
+      <tr class="total-final"><td>Total</td><td>₹${(order.netAmount || (order.subtotal || 0) + (order.taxAmount || 0) + (order.shippingAmount || 0)).toLocaleString('en-IN')}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{ label: 'Confirmed', value: order.confirmedAt }] : []), ...(order.shippedAt ? [{ label: 'Shipped', value: order.shippedAt }] : []), ...(order.deliveredAt ? [{ label: 'Delivered', value: order.deliveredAt }] : [])].map(e => `
+<div class="timeline-item"><div class="dot"></div><div><strong>${e.label}:</strong> ${format(new Date(e.value), 'dd MMM yyyy, hh:mm a')}</div></div>`).join('')}
+
+<div class="footer">This is a system-generated order summary.</div>
+<script>window.onload=function(){setTimeout(function(){window.print();window.close();},300);};<\/script>
+</body></html>`;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=750');
+    if (!printWindow) return;
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+  };
+
+  const handleInvoice = () => {
+    navigate('/invoices/new', { state: { fromOrder: order } });
+  };
+
   useEffect(() => {
     dispatch(clearSelected());
     dispatch(fetchOrderById(id)).then(() => setAttempted(true));
@@ -197,10 +307,10 @@ const OrderDetailPage = () => {
               </button>
             </>
           )}
-          <button className="btn-secondary flex items-center gap-1.5 text-sm">
+          <button type='button' onClick={handlePrint} className="btn-secondary flex items-center gap-1.5 text-sm">
             <Printer size={14} /> Print
           </button>
-          <button className="btn-danger flex items-center gap-1.5 text-sm">
+          <button type='button' onClick={handleInvoice} className="btn-danger flex items-center gap-1.5 text-sm">
             <FileText size={14} /> Invoice
           </button>
         </div>
