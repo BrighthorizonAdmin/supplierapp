@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -224,19 +225,36 @@ export default function InvoiceFormPage() {
     }
     // Line items
     if (fromOrder.items?.length > 0) {
+      // Derive a fallback taxRate from the order-level taxAmount & subtotal
+      // when individual items don't carry their own taxRate (e.g. dealer-app orders).
+      const orderLevelTaxRate = (() => {
+        const sub = fromOrder.subtotal || 0;
+        const tax = fromOrder.taxAmount || 0;
+        if (!sub || !tax) return 0;
+        const raw = Math.round((tax / sub) * 100);
+        // Snap to nearest valid GST slab: 0, 5, 12, 18, 28
+        const slabs = [0, 5, 12, 18, 28];
+        return slabs.reduce((prev, curr) =>
+          Math.abs(curr - raw) < Math.abs(prev - raw) ? curr : prev
+        );
+      })();
+
       setItems(
-        fromOrder.items.map((item) =>
-          calcItem({
+        fromOrder.items.map((item) => {
+          // item.taxRate may be undefined (dealer-app items) — fall back to order-level rate
+          const itemTaxRate =
+            item.taxRate != null ? item.taxRate : orderLevelTaxRate;
+          return calcItem({
             ...EMPTY_ITEM,
             productId:   item.productId || '',
             productName: item.productName || item.name || '',
             hsnCode:     item.hsnCode || '',
             quantity:    item.quantity || 1,
             unit:        item.unit || 'PCS',
-            unitPrice:   item.unitPrice || 0,
-            taxRate:     item.taxRate || 0,
-          })
-        )
+            unitPrice:   item.unitPrice || item.basePrice || 0,
+            taxRate:     itemTaxRate,
+          });
+        })
       );
     }
     // Notes
