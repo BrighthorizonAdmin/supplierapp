@@ -15,21 +15,22 @@ import { format } from 'date-fns';
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'all',       label: 'All Dealers',       status: 'active' },
-  { id: 'active',    label: 'Active Dealers',     status: 'active' },
-  { id: 'suspended', label: 'Suspended Dealers',  status: 'suspended' },
+  { id: 'all', label: 'All Dealers', status: 'active' },
+  { id: 'active', label: 'Active Dealers', status: 'active' },
+  { id: 'inactive', label: 'Inactive Dealers', status: 'pending' },
+  { id: 'suspended', label: 'Suspended Dealers', status: 'suspended' },
   // { id: 'new',       label: 'New Applications',   status: 'pending' },
 ];
 
 // ─── Status chip ───────────────────────────────────────────────────────────────
 const STATUS_CLS = {
-  active:    'badge-green',
-  pending:   'badge-yellow',
+  active: 'badge-green',
+  pending: 'badge-yellow',
   suspended: 'badge-red',
-  rejected:  'badge-red',
+  rejected: 'badge-red',
 };
 const STATUS_LABEL = {
-  active: 'Active', pending: 'Pending', suspended: 'Suspended', rejected: 'Rejected',
+  active: 'Active', pending: 'Inactive', suspended: 'Suspended', rejected: 'Rejected',
 };
 const StatusChip = ({ status }) => {
   const key = status?.toLowerCase();
@@ -119,20 +120,20 @@ const RowActions = ({ row, onView, onEdit, onApprove, onReject, onSuspend }) => 
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 const DealerListPage = () => {
-  const dispatch  = useDispatch();
-  const navigate  = useNavigate();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { list, pagination, loading, counts, countsFetched } = useSelector((s) => s.dealer);
 
-  const [activeTab,    setActiveTab]    = useState('all');
-  const [page,         setPage]         = useState(1);
-  const [searchInput,  setSearchInput]  = useState('');
-  const [search,       setSearch]       = useState('');
-  const [showFilters,  setShowFilters]  = useState(false);
-  const [bizType,      setBizType]      = useState('');
-  const [selected,     setSelected]     = useState(new Set());
-  const [approvalModal,setApprovalModal]= useState(null);
-  const [rejectModal,  setRejectModal]  = useState(null);
-  const [editModal,    setEditModal]    = useState(null);
+  const [activeTab, setActiveTab] = useState('all');
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [bizType, setBizType] = useState('');
+  const [selected, setSelected] = useState(new Set());
+  const [approvalModal, setApprovalModal] = useState(null);
+  const [rejectModal, setRejectModal] = useState(null);
+  const [editModal, setEditModal] = useState(null);
   const [editCreditLimit, setEditCreditLimit] = useState(0);
 
   const { register, handleSubmit, reset } = useForm();
@@ -147,9 +148,11 @@ const DealerListPage = () => {
   // Fetch list — abort the previous in-flight request on every filter change
   useEffect(() => {
     const params = { page, limit: 20 };
-    params.status = tabStatus || 'active';
-    if (search)     params.search       = search;
-    if (bizType)    params.businessType = bizType;
+    if (tabStatus) {
+      params.status = tabStatus;
+    }
+    if (search) params.search = search;
+    if (bizType) params.businessType = bizType;
     const promise = dispatch(fetchDealers(params));
     setSelected(new Set());
     return () => promise.abort();
@@ -184,8 +187,8 @@ const DealerListPage = () => {
   };
 
   // Bulk selection
-  const allIds       = list.map((d) => d._id);
-  const allSelected  = allIds.length > 0 && allIds.every((id) => selected.has(id));
+  const allIds = list.map((d) => d._id);
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
   const someSelected = allIds.some((id) => selected.has(id)) && !allSelected;
 
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(allIds));
@@ -200,13 +203,36 @@ const DealerListPage = () => {
   const handleExport = async () => {
     try {
       let dealers;
+
+      // If user selected rows → export only selected
       if (selected.size > 0) {
         dealers = list.filter((d) => selected.has(d._id));
       } else {
-        const res = await api.get('/dealers', { params: { limit: 10000 } });
+        // Otherwise → export EXACTLY what current tab shows
+        const params = {
+          limit: 10000,
+        };
+
+        if (tabStatus) params.status = tabStatus;   // ✅ important
+        if (search) params.search = search;         // ✅ keep search
+        if (bizType) params.businessType = bizType; // ✅ keep filters
+
+        const res = await api.get('/dealers', { params });
         dealers = res.data.data || [];
       }
-      const headers = ['Dealer Code', 'Business Name', 'Owner', 'Email', 'Phone', 'City', 'State', 'Credit Limit', 'Status'];
+
+      const headers = [
+        'Dealer Code',
+        'Business Name',
+        'Owner',
+        'Email',
+        'Phone',
+        'City',
+        'State',
+        'Credit Limit',
+        'Status',
+      ];
+
       const rows = dealers.map((d) => [
         d.dealerCode || '',
         d.businessName || '',
@@ -218,15 +244,31 @@ const DealerListPage = () => {
         d.creditLimit || 0,
         d.status || '',
       ]);
+
       const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
-      const csv = [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
+      const csv = [headers, ...rows]
+        .map((r) => r.map(escape).join(','))
+        .join('\n');
+
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
+
       const a = document.createElement('a');
-      const suffix = selected.size > 0 ? `selected-${selected.size}` : 'all';
-      a.href = url; a.download = `dealers-${suffix}-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
+
+      // Better file naming based on tab
+      const suffix =
+        selected.size > 0
+          ? `selected-${selected.size}`
+          : activeTab;
+
+      a.href = url;
+      a.download = `dealers-${suffix}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      a.click();
+
       URL.revokeObjectURL(url);
-    } catch (err) { console.error('Export failed', err); }
+    } catch (err) {
+      console.error('Export failed', err);
+    }
   };
 
   return (
@@ -280,11 +322,10 @@ const DealerListPage = () => {
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setPage(1); setSearchInput(''); setSearch(''); setBizType(''); }}
-              className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
+              className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
             >
               {tab.label}
             </button>
@@ -386,7 +427,7 @@ const DealerListPage = () => {
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Contact</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Credit limit</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Status</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Actions</th>
+                  {/* <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Actions</th> */}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -399,13 +440,16 @@ const DealerListPage = () => {
                 ) : list.map((d) => (
                   <tr
                     key={d._id}
-                    className={`transition-colors hover:bg-slate-50 ${selected.has(d._id) ? 'bg-primary-50/60' : ''}`}
+                    onClick={() => navigate(`/dealers/${d._id}`)}
+                    className={`cursor-pointer transition-colors hover:bg-slate-50 ${selected.has(d._id) ? 'bg-primary-50/60' : ''
+                      }`}
                   >
                     {/* Checkbox */}
                     <td className="px-4 py-3.5">
                       <input
                         type="checkbox"
                         checked={selected.has(d._id)}
+                        onClick={(e) => e.stopPropagation()}
                         onChange={() => toggleRow(d._id)}
                         className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
                       />
@@ -421,7 +465,10 @@ const DealerListPage = () => {
                     {/* Dealer Name */}
                     <td className="px-4 py-3.5">
                       <button
-                        onClick={() => navigate(`/dealers/${d._id}`)}
+                        onClick={(e) => {
+                          e.stopPropagation();   // ✅ prevent double trigger
+                          navigate(`/dealers/${d._id}`);
+                        }}
                         className="flex items-start gap-2.5 text-left group"
                       >
                         <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -470,7 +517,7 @@ const DealerListPage = () => {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-4 py-3.5">
+                    {/* <td className="px-4 py-3.5">
                       <RowActions
                         row={d}
                         onView={(d2) => navigate(`/dealers/${d2._id}`)}
@@ -479,7 +526,7 @@ const DealerListPage = () => {
                         onReject={(d2) => setRejectModal(d2)}
                         onSuspend={(d2) => dispatch(suspendDealer({ id: d2._id, reason: 'Administrative action' }))}
                       />
-                    </td>
+                    </td> */}
                   </tr>
                 ))}
               </tbody>

@@ -10,51 +10,45 @@ import { fetchProducts } from '../../products/productSlice';
 import Pagination from '../../../components/ui/Pagination';
 import { format } from 'date-fns';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtNum = (n) => {
   if (!n && n !== 0) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString('en-IN');
 };
 const fmtCurrency = (n) => (n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—');
 
-// ─── Chart colours (green-500, amber-500, red-500) ────────────────────────────
 const DONUT_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
 
-// ─── Stock status helpers (rule: noStock ≤0 | lowStock <20% of opening | inStock ≥20%) ──
 const stockStatus = (item) => {
-  const cur  = item.currentStockQty ?? 0;
+  const cur = item.currentStockQty ?? 0;
   const open = item.openingStockQty ?? 0;
-  if (cur <= 0)                          return 'no-stock';
-  if (open > 0 && cur < open * 0.2)     return 'low-stock';
-  return 'in-stock';
+  if (cur <= 0) return 'out-of-stock';
+  if (open > 0 && cur < open * 0.2) return 'low stock';
+  return 'in stock';
 };
 
-// ─── Stock status chip ────────────────────────────────────────────────────────
 const StockChip = ({ item }) => {
   const s = stockStatus(item);
-  if (s === 'no-stock')  return <span className="badge-red">No Stock</span>;
-  if (s === 'low-stock') return <span className="badge-yellow">Low Stock</span>;
+  if (s === 'out-of-stock') return <span className="badge-red">Out of Stock</span>;
+  if (s === 'low stock') return <span className="badge-yellow">Low Stock</span>;
   return <span className="badge-green">In-Stock</span>;
 };
 
 const forecastLabel = (item) => {
   const s = stockStatus(item);
-  if (s === 'no-stock')  return 'Replenishment Required';
-  if (s === 'low-stock') return 'Projected to Spike – order soon';
+  if (s === 'out of stock') return 'Replenishment Required';
+  if (s === 'low stock') return 'Projected to Spike – order soon';
   return 'Stable Demand – next 30 days';
 };
 
-// ─── Tab config ───────────────────────────────────────────────────────────────
 const STOCK_TABS = [
-  { id: '',             label: 'All Items' },
-  { id: 'low-stock',    label: 'Low Stock' },
-  { id: 'high-stock',   label: 'High Stock' },
+  { id: '', label: 'All Items' },
+  { id: 'low-stock', label: 'Low Stock' },
+  { id: 'high-stock', label: 'High Stock' },
   { id: 'out-of-stock', label: 'Out of Stock' },
 ];
 
-// ─── Stat card ────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, sub, subIcon: SubIcon, icon: Icon, iconBg, badge, badgeCls }) => (
   <div className="card p-4 flex items-start justify-between gap-3">
     <div className="flex-1 min-w-0">
@@ -75,7 +69,6 @@ const StatCard = ({ label, value, sub, subIcon: SubIcon, icon: Icon, iconBg, bad
   </div>
 );
 
-// ─── Donut tooltip ────────────────────────────────────────────────────────────
 const DonutTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -86,7 +79,6 @@ const DonutTooltip = ({ active, payload }) => {
   );
 };
 
-// ─── Add Stock Modal ──────────────────────────────────────────────────────────
 const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
   const { list: products } = useSelector((s) => s.product);
   const [productSearch, setProductSearch] = useState('');
@@ -156,7 +148,7 @@ const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
           <div>
             <label className="label">Operation</label>
             <div className="flex gap-3">
-              {[{v:'add',l:'Add Stock'},{v:'remove',l:'Remove Stock'}].map(({v,l}) => (
+              {[{ v: 'add', l: 'Add Stock' }, { v: 'remove', l: 'Remove Stock' }].map(({ v, l }) => (
                 <label key={v} className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
                   <input type="radio" name="type" value={v} checked={form.type === v} onChange={() => setF('type', v)} className="text-blue-600" />
                   {l}
@@ -176,58 +168,52 @@ const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
   );
 };
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
 const InventoryPage = () => {
   const dispatch = useDispatch();
   const { list, warehouses, stats, pagination, loading } = useSelector((s) => s.inventory);
   const { list: products } = useSelector((s) => s.product);
 
-  const [page,        setPage]        = useState(1);
+  const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
-  const [search,      setSearch]      = useState('');
-  const [stockTab,    setStockTab]    = useState('');
+  const [search, setSearch] = useState('');
+  const [stockTab, setStockTab] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
-  const [category,    setCategory]    = useState('');
-  const [showModal,   setShowModal]   = useState(false);
-  const [adjusting,   setAdjusting]   = useState(false);
+  const [category, setCategory] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [adjusting, setAdjusting] = useState(false);
 
-  // Debounce search — API call fires only after 400 ms of inactivity
   useEffect(() => {
     const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
     return () => clearTimeout(id);
   }, [searchInput]);
 
-  // Fetch stats, warehouses, products once
   useEffect(() => {
     dispatch(fetchInventoryStats());
     dispatch(fetchWarehouses());
     dispatch(fetchProducts({ limit: 200 }));
   }, [dispatch]);
 
-  // Fetch list on filter change
   useEffect(() => {
     const params = { page, limit: 20 };
-    if (stockTab)    params.status      = stockTab;
+    if (stockTab) params.status = stockTab;
     if (warehouseId) params.warehouseId = warehouseId;
-    if (search)      params.search      = search;
-    if (category)    params.category    = category;
+    if (search) params.search = search;
+    if (category) params.category = category;
     dispatch(fetchInventory(params));
   }, [dispatch, page, stockTab, warehouseId, search, category]);
 
-  // Distinct categories from all products (independent of table filters/pagination)
   const categories = useMemo(
     () => [...new Set(products?.map((p) => p?.category)?.filter(Boolean))]?.sort(),
     [products]
   );
 
-  // Donut data
   const donutData = stats ? [
-    { name: 'In Stock',     value: stats.distribution?.inStock    || 0 },
-    { name: 'Low Stock',    value: stats.distribution?.lowStock   || 0 },
+    { name: 'In Stock', value: stats.distribution?.inStock || 0 },
+    { name: 'Low Stock', value: stats.distribution?.lowStock || 0 },
     { name: 'Out of Stock', value: stats.distribution?.outOfStock || 0 },
   ] : [];
-  const totalItems   = donutData.reduce((s, d) => s + d.value, 0);
-  const forecastPct  = stats?.totalSKUs
+  const totalItems = donutData.reduce((s, d) => s + d.value, 0);
+  const forecastPct = stats?.totalSKUs
     ? Math.round((stats.fastMovingCount / stats.totalSKUs) * 100)
     : 0;
 
@@ -239,19 +225,18 @@ const InventoryPage = () => {
     setAdjusting(false);
     if (!res.error) {
       setShowModal(false);
-      // List item is updated in-place by the slice; only stats aggregates need a refresh
       dispatch(fetchInventoryStats());
     }
   };
 
   const handleExport = () => {
     if (!list.length) return;
-    const headers = ['Product','SKU','Category','Warehouse','Available','Allocated','Total','Unit Price','Status'];
+    const headers = ['Product', 'SKU', 'Category', 'Warehouse', 'Available', 'Allocated', 'Total', 'Unit Price', 'Status'];
     const rows = list.map((item) => {
       const prod = item.productId || {};
-      const wh   = item.warehouseId || {};
-      const s      = stockStatus(item);
-      const status = s === 'no-stock' ? 'No Stock' : s === 'low-stock' ? 'Low Stock' : 'In Stock';
+      const wh = item.warehouseId || {};
+      const s = stockStatus(item);
+      const status = s === 'no-stock' ? 'Out of Stock' : s === 'low-stock' ? 'Low Stock' : 'In Stock';
       return [
         prod.name || '—', prod.productCode || '—', prod.category || '—',
         wh.name || '—',
@@ -262,9 +247,9 @@ const InventoryPage = () => {
     const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
     const csv = [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
     a.download = `inventory-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
@@ -281,7 +266,7 @@ const InventoryPage = () => {
         />
       )}
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
         <button
@@ -292,41 +277,44 @@ const InventoryPage = () => {
         </button>
       </div>
 
-      {/* ── Top section ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
+      {/* ── Top section: donut + stat cards, equal height ── */}
+      {/* FIX 1: items-stretch so the donut card grows to match the stat-cards grid height */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-stretch">
 
-        {/* Donut chart card */}
-        <div className="card p-5 lg:col-span-2 flex flex-col items-center">
+        {/* Donut chart card — h-full makes it fill the row height */}
+        <div className="card p-5 lg:col-span-2 flex flex-col items-center h-full">
           <p className="text-xs font-bold text-slate-600 tracking-widest uppercase mb-3">
             Inventory Distribution
           </p>
 
           {totalItems === 0 ? (
-            <div className="flex items-center justify-center h-48 text-slate-400 text-sm">No data</div>
+            <div className="flex items-center justify-center flex-1 text-slate-400 text-sm">No data</div>
           ) : (
-            <ResponsiveContainer width="100%" height={210}>
-              <PieChart>
-                <Pie
-                  data={donutData}
-                  cx="50%" cy="50%"
-                  innerRadius={60} outerRadius={90}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {donutData.map((_, i) => (
-                    <Cell key={i} fill={DONUT_COLORS[i]} strokeWidth={0} />
-                  ))}
-                </Pie>
-                <Tooltip content={<DonutTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="w-full flex-1 min-h-0">
+              <ResponsiveContainer width="100%" height={210}>
+                <PieChart>
+                  <Pie
+                    data={donutData}
+                    cx="50%" cy="50%"
+                    innerRadius={60} outerRadius={90}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {donutData.map((_, i) => (
+                      <Cell key={i} fill={DONUT_COLORS[i]} strokeWidth={0} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<DonutTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           )}
 
-          {/* Legend */}
-          <div className="flex items-center gap-5 mt-1">
+          {/* Legend pushed to bottom */}
+          <div className="flex items-center gap-5 mt-auto pt-3">
             {[
-              { label: 'In Stock',     color: 'bg-green-500' },
-              { label: 'Low Stock',    color: 'bg-amber-500' },
+              { label: 'In Stock', color: 'bg-green-500' },
+              { label: 'Low Stock', color: 'bg-amber-500' },
               { label: 'Out of Stock', color: 'bg-red-500' },
             ].map(({ label, color }) => (
               <div key={label} className="flex items-center gap-1.5">
@@ -338,7 +326,7 @@ const InventoryPage = () => {
         </div>
 
         {/* 6 stat cards */}
-        <div className="lg:col-span-3 grid grid-cols-2 gap-3">
+        <div className="lg:col-span-3 grid grid-cols-2 gap-3 content-start">
           <StatCard
             label="Total Network Stocks"
             value={fmtNum(stats?.totalOnHand)}
@@ -399,75 +387,90 @@ const InventoryPage = () => {
       {/* ── Table card ── */}
       <div className="card overflow-hidden">
 
-        {/* Search + controls row */}
-<div className="flex items-center justify-between gap-4 w-full">
+        <div className="flex items-center px-4 py-3 gap-4 w-full border-b border-slate-100">
 
-  {/* Search Input */}
-  <div className="relative w-64">
-    <Search
-      size={13}
-      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-    />
-    <input
-      type="text"
-      placeholder="Search Product Name, Dealer, SKU..."
-      value={searchInput}
-      onChange={(e) => setSearchInput(e.target.value)}
-      className="input pl-8 py-2 text-sm w-full"
-    />
-  </div>
-
-  {/* Tab Bar */}
-  <div className="flex items-center border-b border-slate-100 overflow-x-auto">
-    {STOCK_TABS.map((tab) => (
-      <button
-        key={tab.id}
-        onClick={() => switchTab(tab.id)}
-        className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-          stockTab === tab.id
-            ? 'border-primary-600 text-primary-600'
-            : 'border-transparent text-slate-500 hover:text-slate-800'
-        }`}
-      >
-        {tab.label}
-      </button>
-    ))}
-  </div>
-
-</div>
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
-          {/* Category select */}
-          <div className="relative">
-            <select
-              value={category}
-              onChange={(e) => { setCategory(e.target.value); setPage(1); }}
-              className="input w-36 py-2 text-sm appearance-none pr-7 cursor-pointer"
-            >
-              <option value="">Category</option>
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          {/* Search */}
+          <div className="relative flex-shrink-0">
+            <Search
+              size={13}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              placeholder="Search Product Name, Dealer, SKU..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="input pl-8 py-2 text-sm w-64"
+            />
           </div>
 
-          <div className="flex-1" />
+          {/* Tabs */}
+          <div className="flex items-center border-b border-slate-100 overflow-x-auto">
+            {STOCK_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => switchTab(tab.id)}
+                className={`px-5 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap ${stockTab === tab.id
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-            <Filter size={13} /> Saved Filters
-          </button>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            <Download size={13} /> Export
-          </button>
+          {/* Push right side */}
+          <div className="ml-auto flex items-center gap-3">
+
+            {/* Category */}
+            <div className="relative">
+              <select
+                value={category}
+                onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+                className={`input w-36 py-2 text-sm appearance-none pr-8 cursor-pointer ${!category ? 'text-slate-400' : 'text-slate-700'
+                  }`}
+              >
+                <option value="" disabled hidden>
+                  Select Category
+                </option>
+
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+
+              {/* Dropdown icon */}
+              <ChevronDown
+                size={12}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
+
+              {/* Clear icon */}
+              {category && (
+                <button
+                  onClick={() => { setCategory(''); setPage(1); }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100"
+                >
+                  <X size={12} className="text-slate-500" />
+                </button>
+              )}
+            </div>
+
+            {/* Export */}
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700"
+            >
+              <Download size={13} /> Export
+            </button>
+
+          </div>
         </div>
-
-      
 
         {/* Table header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
           <p className="text-sm font-semibold text-slate-800">Stock Details</p>
-          
         </div>
 
         {/* Table */}
@@ -496,13 +499,11 @@ const InventoryPage = () => {
                   </tr>
                 ) : list.map((item) => {
                   const prod = item.productId || {};
-                  const wh   = item.warehouseId || {};
-                  const loc  = [wh.address?.city, wh.address?.state].filter(Boolean).join(' • ');
+                  const wh = item.warehouseId || {};
+                  const loc = [wh.address?.city, wh.address?.state].filter(Boolean).join(' • ');
 
                   return (
                     <tr key={item._id} className="hover:bg-slate-50 transition-colors">
-
-                      {/* Product / SKU */}
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-slate-800 leading-snug">{prod.name || '—'}</p>
                         <p className="text-xs text-slate-400 mt-0.5">
@@ -510,45 +511,31 @@ const InventoryPage = () => {
                           {prod.category ? ` | Category: ${prod.category}` : ''}
                         </p>
                       </td>
-
-                      {/* Location */}
                       <td className="px-4 py-3.5">
                         <p className="text-slate-700 leading-snug">{wh.name || '—'}</p>
                         <p className="text-xs text-slate-400 mt-0.5">{loc || wh.code || ''}</p>
                       </td>
-
-                      {/* Available */}
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-slate-800">
                           {(item.currentStockQty ?? 0).toLocaleString('en-IN')}
                         </p>
                         {prod.unit && <p className="text-xs text-slate-400 mt-0.5">{prod.unit}</p>}
                       </td>
-
-                      {/* Allocated */}
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-slate-800">
                           {(item.quantityAllocated ?? 0).toLocaleString('en-IN')}
                         </p>
                         <p className="text-xs text-slate-400 mt-0.5">Reserved</p>
                       </td>
-
-                      {/* Total */}
                       <td className="px-4 py-3.5 font-semibold text-slate-800">
                         {(item.quantityOnHand ?? 0).toLocaleString('en-IN')}
                       </td>
-
-                      {/* Unit Price */}
                       <td className="px-4 py-3.5 font-semibold text-slate-800">
                         {fmtCurrency(prod.basePrice)}
                       </td>
-
-                      {/* Stock Status */}
                       <td className="px-4 py-3.5">
                         <StockChip item={item} />
                       </td>
-
-                      {/* Forecast & Demand */}
                       <td className="px-4 py-3.5 text-xs text-slate-500 max-w-[160px] leading-relaxed">
                         {forecastLabel(item)}
                       </td>
@@ -561,8 +548,6 @@ const InventoryPage = () => {
         )}
 
         <Pagination pagination={pagination} onPageChange={setPage} />
-
- 
       </div>
     </div>
   );

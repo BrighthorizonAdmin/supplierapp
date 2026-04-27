@@ -142,7 +142,7 @@ const AddMarketingLeadPage = () => {
       </div>
 
       {/* Body */}
-      <div className="max-w-6xl mx-auto px-6 py-6 grid grid-cols-3 gap-6">
+      <div className="max-w-8xl mx-auto px-6 py-6 grid grid-cols-3 gap-6">
 
         {/* LEFT: Business + Location */}
         <div className="col-span-2 space-y-6">

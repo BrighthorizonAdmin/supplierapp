@@ -532,7 +532,7 @@ const ProductFormPage = () => {
               const cur  = selected?.currentStockQty  ?? 0;
               const open = selected?.openingStockQty ?? 0;
               const status = cur <= 0
-                ? { label: 'No Stock',  cls: 'bg-red-100 text-red-700 border-red-200' }
+                ? { label: 'Out of Stock',  cls: 'bg-red-100 text-red-700 border-red-200' }
                 : open > 0 && cur < open * 0.2
                 ? { label: 'Low Stock', cls: 'bg-amber-100 text-amber-700 border-amber-200' }
                 : { label: 'In Stock',  cls: 'bg-green-100 text-green-700 border-green-200' };

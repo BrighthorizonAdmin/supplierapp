@@ -79,11 +79,10 @@ const ImageCarousel = ({ srcs, name }) => {
               <button
                 key={i}
                 onClick={(e) => { e.stopPropagation(); setIdx(i); }}
-                className={`rounded-full transition-all ${
-                  i === safeIdx
+                className={`rounded-full transition-all ${i === safeIdx
                     ? 'w-3 h-1.5 bg-white'
                     : 'w-1.5 h-1.5 bg-white/60 hover:bg-white/90'
-                }`}
+                  }`}
               />
             ))}
           </div>
@@ -106,19 +105,19 @@ const getStockStatus = (cur = 0, open = 0) => {
 };
 
 const StockBadge = ({ product }) => {
-  const cur  = product.currentStockQty ?? 0;
+  const cur = product.currentStockQty ?? 0;
   const open = product.openingStockQty ?? 0;
   const status = getStockStatus(cur, open);
 
-  const label = status === 'no-stock' ? 'No Stock' : status === 'low-stock' ? 'Low Stock' : 'In Stock';
-  const cls   = status === 'no-stock' ? 'badge-red' : status === 'low-stock' ? 'badge-yellow' : 'badge-green';
+  const label = status === 'no-stock' ? 'Out of Stock' : status === 'low-stock' ? 'Low Stock' : 'In Stock';
+  const cls = status === 'no-stock' ? 'badge-red' : status === 'low-stock' ? 'badge-yellow' : 'badge-green';
 
   return <span className={cls}>{label}</span>;
 };
 
 const ProductCard = ({ product, onEdit }) => {
   const srcs = getImageSrcs(product);
-  const cur  = product.currentStockQty ?? 0;
+  const cur = product.currentStockQty ?? 0;
   const open = product.openingStockQty ?? 0;
   const status = getStockStatus(cur, open);
 
@@ -126,18 +125,18 @@ const ProductCard = ({ product, onEdit }) => {
     <div className="card overflow-hidden group hover:shadow-md transition-shadow">
       {/* Image area */}
       <div className="relative bg-slate-100 h-44 flex items-center justify-center overflow-hidden">
-        <div className="absolute top-2 right-2 z-10">
-          <StockBadge product={product} />
-        </div>
-
         <ImageCarousel srcs={srcs} name={product.name} />
       </div>
 
       {/* Card body */}
       <div className="p-3">
-        <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest mb-1">
-          {product.category || 'GENERAL'}
-        </p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest">
+            {product.category || 'GENERAL'}
+          </p>
+
+          <StockBadge product={product} />
+        </div>
         <h3 className="font-bold text-slate-900 text-sm leading-snug mb-1 line-clamp-1">
           {product.name}
         </h3>
@@ -149,9 +148,8 @@ const ProductCard = ({ product, onEdit }) => {
 
         {/* Stock quantity row */}
         <div className="flex items-center gap-1.5 mb-3">
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-            status === 'in-stock' ? 'bg-green-500' : status === 'low-stock' ? 'bg-amber-400' : 'bg-red-500'
-          }`} />
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${status === 'in-stock' ? 'bg-green-500' : status === 'low-stock' ? 'bg-amber-400' : 'bg-red-500'
+            }`} />
           <span className="text-[11px] text-slate-500">
             {cur > 0
               ? <>{cur} <span className="text-slate-400">/ {open} units</span></>
@@ -185,8 +183,8 @@ const ProductListPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { list, categories, pagination, loading } = useSelector((s) => s.product);
- 
-  
+
+
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -211,9 +209,9 @@ const ProductListPage = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Product Catalog</h1>
         <div className="flex items-center gap-2">
-          <button className="btn-secondary flex items-center gap-2 text-sm py-2 px-4">
+          {/* <button className="btn-secondary flex items-center gap-2 text-sm py-2 px-4">
             <Upload size={14} /> Bulk Upload
-          </button>
+          </button> */}
           <button
             onClick={() => navigate('/products/new')}
             className="btn-primary flex items-center gap-2 text-sm py-2 px-4"

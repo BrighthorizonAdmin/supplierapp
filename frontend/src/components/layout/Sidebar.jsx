@@ -61,7 +61,7 @@ const Sidebar = () => {
         </div>
         {sidebarOpen && (
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white truncate leading-tight">Company Name</p>
+            <p className="text-sm font-bold text-black truncate leading-tight">Company Name</p>
             <p className="text-xs text-blue-600 truncate leading-tight">{`Supplier ${Array.isArray(user.role) ? user.role.join(', ') : user.role} Portal`}</p>
           </div>
         )}
@@ -132,11 +132,14 @@ const Sidebar = () => {
         {sidebarOpen && (
           <>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate leading-tight">
+              <p className="text-xs font-semibold text-blue-600 truncate leading-tight">
                 {user?.name || 'Supplier User'}
               </p>
-              <p className="text-xs text-blue-300 truncate leading-tight capitalize">
-                {Array.isArray(user?.role) ? user.role.join(', ') : (user?.role || 'User')}
+              <p
+                onClick={handleLogout}
+                className="text-xs text-gray-500 cursor-pointer hover:text-red-500 transition-colors"
+              >
+                Sign out
               </p>
             </div>
             <button
