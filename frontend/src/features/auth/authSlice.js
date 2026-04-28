@@ -55,17 +55,28 @@ const authSlice = createSlice({
       .addCase(login.fulfilled, (state, action) => {
   state.loading = false;
 
-  const { user, permissions, isFirstLogin } = action.payload;
+  const { user, permissions, isFirstLogin, lowStockCount, outOfStockCount } = action.payload;
 
   state.user = user;
   state.token = action.payload.token;
   state.isAuthenticated = true;
   state.permissions = permissions;
-  state.isFirstLogin = isFirstLogin; // ✅ IMPORTANT
+  state.isFirstLogin = isFirstLogin;
   localStorage.setItem('user', JSON.stringify(user));
   localStorage.setItem('permissions', JSON.stringify(permissions));
 
   toast.success('Welcome back!');
+
+  const total = (lowStockCount || 0) + (outOfStockCount || 0);
+  if (total > 0) {
+    const parts = [];
+    if (lowStockCount > 0) parts.push(`${lowStockCount} low-stock`);
+    if (outOfStockCount > 0) parts.push(`${outOfStockCount} out-of-stock`);
+    toast(`⚠️ ${parts.join(' and ')} product${total !== 1 ? 's' : ''} need attention!`, {
+      duration: 8000,
+      style: { background: '#f59e0b', color: '#fff', fontWeight: '600' },
+    });
+  }
 })
       .addCase(login.rejected, (state, action) => {
         state.loading = false;

@@ -6,6 +6,7 @@ const notificationService = require('../notifications/notification.service');
 const { emitToRole, emitToAll } = require('../../websocket/socket');
 const { DEALER_APPLICATION, DEALER_APPROVED, DEALER_REJECTED, DEALER_SUSPENDED } = require('../../websocket/events');
 const axios = require('axios');
+const { generateRandomPassword, sendDealerApprovalEmail } = require('../../utils/mailer');
 
 const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5001';
 
@@ -124,14 +125,30 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => 
 
   const before = { status: dealer.status, creditLimit: dealer.creditLimit, pricingTier: dealer.pricingTier };
 
+  // Generate password BEFORE save so the pre-save hook hashes it
+  const randomPassword = generateRandomPassword();
+
   dealer.status = 'active';
   dealer.kycStatus = 'verified';
   dealer.creditLimit = creditLimit || 0;
   dealer.pricingTier = pricingTier || 'standard';
   dealer.approvedBy = userId;
   dealer.approvedAt = new Date();
+  dealer.password = randomPassword; // pre-save hook will hash this
 
   await dealer.save();
+
+  // Send the plain-text password to the dealer's email
+  try {
+    await sendDealerApprovalEmail({
+      to: dealer.email,
+      businessName: dealer.businessName,
+      password: randomPassword,
+    });
+    console.log(`[DealerApprove] Approval email sent to ${dealer.email}`);
+  } catch (err) {
+    console.error('[DealerApprove] Failed to send approval email:', err.message);
+  }
 
   await auditService.log('dealer', dealerId, 'approve', userId, {
     before,
@@ -143,7 +160,8 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => 
 
   await syncToDealerApp(dealer.applicationId, 'APPROVE');
 
-  return dealer;
+  // Return plain object; tempPassword is exposed once here (not stored in response elsewhere)
+  return { ...dealer.toJSON(), tempPassword: randomPassword };
 };
 
 const rejectDealer = async (dealerId, reason, userId) => {

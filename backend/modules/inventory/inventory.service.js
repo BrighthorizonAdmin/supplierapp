@@ -1,3 +1,4 @@
+const axios = require('axios');
 const Inventory = require('./model/Inventory.model');
 const Warehouse = require('./model/Warehouse.model');
 const Product = require('../products/model/Product.model');
@@ -6,6 +7,28 @@ const { getPagination, buildMeta } = require('../../utils/pagination');
 const auditService = require('../audit/audit.service');
 const { emitToRole } = require('../../websocket/socket');
 const { LOW_STOCK_ALERT } = require('../../websocket/events');
+const logger = require('../../utils/logger');
+
+const pushStockAlertToDealers = async (productId, quantityAvailable, reorderLevel) => {
+  const dealerApiUrl = process.env.DEALER_API_URL;
+  const dealerApiKey = process.env.DEALER_WEBHOOK_SECRET;
+  if (!dealerApiUrl || !dealerApiKey) return;
+
+  try {
+    const product = await Product.findById(productId).select('name productCode').lean();
+    if (!product) return;
+
+    const alertType = quantityAvailable <= 0 ? 'out-of-stock' : 'low-stock';
+    await axios.post(
+      `${dealerApiUrl}/api/notifications/supplier/stock-alert`,
+      { productId, productName: product.name, productCode: product.productCode, alertType, quantityAvailable, reorderLevel },
+      { headers: { 'Content-Type': 'application/json', 'x-api-key': dealerApiKey }, timeout: 5000 }
+    );
+  } catch (err) {
+    logger.error('[InventoryService] Failed to push stock alert to dealer backend:', err.message);
+  }
+};
+
 
 const getOrCreateInventory = async (productId, warehouseId, session = null) => {
   const opts = session ? { session } : {};
@@ -36,8 +59,8 @@ const adjustStock = async (productId, warehouseId, quantity, type = 'add', userI
 
   if (!inv) throw new AppError('Insufficient stock for this operation', 400);
 
-  // Low stock check
-  if (inv.quantityAvailable <= inv.reorderLevel) {
+  // Low-stock / out-of-stock check — only relevant when stock is reduced
+  if (type === 'remove' && inv.quantityAvailable <= inv.reorderLevel) {
     try {
       emitToRole('inventory-manager', LOW_STOCK_ALERT, {
         productId,
@@ -46,6 +69,9 @@ const adjustStock = async (productId, warehouseId, quantity, type = 'add', userI
         reorderLevel: inv.reorderLevel,
       });
     } catch {}
+
+    // Push alert to dealer app (non-blocking, deduped on dealer side per 24 h)
+    pushStockAlertToDealers(productId, inv.quantityAvailable, inv.reorderLevel);
   }
 
   await auditService.log('inventory', inv._id, 'update', userId, {

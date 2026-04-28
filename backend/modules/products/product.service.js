@@ -1,9 +1,15 @@
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const Product = require('./model/Product.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const auditService = require('../audit/audit.service');
+const notificationService = require('../notifications/notification.service');
+const User = require('../auth/model/User.model');
+const { emitToRole } = require('../../websocket/socket');
+const { PRODUCT_CREATED, PRODUCT_UPDATED } = require('../../websocket/events');
+const logger = require('../../utils/logger');
 
 // Recompute image url from filePath so the full server URL is always returned,
 // regardless of what was stored (handles legacy records missing the base URL).
@@ -19,6 +25,58 @@ const withResolvedImages = (product) => {
   return { ...product, images: (product.images || []).map(resolveImageUrl) };
 };
 
+const notifyDealersAboutProduct = async (product, action) => {
+  try {
+    const title = action === 'created' ? 'New product available' : 'Product updated';
+    const message = action === 'created'
+      ? `${product.name} is now available for dealers.`
+      : `${product.name} has been updated.`;
+
+    const event = action === 'created' ? PRODUCT_CREATED : PRODUCT_UPDATED;
+    emitToRole('dealer', event, {
+      productId: product._id,
+      name: product.name,
+      productCode: product.productCode,
+      category: product.category,
+      brand: product.brand,
+      basePrice: product.basePrice,
+      isActive: product.isActive,
+    });
+
+    const dealerUsers = await User.find({ role: 'dealer', isActive: true }).select('_id').lean();
+    await Promise.all(dealerUsers.map(({ _id }) => notificationService.create({
+      recipientId: _id,
+      title,
+      message,
+      type: 'info',
+      relatedEntity: { entityType: 'Product', entityId: product._id },
+      createdBy: product.createdBy || undefined,
+    })));
+
+    const dealerApiUrl = process.env.DEALER_API_URL;
+    const dealerApiKey = process.env.DEALER_WEBHOOK_SECRET;
+    if (dealerApiUrl && dealerApiKey) {
+      await axios.post(
+        `${dealerApiUrl}/api/notifications/supplier/product-update`,
+        {
+          productId: product._id,
+          productName: product.name,
+          action,
+          category: product.category,
+          brand: product.brand,
+          basePrice: product.basePrice,
+        },
+        {
+          headers: { 'Content-Type': 'application/json', 'x-api-key': dealerApiKey },
+          timeout: 5000,
+        }
+      ).catch(err => logger.error('[ProductService] Failed to push product notification to dealer backend', err.message));
+    }
+  } catch (err) {
+    logger.error('[ProductService] notifyDealersAboutProduct failed', err);
+  }
+};
+
 const createProduct = async (data, userId) => {
   // Seed currentStockQty from openingStockQty so live stock starts at the opening value
   const payload = { ...data, createdBy: userId };
@@ -27,6 +85,7 @@ const createProduct = async (data, userId) => {
   }
   const product = await Product.create(payload);
   await auditService.log('product', product._id, 'create', userId, { after: { name: product.name, productCode: product.productCode } });
+  await notifyDealersAboutProduct(product, 'created');
   return product;
 };
 
@@ -72,6 +131,7 @@ const updateProduct = async (id, updates, userId) => {
   await product.save();
 
   await auditService.log('product', id, 'update', userId, { before, after: safeUpdates });
+  await notifyDealersAboutProduct(product, 'updated');
   return product;
 };
 
