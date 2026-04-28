@@ -75,7 +75,55 @@ const login = async (email, password, meta = {}) => {
 
   const permissions = await getPermissionsForRole(user.role);
   const token = signToken(user, permissions);
-  return { user, token, permissions, isFirstLogin };
+
+  // Low-stock check on every login — non-blocking
+  let lowStockCount = 0;
+  let outOfStockCount = 0;
+  try {
+    const Product = require('../products/model/Product.model');
+    [lowStockCount, outOfStockCount] = await Promise.all([
+      Product.countDocuments({
+        isActive: true,
+        currentStockQty: { $gt: 0 },
+        $expr: { $lt: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.2] }] },
+      }),
+      Product.countDocuments({ isActive: true, currentStockQty: { $lte: 0 } }),
+    ]);
+
+    const total = lowStockCount + outOfStockCount;
+    if (total > 0) {
+      const notificationService = require('../notifications/notification.service');
+      const Notification = require('../notifications/model/Notification.model');
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      // Create at most one low-stock alert per user per day
+      const alreadyAlerted = await Notification.exists({
+        recipientId: user._id,
+        type: 'warning',
+        isRead: false,
+        createdAt: { $gte: todayStart },
+        title: 'Low Stock Alert',
+      });
+
+      if (!alreadyAlerted) {
+        const parts = [];
+        if (lowStockCount > 0) parts.push(`${lowStockCount} low-stock`);
+        if (outOfStockCount > 0) parts.push(`${outOfStockCount} out-of-stock`);
+        await notificationService.create({
+          recipientId: user._id,
+          title: 'Low Stock Alert',
+          message: `${parts.join(' and ')} product${total !== 1 ? 's' : ''} need attention. Review your inventory.`,
+          type: 'warning',
+          relatedEntity: { entityType: 'Inventory', entityId: user._id },
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[Auth] Low-stock check failed:', err.message);
+  }
+
+  return { user, token, permissions, isFirstLogin, lowStockCount, outOfStockCount };
 };
 
 const getMe = async (userId) => {

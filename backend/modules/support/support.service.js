@@ -1,7 +1,7 @@
-const SupportTicket      = require('./model/SupportTicket.model');
+const SupportTicket = require('./model/SupportTicket.model');
 const notificationService = require('../notifications/notification.service');
 const { getPagination, buildMeta } = require('../../utils/pagination');
-const axios  = require('axios');
+const axios = require('axios');
 
 // NOTE: DEALER_API_URL and DEALER_WEBHOOK_SECRET are intentionally read from
 // process.env inside the function — not captured as module-level constants —
@@ -9,7 +9,7 @@ const axios  = require('axios');
 
 // Notify dealer backend when supplier updates a ticket
 async function notifyDealerBackend(dbeId, type, status, adminNotes, priority, resolvedAt) {
-  const DEALER_API_URL        = process.env.DEALER_API_URL;
+  const DEALER_API_URL = process.env.DEALER_API_URL;
   const DEALER_WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET || '';
 
   if (!DEALER_API_URL) {
@@ -38,13 +38,13 @@ const getAll = async (query = {}) => {
   const { page, limit, skip } = getPagination(query);
   const filter = {};
   if (query.status) filter.status = query.status;
-  if (query.type)   filter.type   = query.type;
+  if (query.type) filter.type = query.type;
   if (query.search) {
     filter.$or = [
       { ticketNumber: { $regex: query.search, $options: 'i' } },
-      { dealerName:   { $regex: query.search, $options: 'i' } },
-      { message:      { $regex: query.search, $options: 'i' } },
-      { description:  { $regex: query.search, $options: 'i' } },
+      { dealerName: { $regex: query.search, $options: 'i' } },
+      { message: { $regex: query.search, $options: 'i' } },
+      { description: { $regex: query.search, $options: 'i' } },
     ];
   }
 
@@ -71,10 +71,10 @@ const updateStatus = async (id, { status, adminNotes, priority, assignedTo }, up
   if (!ticket) throw Object.assign(new Error('Ticket not found'), { statusCode: 404 });
 
   const prevStatus = ticket.status;
-  if (status)                   ticket.status     = status;
+  if (status) ticket.status = status;
   if (adminNotes !== undefined) ticket.adminNotes = adminNotes;
-  if (priority)                 ticket.priority   = priority;
-  if (assignedTo)               ticket.assignedTo = assignedTo;
+  if (priority) ticket.priority = priority;
+  if (assignedTo) ticket.assignedTo = assignedTo;
   if (status === 'RESOLVED' || status === 'CLOSED') ticket.resolvedAt = new Date();
   await ticket.save();
 
@@ -150,6 +150,7 @@ const createFromWebhook = async (data, type) => {
   try {
     const User = require('../auth/model/User.model');
     const admins = await User.find({ isActive: true }).lean();
+    console.log('👥 Admins:', admins.length);
     for (const admin of admins) {
       await notificationService.create({
         recipientId: admin._id,
@@ -163,5 +164,4 @@ const createFromWebhook = async (data, type) => {
 
   return ticket;
 };
-
 module.exports = { getAll, getById, updateStatus, createFromWebhook };

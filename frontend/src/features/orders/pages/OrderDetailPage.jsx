@@ -312,12 +312,16 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
               </button>
             </>
           )}
-          <button type='button' onClick={handlePrint} className="btn-secondary flex items-center gap-1.5 text-sm">
-            <Printer size={14} /> Print
-          </button>
-          <button type='button' onClick={handleInvoice} className="btn-danger flex items-center gap-1.5 text-sm">
-            <FileText size={14} /> Invoice
-          </button>
+          {!['draft', 'pending'].includes(order.status) && (
+            <>
+              <button type='button' onClick={handlePrint} className="btn-secondary flex items-center gap-1.5 text-sm">
+                <Printer size={14} /> Print
+              </button>
+              <button type='button' onClick={handleInvoice} className="btn-danger flex items-center gap-1.5 text-sm">
+                <FileText size={14} /> Invoice
+              </button>
+            </>
+          )}
         </div>
       </div>
 

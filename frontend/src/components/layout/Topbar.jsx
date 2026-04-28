@@ -26,6 +26,7 @@ const TYPE_COLORS = {
   payment: 'bg-green-100 text-green-700',
   dealer: 'bg-purple-100 text-purple-700',
   inventory: 'bg-orange-100 text-orange-700',
+  warning: 'bg-yellow-100 text-yellow-700',
   return: 'bg-red-100 text-red-700',
   default: 'bg-slate-100 text-slate-600',
 };
@@ -33,9 +34,11 @@ const TYPE_COLORS = {
 const getNotificationRoute = (n) => {
   const entityType = n.relatedEntity?.entityType?.toLowerCase();
   const type = n.type?.toLowerCase();
+  if (entityType === 'inventory' || type === 'warning') return '/inventory';
   if (entityType === 'supportticket' || entityType === 'support_ticket' || type === 'info' || type === 'support') return '/support';
   if (entityType === 'dealer' || type === 'dealer') return '/onboarding';
-  if (entityType === 'Order' || type === 'order') return '/orders';
+  if (entityType === 'order' || type === 'order') return '/orders';
+  if (entityType === 'invoice' || type === 'payment') return '/invoices';
   return null;
 };
  

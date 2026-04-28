@@ -8,6 +8,8 @@ module.exports = {
   PAYMENT_CONFIRMED: 'payment:confirmed',
   RETURN_PROCESSED: 'return:processed',
   LOW_STOCK_ALERT: 'inventory:low_stock',
+  PRODUCT_CREATED: 'product:created',
+  PRODUCT_UPDATED: 'product:updated',
   NEW_NOTIFICATION: 'notification:new',
   KPI_UPDATE: 'dashboard:kpi_update',
   INVOICE_OVERDUE: 'invoice:overdue',

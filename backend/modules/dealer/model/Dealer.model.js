@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const addressSchema = new mongoose.Schema(
   {
@@ -167,6 +168,11 @@ const dealerSchema = new mongoose.Schema(
     updateRequestedFields: [{ type: String }],
     // Timestamp of dealer's last resubmission after an update request
     lastResubmittedAt: { type: Date },
+    // Auto-set on approval — hashed with bcrypt, never returned in API responses
+    password: {
+      type: String,
+      select: false,
+    },
   },
   {
     timestamps: true,
@@ -187,6 +193,23 @@ dealerSchema.pre('save', async function () {
   const { generateCode } = require('../../../utils/autoCode');
   this.dealerCode = await generateCode(this.constructor, 'DLR', 'dealerCode', 'yyyyMM');
 });
+
+// Hash password whenever it is set/changed
+dealerSchema.pre('save', async function () {
+  if (!this.isModified('password') || !this.password) return;
+  this.password = await bcrypt.hash(this.password, 12);
+});
+
+dealerSchema.methods.comparePassword = async function (candidate) {
+  return bcrypt.compare(candidate, this.password);
+};
+
+// Never expose the hashed password in API responses
+dealerSchema.methods.toJSON = function () {
+  const obj = this.toObject({ virtuals: true });
+  delete obj.password;
+  return obj;
+};
 
 dealerSchema.index({ gstNumber: 1 }, { unique: true });
 dealerSchema.index({ panNumber: 1 }, { unique: true });

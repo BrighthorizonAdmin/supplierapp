@@ -128,6 +128,25 @@ router.post('/dealer-retail-invoice', async (req, res) => {
     }
 
     console.log(`[Webhook] Retail invoice synced: ${invoice.invoiceNumber} for dealer: ${dealerName}`);
+
+    // Notify all active supplier admins about the new retail sale invoice
+    try {
+      const User = require('../auth/model/User.model');
+      const admins = await User.find({ isActive: true }).lean();
+      const itemCount = Array.isArray(items) ? items.length : 0;
+      for (const admin of admins) {
+        await notificationService.create({
+          recipientId: admin._id,
+          title:       `Retail Sale Invoice: ${invoice.invoiceNumber}`,
+          message:     `${dealerName || 'A dealer'} generated a retail sale of ₹${totalAmount} (${itemCount} item${itemCount !== 1 ? 's' : ''}) to ${customerName}`,
+          type:        'payment',
+          relatedEntity: { entityType: 'Invoice', entityId: invoice._id },
+        });
+      }
+    } catch (notifErr) {
+      console.error('[Webhook] retail-invoice notification failed:', notifErr.message);
+    }
+
     return res.status(201).json({ success: true, data: invoice });
 
   } catch (err) {
@@ -419,6 +438,53 @@ router.post('/dealer-return-cancel', async (req, res) => {
     return res.json({ success: true, data: updated });
   } catch (err) {
     console.error('[Webhook] dealer-return-cancel error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
+// POST /api/webhooks/low-stock-after-order
+// Called by D-BE after an order is confirmed and some ordered products are
+// found to be low-stock or out-of-stock. Notifies all supplier admins.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/low-stock-after-order', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { orderNumber, lowStockItems } = req.body;
+    if (!Array.isArray(lowStockItems) || lowStockItems.length === 0) {
+      return res.json({ success: true, message: 'No low-stock items' });
+    }
+
+    try {
+      const User = require('../auth/model/User.model');
+      const admins = await User.find({ isActive: true }).lean();
+      const names  = lowStockItems.map(i => i.productName).join(', ');
+      const outCount = lowStockItems.filter(i => i.alertType === 'out-of-stock').length;
+      const lowCount = lowStockItems.filter(i => i.alertType === 'low-stock').length;
+      const parts = [];
+      if (outCount) parts.push(`${outCount} out-of-stock`);
+      if (lowCount) parts.push(`${lowCount} low-stock`);
+
+      for (const admin of admins) {
+        await notificationService.create({
+          recipientId: admin._id,
+          title:       `Stock Alert after Order #${orderNumber}`,
+          message:     `${parts.join(' and ')} product(s) need attention: ${names}`,
+          type:        'warning',
+          relatedEntity: { entityType: 'Order', entityId: orderNumber },
+        });
+      }
+      console.log(`[Webhook] low-stock-after-order — notified ${admins.length} admin(s) for order ${orderNumber}`);
+    } catch (notifErr) {
+      console.error('[Webhook] low-stock-after-order notification failed:', notifErr.message);
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[Webhook] low-stock-after-order error:', err.message);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
