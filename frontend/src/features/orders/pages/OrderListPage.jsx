@@ -505,9 +505,16 @@ const filteredOrders = useMemo(() => {
                     <td className="px-4 py-3.5">
                       <button
                         onClick={() => navigate(`/orders/${order._id}`)}
-                        className="font-semibold text-slate-800 hover:text-primary-600 transition-colors"
+                        className="text-left"
                       >
-                        Order #{order.orderNumber?.slice(-4) || order._id?.slice(-4)}
+                        <p className="font-semibold text-slate-800 hover:text-primary-600 transition-colors">
+                          {order.orderNumber}
+                        </p>
+                        {order.dealerOrderNumber && (
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Dealer: {order.dealerOrderNumber}
+                          </p>
+                        )}
                       </button>
                     </td>
 

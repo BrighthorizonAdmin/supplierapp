@@ -87,7 +87,7 @@ const dealerSchema = new mongoose.Schema(
     businessType: {
       type: String,
       enum: {
-        values: ['retailer', 'wholesaler', 'distributor'],
+        values: ['dealer','retailer', 'wholesaler', 'distributor'],
         message: '{VALUE} is not a valid business type',
       },
       required: [true, 'Business type is required'],

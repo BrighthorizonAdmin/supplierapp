@@ -56,6 +56,7 @@ const getInvoices = async (query = {}) => {
     match.status = { $in: ['issued', 'partial'] };
     match.dueDate = { $lt: new Date() };
   }
+  match.invoiceType = match.invoiceType || { $in: ['b2b', 'retail'] };
   const [data, total] = await Promise.all([
     Invoice.find(match)
       .populate('dealerId', 'businessName dealerCode')
@@ -201,4 +202,3 @@ const deleteInvoice = async (id) => {
 };
 
 module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, issueInvoice, cancelInvoice, deleteInvoice };
-
