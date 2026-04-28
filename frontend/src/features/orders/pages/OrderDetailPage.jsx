@@ -13,11 +13,11 @@ const STATUS_RANK = {
 };
 
 const PROGRESS_STEPS = [
-  { label: 'Confirm',          status: 'confirmed',        Icon: CheckCircle },
-  { label: 'Mark Processing',  status: 'processing',       Icon: Package     },
-  { label: 'Mark Shipped',     status: 'shipped',          Icon: Truck       },
-  { label: 'Out for Delivery', status: 'out_for_delivery', Icon: MapPin      },
-  { label: 'Mark Delivered',   status: 'delivered',        Icon: CheckCheck  },
+  { label: 'Confirm', status: 'confirmed', Icon: CheckCircle },
+  { label: 'Mark Processing', status: 'processing', Icon: Package },
+  { label: 'Mark Shipped', status: 'shipped', Icon: Truck },
+  { label: 'Out for Delivery', status: 'out_for_delivery', Icon: MapPin },
+  { label: 'Mark Delivered', status: 'delivered', Icon: CheckCheck },
 ];
 
 const fmt = (n) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`;
@@ -39,8 +39,8 @@ const OrderProgress = ({ order, onStatusUpdate, loading }) => {
 
         {PROGRESS_STEPS.map((step) => {
           const stepRank = STATUS_RANK[step.status];
-          const done     = currentRank >= stepRank;
-          const isNext   = stepRank === currentRank + 1;
+          const done = currentRank >= stepRank;
+          const isNext = stepRank === currentRank + 1;
           const { Icon } = step;
 
           return (
@@ -54,8 +54,8 @@ const OrderProgress = ({ order, onStatusUpdate, loading }) => {
                   done
                     ? 'bg-green-500 border-green-500 text-white'
                     : isNext
-                    ? 'bg-white border-green-400 text-green-600 hover:bg-green-50 cursor-pointer'
-                    : 'bg-white border-slate-200 text-slate-300 cursor-default',
+                      ? 'bg-white border-green-400 text-green-600 hover:bg-green-50 cursor-pointer'
+                      : 'bg-white border-slate-200 text-slate-300 cursor-default',
                 ].join(' ')}
               >
                 <Icon size={17} strokeWidth={2.2} />
@@ -79,11 +79,11 @@ const OrderProgress = ({ order, onStatusUpdate, loading }) => {
 };
 
 const OrderDetailPage = () => {
-  const { id }       = useParams();
-  const dispatch     = useDispatch();
-  const navigate     = useNavigate();
+  const { id } = useParams();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { selected: order, loading } = useSelector((s) => s.order);
-  const [attempted, setAttempted]         = useState(false);
+  const [attempted, setAttempted] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
 
   const handlePrint = () => {
@@ -118,70 +118,70 @@ const OrderDetailPage = () => {
 </style>
 </head><body>
 <div class="header">
-  <div>
-    <div class="order-title">Order ${order.orderNumber || `#${order._id?.slice(-6).toUpperCase()}`}</div>
-    <div style="color:#666;font-size:12px;margin-top:4px;">Placed on ${format(new Date(order.createdAt), 'dd MMM yyyy')}</div>
-    <span class="badge">${(order.status || '').replace(/_/g, ' ')}</span>
-  </div>
-  <div style="text-align:right;font-size:11px;color:#888;">Printed on ${format(new Date(), 'dd MMM yyyy, hh:mm a')}</div>
+<div>
+<div class="order-title">Order ${order.orderNumber || `#${order._id?.slice(-6).toUpperCase()}`}</div>
+<div style="color:#666;font-size:12px;margin-top:4px;">Placed on ${format(new Date(order.createdAt), 'dd MMM yyyy')}</div>
+<span class="badge">${(order.status || '').replace(/_/g, ' ')}</span>
 </div>
-
+<div style="text-align:right;font-size:11px;color:#888;">Printed on ${format(new Date(), 'dd MMM yyyy, hh:mm a')}</div>
+</div>
+ 
 <div class="grid2">
-  <div>
-    <div class="section-title">Customer Details</div>
-    <div class="label">Name</div><div class="value">${order.dealerId?.businessName || order.dealerId?.name || '—'}</div>
-    <div class="label">Email</div><div class="value">${order.dealerId?.email || order.email || '—'}</div>
-    <div class="label">Phone</div><div class="value">${order.dealerId?.phone || order.phone || '—'}</div>
-    <div class="label">Shipping Address</div>
-    <div class="value">${[order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode, order.deliveryAddress?.country].filter(Boolean).join(', ') || order.dealerId?.address || '—'}</div>
-  </div>
-  <div>
-    <div class="section-title">Payment & Shipping</div>
-    <div class="label">Payment Status</div><div class="value">${order.paymentStatus || 'Pending'}</div>
-    <div class="label">Payment Method</div><div class="value">${order.paymentMethod || 'Credit Card'}</div>
-    <div class="label">Credit Terms</div><div class="value">${order.paymentTerms || 'Net 30'}</div>
-    <div class="label">Carrier</div><div class="value">${order.shippingMethod || order.deliveryMethod || '—'}</div>
-    <div class="label">Tracking No.</div><div class="value">${order.trackingNumber || 'Pending'}</div>
-  </div>
+<div>
+<div class="section-title">Customer Details</div>
+<div class="label">Name</div><div class="value">${order.dealerId?.businessName || order.dealerId?.name || '—'}</div>
+<div class="label">Email</div><div class="value">${order.dealerId?.email || order.email || '—'}</div>
+<div class="label">Phone</div><div class="value">${order.dealerId?.phone || order.phone || '—'}</div>
+<div class="label">Shipping Address</div>
+<div class="value">${[order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode, order.deliveryAddress?.country].filter(Boolean).join(', ') || order.dealerId?.address || '—'}</div>
 </div>
-
+<div>
+<div class="section-title">Payment & Shipping</div>
+<div class="label">Payment Status</div><div class="value">${order.paymentStatus || 'Pending'}</div>
+<div class="label">Payment Method</div><div class="value">${order.paymentMethod || 'Credit Card'}</div>
+<div class="label">Credit Terms</div><div class="value">${order.paymentTerms || 'Net 30'}</div>
+<div class="label">Carrier</div><div class="value">${order.shippingMethod || order.deliveryMethod || '—'}</div>
+<div class="label">Tracking No.</div><div class="value">${order.trackingNumber || 'Pending'}</div>
+</div>
+</div>
+ 
 <div class="section-title">Order Items</div>
 <table>
-  <thead>
-    <tr>
-      <th>Product</th>
-      <th>SKU</th>
-      <th class="text-center">Qty</th>
-      <th class="text-right">Unit Price</th>
-      <th class="text-right">Line Total</th>
-    </tr>
-  </thead>
-  <tbody>
+<thead>
+<tr>
+<th>Product</th>
+<th>SKU</th>
+<th class="text-center">Qty</th>
+<th class="text-right">Unit Price</th>
+<th class="text-right">Line Total</th>
+</tr>
+</thead>
+<tbody>
     ${(order.items || []).map(item => `
-    <tr>
-      <td><strong>${item.productName || item.name || '—'}</strong></td>
-      <td style="color:#666">${item.sku || '—'}</td>
-      <td class="text-center">${item.quantity}</td>
-      <td class="text-right">₹${(item.unitPrice || 0).toLocaleString('en-IN')}</td>
-      <td class="text-right"><strong>₹${(item.lineTotal || 0).toLocaleString('en-IN')}</strong></td>
-    </tr>`).join('')}
-  </tbody>
+<tr>
+<td><strong>${item.productName || item.name || '—'}</strong></td>
+<td style="color:#666">${item.sku || '—'}</td>
+<td class="text-center">${item.quantity}</td>
+<td class="text-right">₹${(item.unitPrice || 0).toLocaleString('en-IN')}</td>
+<td class="text-right"><strong>₹${(item.lineTotal || 0).toLocaleString('en-IN')}</strong></td>
+</tr>`).join('')}
+</tbody>
 </table>
-
+ 
 <div class="totals-wrap">
-  <table class="totals-table">
-    <tbody>
-      <tr><td style="color:#666">Subtotal</td><td>₹${(order.subtotal || 0).toLocaleString('en-IN')}</td></tr>
-      <tr><td style="color:#666">Tax</td><td>₹${(order.taxAmount || 0).toLocaleString('en-IN')}</td></tr>
-      <tr><td style="color:#666">Shipping</td><td>₹${(order.shippingAmount || 0).toLocaleString('en-IN')}</td></tr>
-      <tr class="total-final"><td>Total</td><td>₹${(order.netAmount || (order.subtotal || 0) + (order.taxAmount || 0) + (order.shippingAmount || 0)).toLocaleString('en-IN')}</td></tr>
-    </tbody>
-  </table>
+<table class="totals-table">
+<tbody>
+<tr><td style="color:#666">Subtotal</td><td>₹${(order.subtotal || 0).toLocaleString('en-IN')}</td></tr>
+<tr><td style="color:#666">Tax</td><td>₹${(order.taxAmount || 0).toLocaleString('en-IN')}</td></tr>
+<tr><td style="color:#666">Shipping</td><td>₹${(order.shippingAmount || 0).toLocaleString('en-IN')}</td></tr>
+<tr class="total-final"><td>Total</td><td>₹${(order.netAmount || (order.subtotal || 0) + (order.taxAmount || 0) + (order.shippingAmount || 0)).toLocaleString('en-IN')}</td></tr>
+</tbody>
+</table>
 </div>
-
+ 
 ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{ label: 'Confirmed', value: order.confirmedAt }] : []), ...(order.shippedAt ? [{ label: 'Shipped', value: order.shippedAt }] : []), ...(order.deliveredAt ? [{ label: 'Delivered', value: order.deliveredAt }] : [])].map(e => `
 <div class="timeline-item"><div class="dot"></div><div><strong>${e.label}:</strong> ${format(new Date(e.value), 'dd MMM yyyy, hh:mm a')}</div></div>`).join('')}
-
+ 
 <div class="footer">This is a system-generated order summary.</div>
 <script>window.onload=function(){setTimeout(function(){window.print();window.close();},300);};<\/script>
 </body></html>`;
@@ -259,23 +259,23 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
   }
   if (!order) return null;
 
-  const items    = order.items || [];
+  const items = order.items || [];
   const subtotal = order.subtotal || 0;
-  const tax      = order.taxAmount || 0;
+  const tax = order.taxAmount || 0;
   const shipping = order.shippingCost || 0;
-  const total    = order.netAmount || (subtotal + tax + shipping);
-  const dealer   = order.dealerId || {};
-  const addr     = order.deliveryAddress || {};
+  const total = order.netAmount || (subtotal + tax + shipping);
+  const dealer = order.dealerId || {};
+  const addr = order.deliveryAddress || {};
   const timeline = order.timeline || [];
 
   const statusColor =
-    order.status === 'delivered'        ? 'bg-green-100 text-green-700'  :
-    order.status === 'cancelled'        ? 'bg-red-100 text-red-700'      :
-    order.status === 'shipped'          ? 'bg-blue-100 text-blue-700'    :
-    order.status === 'out_for_delivery' ? 'bg-purple-100 text-purple-700':
-    order.status === 'confirmed'        ? 'bg-teal-100 text-teal-700'    :
-    order.status === 'processing'       ? 'bg-amber-100 text-amber-700'  :
-    'bg-yellow-100 text-yellow-700';
+    order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+      order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+        order.status === 'shipped' ? 'bg-blue-100 text-blue-700' :
+          order.status === 'out_for_delivery' ? 'bg-purple-100 text-purple-700' :
+            order.status === 'confirmed' ? 'bg-teal-100 text-teal-700' :
+              order.status === 'processing' ? 'bg-amber-100 text-amber-700' :
+                'bg-yellow-100 text-yellow-700';
 
   return (
     <div>
@@ -286,7 +286,12 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
             <ArrowLeft size={20} />
           </button>
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-slate-900">Order #{order.orderNumber}</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{order.orderNumber}</h1>
+            {order.dealerOrderNumber && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                Dealer Order: <span className="font-medium text-slate-600">{order.dealerOrderNumber}</span>
+              </p>
+            )}
             <p className="text-sm text-slate-500 mt-0.5">
               Placed on {format(new Date(order.createdAt), 'MMM dd, yyyy')}
             </p>
@@ -437,14 +442,20 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
                   <CreditCard size={14} className="text-slate-400" />
                   <span>Payment Status</span>
                 </div>
-                <span className={`badge ${['paid','completed'].includes(order.paymentStatus) ? 'badge-green' : 'badge-yellow'}`}>
+                <span className={`badge ${['paid', 'completed'].includes(order.paymentStatus) ? 'badge-green' : 'badge-yellow'}`}>
                   {order.paymentStatus || 'Pending'}
                 </span>
               </div>
-              {order.paymentMethod && (
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  {order.paymentMethod === 'net-30' ? 'Paid via Credit Limit · Net 30 Terms' : `Via ${order.paymentMethod}`}
-                </p>
+              {(order.paymentMethod) && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Payment Method</span>
+                  <span className="font-medium text-slate-700 capitalize">
+                    {order.paymentMethod === 'net-30' ? 'Credit Limit · Net 30' : order.paymentMethod}
+                  </span>
+                </div>
+              )}
+              {!order.paymentMethod && (
+                <p className="text-xs text-slate-400">Payment method not recorded</p>
               )}
               {order.pricingTier && (
                 <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3">
@@ -465,8 +476,17 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
                 <Truck size={16} className="text-purple-600" />
               </div>
               <div>
-                <p className="font-medium text-sm text-slate-900">{order.carrier || 'Standard Shipping'}</p>
-                <p className="text-xs text-slate-400 mt-0.5">Tracking: {order.trackingId || 'Pending'}</p>
+                <p className="font-medium text-sm text-slate-900">
+                  {order.carrier || 'Standard Shipping'}
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Tracking: {order.trackingId || 'Pending'}
+                </p>
+                {(order.shippingCost > 0) && (
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Shipping Cost: ₹{order.shippingCost.toLocaleString('en-IN')}
+                  </p>
+                )}
               </div>
             </div>
           </div>

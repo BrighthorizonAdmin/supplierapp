@@ -23,6 +23,7 @@ const returnSchema = new mongoose.Schema(
     rmaNumber: {
       type: String,
       unique: true,
+      sparse: true,
       trim: true,
     },
     dealerId: {
@@ -99,7 +100,7 @@ returnSchema.pre('save', async function () {
 returnSchema.index({ dealerId: 1 });
 returnSchema.index({ orderId: 1 });
 returnSchema.index({ status: 1 });
-returnSchema.index({ rmaNumber: 1 }, { unique: true });
+returnSchema.index({ rmaNumber: 1 }, { unique: true, sparse: true });
 returnSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Return', returnSchema);

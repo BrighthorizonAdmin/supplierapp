@@ -25,7 +25,7 @@ const ReturnListPage = () => {
   const [search, setSearch] = useState('');
   const [processModal, setProcessModal] = useState(null);
   const [detailsModal, setDetailsModal] = useState(null);
-  const [detailData, setDetailData] = useState(null); // store payload for details modal
+  const [detailData, setDetailData] = useState(null);
   const { register, handleSubmit, reset } = useForm();
 
   useEffect(() => {
@@ -34,7 +34,12 @@ const ReturnListPage = () => {
 
   const onProcess = (data) => {
     dispatch(processReturn({ id: processModal._id, ...data })).then((res) => {
-      if (!res.error) { setProcessModal(null); reset(); }
+      if (!res.error) {
+        setProcessModal(null);
+        reset();
+        // Re-fetch the full list so the status reflects correctly regardless of filters
+        dispatch(fetchReturns({ page, limit: 20, status: statusFilter }));
+      }
     });
   };
 
@@ -156,7 +161,7 @@ const ReturnListPage = () => {
                   filtered.map((row, idx) => (
                     <tr key={row._id || idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-xs font-semibold text-slate-700">
-                        {row.returnId || '—'}
+                        {row.rmaNumber || row.returnId || '—'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {typeFilter === 'retails' ? (
@@ -172,7 +177,7 @@ const ReturnListPage = () => {
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700">
                         {typeFilter === 'retails'
                           ? (row.customerId?.name || row.customerName || '—')
-                          : (row.dealerId?.name || '—')}
+                          : (row.dealerId?.businessName || row.dealerId?._displayName || row.dealerId?.name || '—')}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600">
                         {row.createdAt ? format(new Date(row.createdAt), 'yyyy-MM-dd') : '—'}
@@ -181,33 +186,43 @@ const ReturnListPage = () => {
                         {row.items?.length ? `${row.items.length} Items` : '—'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">
-                        {row.totalRefundAmount ? `₹${row.totalRefundAmount.toLocaleString('en-IN')}` : '—'}
+                        {(row.totalRefundAmount || row.refundAmount)
+                          ? `₹${(row.totalRefundAmount || row.refundAmount).toLocaleString('en-IN')}`
+                          : '—'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600">
                         {row.refundMethod || 'Credit'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {row.status === 'requested' ? (
+                        {(row.status === 'requested' || row.status === 'REQUEST_SUBMITTED' || row.status === 'UNDER_REVIEW') ? (
                           <div className="flex flex-col gap-0.5">
                             <button
-                              onClick={() => dispatch(updateReturnStatus({ id: row._id, status: 'approved' }))}
+                              onClick={() =>
+                                dispatch(updateReturnStatus({ id: row._id, status: 'approved' })).then((res) => {
+                                  if (!res.error) dispatch(fetchReturns({ page, limit: 20, status: statusFilter }));
+                                })
+                              }
                               className="text-xs text-blue-600 hover:underline font-medium text-left"
                             >
                               Accept Return
                             </button>
                             <button
-                              onClick={() => dispatch(updateReturnStatus({ id: row._id, status: 'rejected' }))}
+                              onClick={() =>
+                                dispatch(updateReturnStatus({ id: row._id, status: 'rejected' })).then((res) => {
+                                  if (!res.error) dispatch(fetchReturns({ page, limit: 20, status: statusFilter }));
+                                })
+                              }
                               className="text-xs text-red-500 hover:underline font-medium text-left"
                             >
                               Reject Return
                             </button>
                           </div>
                         ) : (
-                          <StatusBadge status={row.status} />
+                          <StatusBadge status={row.status === 'APPROVED' ? 'approved' : row.status === 'REJECTED' ? 'rejected' : row.status === 'REFUND_PROCESSED' ? 'refunded' : row.status} />
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {row.status === 'approved' ? (
+                        {(row.status === 'approved' || row.status === 'APPROVED') ? (
                           <button
                             onClick={() => setProcessModal(row)}
                             className="text-xs text-blue-600 font-medium border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-50 transition-colors"
@@ -260,62 +275,82 @@ const ReturnListPage = () => {
       <Modal
         isOpen={!!detailsModal}
         onClose={() => { setDetailsModal(null); setDetailData(null); }}
-        title={`Return Details — ${detailsModal?.rmaNumber}`}
+        title={`Return Details — ${detailsModal?.rmaNumber || detailsModal?.returnId}`}
       >
-        {detailData && (
-          <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                ['RMA Number', detailData.rmaNumber],
-                ['Status', detailData.status],
-                ['Dealer', detailData.dealerId?.businessName || '—'],
-                ['Order', detailData.orderId?.orderNumber || '—'],
-                ['Reason', detailData.reason],
-                ['Refund Amount', detailData.refundAmount ? `₹${detailData.refundAmount.toLocaleString('en-IN')}` : '—'],
-                ['Refund Method', detailData.refundMethod || '—'],
-                ['Date', detailData.createdAt ? format(new Date(detailData.createdAt), 'dd MMM yyyy') : '—'],
-              ].map(([k, v]) => (
-                <div key={k}>
-                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">{k}</p>
-                  <p className="text-slate-800 mt-0.5">{v || '—'}</p>
-                </div>
-              ))}
-            </div>
-            {detailData.items?.length > 0 && (
-              <div>
-                <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-2">Items</p>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium text-slate-600">Product</th>
-                        <th className="px-3 py-2 text-left font-medium text-slate-600">Qty</th>
-                        <th className="px-3 py-2 text-left font-medium text-slate-600">Condition</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {detailData.items.map((item, i) => (
-                        <tr key={i}>
-                          <td className="px-3 py-2">{item.productName || '—'}</td>
-                          <td className="px-3 py-2">{item.quantity}</td>
-                          <td className="px-3 py-2 capitalize">{item.condition}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-            {detailData.rejectionReason && (
-              <div>
-                <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Rejection Reason</p>
-                <p className="text-slate-800 mt-0.5">{detailData.rejectionReason}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
+        {detailData && (() => {
+          // Support both D-BE and S-BE return formats
+          const displayId     = detailData.rmaNumber || detailData.returnId || '—';
+          const displayDealer = detailData.dealerId?.businessName || detailData.dealerId?._displayName || detailData.dealerId?.name || '—';
+          const displayOrder  = detailData.orderId?.orderNumber || '—';
+          const displayReason = detailData.reason || detailData.comments || detailData.items?.[0]?.reason || '—';
+          const displayAmount = detailData.refundAmount || detailData.totalRefundAmount;
+          const rawStatus     = detailData._dbeStatus || detailData.status || '';
+          const statusLabel   = {
+            REQUEST_SUBMITTED: 'Request Submitted',
+            UNDER_REVIEW:      'Under Review',
+            APPROVED:          'Approved',
+            REJECTED:          'Rejected',
+            IN_TRANSIT:        'In Transit',
+            REFUND_PROCESSED:  'Refund Processed',
+            CANCELLED:         'Cancelled',
+          }[rawStatus] || rawStatus;
 
+          return (
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ['Return ID',     displayId],
+                  ['Status',        statusLabel || detailData.status],
+                  ['Dealer',        displayDealer],
+                  ['Order',         displayOrder],
+                  ['Reason',        displayReason],
+                  ['Refund Amount', displayAmount ? `₹${Number(displayAmount).toLocaleString('en-IN')}` : '—'],
+                  ['Refund Method', detailData.refundMethod || '—'],
+                  ['Date',          detailData.createdAt ? format(new Date(detailData.createdAt), 'dd MMM yyyy') : '—'],
+                ].map(([k, v]) => (
+                  <div key={k}>
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">{k}</p>
+                    <p className="text-slate-800 mt-0.5">{v || '—'}</p>
+                  </div>
+                ))}
+              </div>
+              {detailData.items?.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-2">Items</p>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Product</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Qty</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Reason / Condition</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {detailData.items.map((item, i) => (
+                          <tr key={i}>
+                            <td className="px-3 py-2">{item.productName || item.name || '—'}</td>
+                            <td className="px-3 py-2">{item.quantity}</td>
+                            <td className="px-3 py-2 capitalize">
+                              {item.returnReason || item.reason || item.condition || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {(detailData.rejectionReason || detailData.cancellationReason) && (
+                <div>
+                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Rejection Reason</p>
+                  <p className="text-slate-800 mt-0.5">{detailData.rejectionReason || detailData.cancellationReason}</p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </Modal>
 
     </div>
   );

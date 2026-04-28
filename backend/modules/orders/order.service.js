@@ -437,7 +437,7 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
         await DealerInventory.findOneAndUpdate(
           { dealerId: order.dealerId, productId: pid },
           {
-            $inc: { receivedQty: qty, currentQty: qty },
+            // $inc: { receivedQty: qty, currentQty: qty },
             $setOnInsert: {
               productName:   item.name || item.productName || product?.name || '',
               sku:           item.sku  || item.productCode || product?.sku  || '',

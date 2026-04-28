@@ -1,7 +1,7 @@
 const express = require('express');
-const router  = express.Router();
+const router = express.Router();
 const Invoice = require('../payments/model/Invoice.model');
-const Dealer  = require('../dealer/model/Dealer.model');
+const Dealer = require('../dealer/model/Dealer.model');
 const notificationService = require('../notifications/notification.service');
 
 const WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET || '';
@@ -32,6 +32,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       subtotal,
       taxAmount,
       totalAmount,
+      receivedAmount,
       paymentMode,
     } = req.body;
 
@@ -59,41 +60,56 @@ router.post('/dealer-retail-invoice', async (req, res) => {
     }
 
     // 4. Map items to Sup-BE lineItems schema
-    const lineItems = (items || []).map((item) => ({
-      productId:     item.productId || undefined,
-      productName:   item.productName || item.name || '',
-      productCode:   item.productCode || item.sku || '',
-      quantity:      Number(item.quantity),
-      unitPrice:     Number(item.unitPrice),
-      taxRate:       Number(item.taxRate) || 0,
-      taxAmount:     +(Number(item.unitPrice) * Number(item.quantity) * (Number(item.taxRate) || 0) / 100).toFixed(2),
-      lineTotal:     Number(item.lineTotal),
-      discount:      0,
-      discountType:  '%',
-      discountValue: 0,
-    }));
+    // Use exact same calculation as D-BE: lineTotal = unitPrice * qty + (unitPrice * qty * taxRate/100)
+    const lineItems = (items || []).map((item) => {
+      const qty       = Number(item.quantity);
+      const price     = Number(item.unitPrice);
+      const taxR      = Number(item.taxRate) || 0;
+      const lineBase  = price * qty;
+      const lineTax   = lineBase * (taxR / 100);
+      return {
+        productId:    item.productId || undefined,
+        productName:  item.productName || item.name || '',
+        productCode:  item.productCode || item.sku || '',
+        hsnCode:      item.hsnCode || '',
+        quantity:     qty,
+        unitPrice:    price,
+        taxRate:      taxR,
+        taxAmount:    +lineTax.toFixed(2),
+        lineTotal:    +Number(item.lineTotal || (lineBase + lineTax)).toFixed(2),
+        discount:     0,
+        discountType: '%',
+        discountValue: 0,
+      };
+    });
 
-    // 5. Create invoice — catch E11000 in case of race condition / D-BE retry after timeout
+    // 5. Derive correct payment status and balance — same logic as D-BE
+    const total    = Number(totalAmount) || 0;
+    const received = receivedAmount !== undefined ? Number(receivedAmount) : total;
+    const balance  = Math.max(0, +(total - received).toFixed(2));
+    const invoiceStatus = received >= total ? 'paid' : (received > 0 ? 'partial' : 'issued');
+
+    // 6. Create invoice — catch E11000 in case of race condition / D-BE retry after timeout
     let invoice;
     try {
       invoice = await Invoice.create({
-        invoiceType:   'retail',
+        invoiceType:  'retail',
         dbeInvoiceId,
         invoiceNumber: `D-${invoiceNumber}`,
-        dealerId:      dealer?._id || undefined,
-        partyName:     dealerName  || 'Unknown Dealer',
-        partyPhone:    dealerPhone || '',
-        notes: `Retail sale to: ${customerName}${customerPhone ? ' | ' + customerPhone : ''}`,
+        dealerId:     dealer?._id || undefined,
+        partyName:    dealerName || 'Unknown Dealer',
+        partyPhone:   dealerPhone || '',
+        notes:        `Retail sale to: ${customerName}${customerPhone ? ' | ' + customerPhone : ''}`,
         lineItems,
-        subtotal:    Number(subtotal),
-        taxAmount:   Number(taxAmount),
-        totalAmount: Number(totalAmount),
-        discountAmt: 0,
-        amountPaid:  Number(totalAmount),
-        balance:     0,
+        subtotal:     Number(subtotal),
+        taxAmount:    Number(taxAmount),
+        totalAmount:  total,
+        discountAmt:  0,
+        amountPaid:   received,
+        balance,
         paymentMode:  paymentMode || 'Cash',
         invoiceDate:  invoiceDate ? new Date(invoiceDate) : new Date(),
-        status:       'paid',
+        status:       invoiceStatus,
         issuedAt:     new Date(),
       });
     } catch (createErr) {
@@ -138,7 +154,7 @@ router.post('/dealer-order', async (req, res) => {
     const {
       dbeOrderId, orderNumber, dealerId: dealerRef,
       dealerName, dealerPhone,
-      items, subtotal, taxAmount, netAmount, paymentMethod,
+      items, subtotal, taxAmount, netAmount, paymentMethod, paymentStatus,
     } = req.body;
 
     const Order = require('../orders/model/Order.model');
@@ -160,44 +176,67 @@ router.post('/dealer-order', async (req, res) => {
     } else {
       // ── 2. Build embedded items from the dealer payload ──
       const embeddedItems = (items || []).map(item => ({
-        productId:   item.productId || undefined,
-        sku:         item.sku       || item.productCode || '',
-        name:        item.name      || item.productName || '',
-        image:       item.image     || '',
-        unitPrice:   Number(item.basePrice || item.unitPrice || 0),
-        quantity:    Number(item.quantity  || 0),
-        moq:         Number(item.moq       || 1),
-        lineTotal:   Number(item.lineTotal || 0),
+        productId: item.productId || undefined,
+        sku: item.sku || item.productCode || '',
+        name: item.name || item.productName || '',
+        image: item.image || '',
+        unitPrice: Number(item.basePrice || item.unitPrice || 0),
+        quantity: Number(item.quantity || 0),
+        moq: Number(item.moq || 1),
+        lineTotal: Number(item.lineTotal || 0),
       }));
 
       // ── 3. Atomic upsert — findOneAndUpdate with upsert:true on dbeOrderId ──
       // findOneAndUpdate does NOT fire Mongoose pre('save') hooks, so we must
       // generate orderNumber explicitly here rather than relying on the pre-save hook.
+      //
+      // IMPORTANT: Do NOT mix $set and $setOnInsert in the same upsert.
+      // When both operators are present, MongoDB applies $set on INSERT too —
+      // this can conflict with the filter field (dbeOrderId) being written into
+      // the new document and causes the insert to fail or the order to be missing.
+      // Instead: use $setOnInsert-only for the upsert, then do a separate $set
+      // update if the document already existed (identified by updatedAt > createdAt).
       const supplierOrderNumber = await generateCode(Order, 'ORD', 'orderNumber', 'yyyyMMdd');
 
       const result = await Order.findOneAndUpdate(
         { dbeOrderId },
         {
           $setOnInsert: {
-            orderNumber:       supplierOrderNumber,
-            dealerId:          supplierDealer._id,
-            status:            'pending',
+            orderNumber: supplierOrderNumber,
+            dealerId: supplierDealer._id,
+            status: 'pending',
             dbeOrderId,
             dealerOrderNumber: orderNumber,
-            items:             embeddedItems,
-            subtotal:          Number(subtotal  || 0),
-            taxAmount:         Number(taxAmount || 0),
-            netAmount:         Number(netAmount || 0),
-            paymentMethod:     paymentMethod || '',
-            paymentStatus:     'pending',
+            items: embeddedItems,
+            subtotal: Number(subtotal || 0),
+            taxAmount: Number(taxAmount || 0),
+            netAmount: Number(netAmount || 0),
+            paymentMethod: paymentMethod || '',
+            paymentStatus: paymentStatus || '',
             notes: `Dealer order: ${orderNumber}`,
           },
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
-      if (result.__v === undefined || result.createdAt?.getTime() === result.updatedAt?.getTime()) {
+
+      const wasInserted = result.createdAt && result.updatedAt &&
+        Math.abs(result.createdAt.getTime() - result.updatedAt.getTime()) < 1000;
+
+      if (wasInserted) {
         console.log(`[Webhook] Created supplier order linked to dbeOrderId=${dbeOrderId}`);
       } else {
+        // Order already existed — patch payment fields that may have changed
+        if (paymentMethod || paymentStatus) {
+          await Order.updateOne(
+            { dbeOrderId },
+            {
+              $set: {
+                ...(paymentMethod ? { paymentMethod } : {}),
+                ...(paymentStatus ? { paymentStatus } : {}),
+              },
+            }
+          );
+        }
         console.log(`[Webhook] dealer-order already linked (upsert no-op): dbeOrderId=${dbeOrderId}`);
       }
     }
@@ -211,9 +250,9 @@ router.post('/dealer-order', async (req, res) => {
       for (const admin of admins) {
         await notificationService.create({
           recipientId: admin._id,
-          title:       `New Order: ${orderNumber}`,
-          message:     `${dealerName || 'A dealer'} placed an order for ${itemCount} item(s) — ₹${netAmount} via ${paymentMethod}`,
-          type:        'order',
+          title: `New Order: ${orderNumber}`,
+          message: `${dealerName || 'A dealer'} placed an order for ${itemCount} item(s) — ₹${netAmount} via ${paymentMethod}`,
+          type: 'order',
           relatedEntity: { entityType: 'Order', entityId: dbeOrderId },
         });
       }
@@ -225,6 +264,161 @@ router.post('/dealer-order', async (req, res) => {
     return res.status(200).json({ success: true, message: 'Order notification processed' });
   } catch (err) {
     console.error('[Webhook] dealer-order error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-return
+// Called by D-BE when a dealer submits a return request.
+// Creates a Return record in S-BE so the supplier can review and process it.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-return', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      console.warn('[Webhook] Unauthorized dealer-return attempt from:', req.ip);
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const {
+      returnId, dbeReturnId, dbeOrderId, dealerOrderNumber,
+      dealerName, dealerPhone,
+      items, totalRefundAmount, refundMethod, comments, createdAt,
+    } = req.body;
+
+    const Return = require('../returns/model/Return.model');
+    const Order = require('../orders/model/Order.model');
+    const Dealer = require('../dealer/model/Dealer.model');
+
+    // ── Idempotency: skip if already synced ──
+    const existing = await Return.findOne({ dbeReturnId });
+    if (existing) {
+      console.warn(`[Webhook] dealer-return already synced: ${returnId}`);
+      return res.json({ success: true, message: 'Already synced', data: existing });
+    }
+
+    // ── Resolve supplier-side Order ──
+    let supplierOrder = null;
+    if (dbeOrderId) {
+      supplierOrder = await Order.findOne({ dbeOrderId });
+    }
+    if (!supplierOrder && dealerOrderNumber) {
+      supplierOrder = await Order.findOne({ dealerOrderNumber });
+    }
+
+    // ── Resolve supplier-side Dealer ──
+    let supplierDealer = null;
+    if (dealerPhone) supplierDealer = await Dealer.findOne({ phone: dealerPhone }).lean();
+    if (!supplierDealer && dealerName) {
+      supplierDealer = await Dealer.findOne({
+        businessName: { $regex: dealerName.trim(), $options: 'i' },
+      }).lean();
+    }
+
+    if (!supplierOrder) {
+      console.warn(`[Webhook] dealer-return: could not resolve supplier order (dbeOrderId=${dbeOrderId}) — return skipped`);
+      return res.status(200).json({ success: false, message: 'Supplier order not found, return not created' });
+    }
+
+    // ── Map D-BE return items → S-BE return items ──
+    const returnItems = (items || []).map(i => ({
+      productId: i.productId || undefined,
+      productName: i.name || '',
+      quantity: Number(i.quantity) || 1,
+      unitPrice: Number(i.unitPrice) || 0,
+      returnReason: i.reason || '',
+      condition: 'sellable', // default; supplier can update when inspected
+    }));
+
+    // ── Create Return record in S-BE ──
+    const ret = await Return.create({
+      dbeReturnId,            // link back to D-BE record
+      dealerId: supplierDealer?._id || supplierOrder.dealerId,
+      orderId: supplierOrder._id,
+      items: returnItems,
+      reason: (items?.[0]?.reason) || 'Dealer return request',
+      refundAmount: Number(totalRefundAmount) || 0,
+      totalRefundAmount: Number(totalRefundAmount) || 0,
+      refundMethod: refundMethod || '',
+      notes: comments || '',
+      status: 'requested',
+    });
+
+    // ── Notify all active admins ──
+    try {
+      const User = require('../auth/model/User.model');
+      const notificationService = require('../notifications/notification.service');
+      const admins = await User.find({ isActive: true }).lean();
+      for (const admin of admins) {
+        await notificationService.create({
+          recipientId: admin._id,
+          title: `Return Request: ${returnId}`,
+          message: `${dealerName || 'A dealer'} submitted a return for order ${dealerOrderNumber || supplierOrder.orderNumber} — ₹${totalRefundAmount}`,
+          type: 'order',
+          relatedEntity: { entityType: 'Return', entityId: ret._id },
+        });
+      }
+    } catch (notifErr) {
+      console.error('[Webhook] dealer-return notification failed:', notifErr.message);
+    }
+
+    console.log(`[Webhook] dealer-return synced: ${returnId} → RMA ${ret.rmaNumber}`);
+    return res.status(201).json({ success: true, data: ret });
+  } catch (err) {
+    console.error('[Webhook] dealer-return error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-return-cancel
+// Called by D-BE when a dealer cancels their own return request.
+// Finds the matching S-BE return (by dbeReturnId) and marks it as rejected/cancelled.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-return-cancel', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { returnId } = req.body; // D-BE returnId string, e.g. "RET-..."
+    if (!returnId) {
+      return res.status(400).json({ success: false, message: 'returnId required' });
+    }
+
+    const Return = require('../returns/model/Return.model');
+    const Order  = require('../orders/model/Order.model');
+    const updated = await Return.findOneAndUpdate(
+      { dbeReturnId: returnId },
+      {
+        $set:  { status: 'cancelled' },
+        $push: {
+          timeline: {
+            status:      'cancelled',
+            timestamp:   new Date(),
+            description: 'Return request cancelled by dealer',
+          },
+        },
+      },
+      { runValidators: false, new: true }
+    );
+
+    if (!updated) {
+      console.warn(`[Webhook] dealer-return-cancel: no S-BE return found for dbeReturnId=${returnId}`);
+      return res.json({ success: false, message: 'Matching return not found on supplier side' });
+    }
+
+    // Revert the S-BE order status back to 'delivered'
+    if (updated.orderId) {
+      await Order.findByIdAndUpdate(updated.orderId, { status: 'delivered' });
+    }
+
+    console.log(`[Webhook] dealer-return-cancel: cancelled S-BE return ${updated.rmaNumber} for D-BE return ${returnId}`);
+    return res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('[Webhook] dealer-return-cancel error:', err.message);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
