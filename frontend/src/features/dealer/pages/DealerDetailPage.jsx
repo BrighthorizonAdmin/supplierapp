@@ -44,9 +44,6 @@ const DealerDetailPage = () => {
   const [orderSearch, setOrderSearch] = useState('');
 
   /* data */
-  const [documents, setDocuments] = useState([]);
-  const [docsLoading, setDocsLoading] = useState(false);
-  const [showAllDocs, setShowAllDocs] = useState(false);
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [payments, setPayments] = useState([]);
@@ -78,16 +75,6 @@ const DealerDetailPage = () => {
     dispatch(fetchDealerStats(id));
     fetchedTabs.current = new Set();
   }, [dispatch, id]);
-
-  /* fetch docs on load (needed for KYC panel in left col) */
-  useEffect(() => {
-    if (!id) return;
-    setDocsLoading(true);
-    api.get(`/documents/dealer/${id}`)
-      .then((res) => setDocuments(res.data.data || []))
-      .catch(() => setDocuments([]))
-      .finally(() => setDocsLoading(false));
-  }, [id]);
 
   /* fetch tab data lazily */
   useEffect(() => {
@@ -190,9 +177,14 @@ const DealerDetailPage = () => {
   const pendingCount = orders.filter(o =>
     ['draft', 'pending', 'order_confirmed', 'processing'].includes(o.status)).length;
 
-  /* docs panel — show 2 by default, all when expanded */
-  const visibleDocs = showAllDocs ? documents : documents.slice(0, 2);
-  const hasMoreDocs = documents.length > 2;
+  /* derived submittedDocuments — normalise into a flat array for display */
+  const submittedDocs = dealer?.submittedDocuments
+    ? [
+        { key: 'gst',  label: 'GST Certificate',  ...dealer.submittedDocuments.gst  },
+        { key: 'pan',  label: 'PAN Card',          ...dealer.submittedDocuments.pan  },
+        { key: 'bank', label: 'Bank Statement',    ...dealer.submittedDocuments.bank },
+      ].filter((d) => d.fileUrl)
+    : [];
 
   if (!dealer) {
     return (
@@ -321,57 +313,58 @@ const DealerDetailPage = () => {
             </div>
           </div>
 
-          {/* KYC Documents */}
+          {/* KYC Documents — from dealer app submissions */}
           <div className="card p-4 flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-slate-800 text-sm">KYC Documents</h3>
-              {hasMoreDocs ? (
-                <button
-                  onClick={() => setShowAllDocs((v) => !v)}
-                  className="text-xs text-primary-600 hover:underline"
-                >
-                  {showAllDocs ? 'Show Less' : 'View All'}
-                </button>
-              ) : (
-                <span className="text-xs text-slate-300 cursor-not-allowed select-none">View All</span>
+              {submittedDocs.length > 0 && (
+                <span className="text-xs text-slate-400">{submittedDocs.length} file{submittedDocs.length > 1 ? 's' : ''}</span>
               )}
             </div>
 
-            {docsLoading ? (
-              <div className="flex justify-center py-4">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600" />
-              </div>
-            ) : documents.length === 0 ? (
+            {submittedDocs.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-3">No documents uploaded</p>
             ) : (
               <div className="space-y-2">
-                {visibleDocs.map((doc) => (
-                  <div
-                    key={doc._id}
-                    className="flex items-center gap-3 p-2.5 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="w-8 h-8 bg-blue-50 rounded flex items-center justify-center flex-shrink-0">
-                      <FileText size={15} className="text-blue-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-slate-700 truncate">
-                        {doc.documentType || doc.name || 'Document'}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {doc.updatedAt ? format(new Date(doc.updatedAt), 'dd MMM, yyyy') : ''}
-                      </p>
-                    </div>
-                    <a
-                      href={doc.fileUrl || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1 hover:text-primary-600 text-slate-400 flex-shrink-0"
-                      title="Preview document"
+                {submittedDocs.map((doc) => {
+                  // Resolve URL through the /dealer-uploads Vite proxy → D-BE /uploads
+                  const rawPath = (doc.fileUrl || '').replace(/^\/uploads/, '');
+                  const url = (doc.fileUrl || '').startsWith('http')
+                    ? doc.fileUrl
+                    : `/dealer-uploads${rawPath}`;
+                  return (
+                    <div
+                      key={doc.key}
+                      className="flex items-center gap-3 p-2.5 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors"
                     >
-                      <Eye size={14} />
-                    </a>
-                  </div>
-                ))}
+                      <div className="w-8 h-8 bg-blue-50 rounded flex items-center justify-center flex-shrink-0">
+                        <FileText size={15} className="text-blue-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-700 truncate">
+                          {doc.label}
+                        </p>
+                        <p className="text-xs text-slate-400 truncate">
+                          {doc.fileName || '—'}
+                        </p>
+                        {doc.uploadedAt && (
+                          <p className="text-xs text-slate-300">
+                            {format(new Date(doc.uploadedAt), 'dd MMM, yyyy')}
+                          </p>
+                        )}
+                      </div>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 hover:text-primary-600 text-slate-400 flex-shrink-0"
+                        title={`Preview ${doc.label}`}
+                      >
+                        <Eye size={14} />
+                      </a>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

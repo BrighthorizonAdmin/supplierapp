@@ -38,10 +38,27 @@ const createDealer = async (data, userId) => {
 
 // Called from dealer app webhook — creates dealer record then notifies all admins
 const createFromWebhook = async (data) => {
-  // Idempotent: skip if application already registered
-  if (data.applicationId) {
-    const existing = await Dealer.findOne({ applicationId: data.applicationId }).lean();
-    if (existing) return existing;
+  // Idempotent: find existing record by applicationId, email, or gstNumber
+  const orConditions = [];
+  if (data.applicationId) orConditions.push({ applicationId: data.applicationId });
+  if (data.email)         orConditions.push({ email: data.email.toLowerCase().trim() });
+  if (data.gstNumber)     orConditions.push({ gstNumber: data.gstNumber.toUpperCase().trim() });
+
+  if (orConditions.length > 0) {
+    const existing = await Dealer.findOne({ $or: orConditions });
+    if (existing) {
+      console.log(`[createFromWebhook] Dealer already exists (${existing.applicationId || existing.email}), checking for missing submittedDocuments`);
+      // Patch submittedDocuments if the existing record is missing them
+      const hasDocs = existing.submittedDocuments &&
+        Object.values(existing.submittedDocuments).some(d => d?.fileUrl);
+      if (!hasDocs && data.submittedDocuments &&
+          Object.values(data.submittedDocuments).some(d => d?.fileUrl)) {
+        existing.submittedDocuments = data.submittedDocuments;
+        await existing.save();
+        console.log(`[createFromWebhook] Patched submittedDocuments for ${existing.applicationId}`);
+      }
+      return existing;
+    }
   }
 
   const dealer = await createDealer(data, null);

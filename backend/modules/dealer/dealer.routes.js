@@ -29,10 +29,20 @@ router.post('/webhook/application', async (req, res) => {
     // Sanitize email — lowercase trim
     if (body.email) body.email = body.email.toLowerCase().trim();
 
+    // Normalise document field — D-BE sends either 'submittedDocuments' or 'documents'
+    // Always store under 'submittedDocuments' to match the Dealer model field name
+    if (!body.submittedDocuments && body.documents) {
+      body.submittedDocuments = body.documents;
+    }
+    delete body.documents; // remove so it doesn't get spread as an unknown field
+
+    console.log('[Webhook] creating dealer for applicationId:', body.applicationId, 'email:', body.email);
     const dealer = await require('./dealer.service').createFromWebhook(body);
+    console.log('[Webhook] dealer saved:', dealer._id || dealer.applicationId);
     return res.status(201).json({ success: true, data: dealer });
   } catch (err) {
     console.error('[Webhook] createFromWebhook failed:', err.message);
+    console.error('[Webhook] full error:', err.stack);
     return res.status(500).json({ success: false, message: err.message });
   }
 });

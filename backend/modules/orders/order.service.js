@@ -19,16 +19,16 @@ const mongoose = require('mongoose');
 // Both S-BE and D-BE use the same MongoDB (dealer_app), so we can write
 // to dealerinventories without any HTTP roundtrip.
 const dealerInventorySchema = new mongoose.Schema({
-  dealerId:      { type: mongoose.Schema.Types.ObjectId },
-  productId:     { type: mongoose.Schema.Types.ObjectId },
-  productName:   String,
-  sku:           String,
-  imageUrl:      String,
+  dealerId: { type: mongoose.Schema.Types.ObjectId },
+  productId: { type: mongoose.Schema.Types.ObjectId },
+  productName: String,
+  sku: String,
+  imageUrl: String,
   purchasePrice: { type: Number, default: 0 },
-  receivedQty:   { type: Number, default: 0 },
-  currentQty:    { type: Number, default: 0 },
-  soldQty:       { type: Number, default: 0 },
-  threshold:     { type: Number, default: 2 },
+  receivedQty: { type: Number, default: 0 },
+  currentQty: { type: Number, default: 0 },
+  soldQty: { type: Number, default: 0 },
+  threshold: { type: Number, default: 2 },
 }, { strict: false, timestamps: true });
 
 // Re-use existing model if already registered (hot-reload safety)
@@ -49,7 +49,7 @@ async function notifyDealerOrderStatus(order, status, extraFields = {}) {
   }
 
   // Must have either dbeOrderId or dealerOrderNumber to identify the order on dealer side
-  const dbeOrderId        = order.dbeOrderId;
+  const dbeOrderId = order.dbeOrderId;
   const dealerOrderNumber = order.dealerOrderNumber;
   if (!dbeOrderId && !dealerOrderNumber) {
     console.warn(`[notifyDealer] Order ${order.orderNumber} has no dbeOrderId or dealerOrderNumber — cannot notify dealer`);
@@ -58,7 +58,7 @@ async function notifyDealerOrderStatus(order, status, extraFields = {}) {
 
   try {
     const payload = {
-      ...(dbeOrderId        ? { dbeOrderId }        : {}),
+      ...(dbeOrderId ? { dbeOrderId } : {}),
       ...(dealerOrderNumber ? { orderNumber: dealerOrderNumber } : {}),
       status,
       ...extraFields,
@@ -90,7 +90,7 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber) {
   try {
     const notificationService = require('../notifications/notification.service');
     const User = require('../auth/model/User.model');
-    const DEALER_API_URL        = process.env.DEALER_API_URL;
+    const DEALER_API_URL = process.env.DEALER_API_URL;
     const DEALER_WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET;
 
     const alertItems = [];
@@ -109,10 +109,10 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber) {
       if (!isOutOfStock && !isLowStock) continue;
 
       alertItems.push({
-        productId:         pid.toString(),
-        productName:       product.name,
-        productCode:       product.productCode || '',
-        alertType:         isOutOfStock ? 'out-of-stock' : 'low-stock',
+        productId: pid.toString(),
+        productName: product.name,
+        productCode: product.productCode || '',
+        alertType: isOutOfStock ? 'out-of-stock' : 'low-stock',
         quantityAvailable: product.currentStockQty,
       });
     }
@@ -124,7 +124,7 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber) {
 
     const outCount = alertItems.filter(i => i.alertType === 'out-of-stock').length;
     const lowCount = alertItems.filter(i => i.alertType === 'low-stock').length;
-    const parts    = [];
+    const parts = [];
     if (outCount) parts.push(`${outCount} out-of-stock`);
     if (lowCount) parts.push(`${lowCount} low-stock`);
     const names = alertItems.map(i => i.productName).join(', ');
@@ -134,9 +134,9 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber) {
     for (const admin of admins) {
       await notificationService.create({
         recipientId: admin._id,
-        title:       `Stock Alert after Order #${orderNumber}`,
-        message:     `${parts.join(' and ')} product(s) need attention: ${names}`,
-        type:        'warning',
+        title: `Stock Alert after Order #${orderNumber}`,
+        message: `${parts.join(' and ')} product(s) need attention: ${names}`,
+        type: 'warning',
       });
     }
 
@@ -402,21 +402,23 @@ const cancelOrder = async (orderId, reason, userId) => {
       }], { session });
     }
 
-    order.status = 'cancelled';
+    const newStatus = order.status === 'pending' ? 'rejected' : 'cancelled';
+    const beforeStatus = order.status; 
+    order.status = newStatus;
     order.cancelledBy = userId;
     order.cancelledAt = new Date();
     order.cancellationReason = reason;
     await order.save({ session });
 
     await auditService.log('order', orderId, 'cancel', userId, {
-      before: { status: wasConfirmed ? 'confirmed' : order.status },
-      after: { status: 'cancelled', reason },
+      before: { status: wasConfirmed ? 'confirmed' : beforeStatus },
+      after: { status: newStatus, reason },
     });
 
     emitToAll(ORDER_CANCELLED, { orderId, orderNumber: order.orderNumber });
 
     // Notify D-BE so the dealer's order status updates to 'cancelled'
-    notifyDealerOrderStatus(order, 'cancelled');
+    notifyDealerOrderStatus(order, newStatus);
 
     return order;
   });
@@ -509,20 +511,20 @@ const getOrderById = async (id) => {
   const items = order.items?.length
     ? order.items
     : await OrderItem.find({ orderId: id })
-        .populate('productId', 'name productCode unit')
-        .populate('warehouseId', 'name code')
-        .lean();
+      .populate('productId', 'name productCode unit')
+      .populate('warehouseId', 'name code')
+      .lean();
 
   return { ...order, items };
 };
 
 const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
   const allowed = {
-    confirmed:        ['pending', 'draft'],
-    processing:       ['confirmed'],
-    shipped:          ['processing', 'confirmed'],
+    confirmed: ['pending', 'draft'],
+    processing: ['confirmed'],
+    shipped: ['processing', 'confirmed'],
     out_for_delivery: ['shipped', 'processing'],
-    delivered:        ['shipped', 'out_for_delivery', 'processing'],
+    delivered: ['shipped', 'out_for_delivery', 'processing'],
   };
   const order = await Order.findById(orderId);
   if (!order) throw new AppError('Order not found', 404);
@@ -534,10 +536,10 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
 
   const before = { status: order.status };
   order.status = status;
-  if (status === 'shipped')          order.shippedAt   = new Date();
-  if (status === 'delivered')        order.deliveredAt = new Date();
-  if (extraFields.trackingId)        order.trackingId  = extraFields.trackingId;
-  if (extraFields.carrier)           order.carrier     = extraFields.carrier;
+  if (status === 'shipped') order.shippedAt = new Date();
+  if (status === 'delivered') order.deliveredAt = new Date();
+  if (extraFields.trackingId) order.trackingId = extraFields.trackingId;
+  if (extraFields.carrier) order.carrier = extraFields.carrier;
   await order.save();
 
   await auditService.log('order', orderId, 'update', userId, { before, after: { status } });
@@ -556,20 +558,20 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
 
         const product = await Product.findById(pid).lean();
         const purchasePrice = item.basePrice || item.unitPrice || product?.basePrice || product?.price || 0;
-        const imageUrl      = item.image || product?.images?.find(i => i.isPrimary)?.url || product?.images?.[0]?.url || '';
-        const qty           = Number(item.quantity) || 0;
-        const threshold     = Math.max(2, Math.ceil(qty * 0.2));
+        const imageUrl = item.image || product?.images?.find(i => i.isPrimary)?.url || product?.images?.[0]?.url || '';
+        const qty = Number(item.quantity) || 0;
+        const threshold = Math.max(2, Math.ceil(qty * 0.2));
 
         await DealerInventory.findOneAndUpdate(
           { dealerId: order.dealerId, productId: pid },
           {
             // $inc: { receivedQty: qty, currentQty: qty },
             $setOnInsert: {
-              productName:   item.name || item.productName || product?.name || '',
-              sku:           item.sku  || item.productCode || product?.sku  || '',
+              productName: item.name || item.productName || product?.name || '',
+              sku: item.sku || item.productCode || product?.sku || '',
               imageUrl,
               purchasePrice,
-              soldQty:   0,
+              soldQty: 0,
               threshold,
             },
           },
