@@ -45,6 +45,7 @@ const getNotificationRoute = (n) => {
   if (entityType === 'SupportTicket' ||  type === 'info') return '/support';
   if (entityType === 'dealer' || type === 'dealer') return '/onboarding';
   if(entityType === 'Order' || type === 'order') return '/orders';
+  if (entityType === 'invoice' || type === 'payment') return '/invoices';
   return null;
 };
 

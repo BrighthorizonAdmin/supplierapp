@@ -489,4 +489,78 @@ router.post('/low-stock-after-order', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-order-cancel
+// Called by D-BE when a dealer cancels their own order.
+// Finds the matching S-BE order (by dbeOrderId) and marks it as cancelled.
+// If the supplier had already confirmed the order, also reverses any S-BE-side
+// inventory allocations and cancels the S-BE invoice.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-order-cancel', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      console.warn('[Webhook] Unauthorized dealer-order-cancel attempt from:', req.ip);
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { dbeOrderId, orderNumber, reason } = req.body;
+
+    const Order = require('../orders/model/Order.model');
+    const OrderItem = require('../orders/model/OrderItem.model');
+    const Invoice = require('../payments/model/Invoice.model');
+
+    // Find the S-BE order linked to this D-BE order
+    let supplierOrder = null;
+    if (dbeOrderId) supplierOrder = await Order.findOne({ dbeOrderId });
+    if (!supplierOrder && orderNumber) {
+      supplierOrder = await Order.findOne({ dealerOrderNumber: orderNumber });
+    }
+
+    if (!supplierOrder) {
+      console.warn(`[Webhook] dealer-order-cancel: no S-BE order found for dbeOrderId=${dbeOrderId}`);
+      return res.json({ success: true, message: 'Supplier order not found, nothing to cancel' });
+    }
+
+    if (['cancelled', 'delivered'].includes(supplierOrder.status)) {
+      console.log(`[Webhook] dealer-order-cancel: order already ${supplierOrder.status}, skipping`);
+      return res.json({ success: true, message: `Order already ${supplierOrder.status}` });
+    }
+
+    const wasConfirmed = supplierOrder.status === 'confirmed';
+
+    // If supplier had already confirmed, reverse S-BE inventory allocations
+    if (wasConfirmed) {
+      const items = await OrderItem.find({ orderId: supplierOrder._id }).lean();
+      if (items.length > 0) {
+        const inventoryService = require('../inventory/inventory.service');
+        const Product = require('../products/model/Product.model');
+        for (const item of items) {
+          try {
+            await inventoryService.releaseAllocation(item.productId, item.warehouseId, item.quantity);
+            await Product.findByIdAndUpdate(item.productId, { $inc: { currentStockQty: item.quantity } });
+          } catch (invErr) {
+            console.error('[Webhook] dealer-order-cancel: inventory reversal failed:', invErr.message);
+          }
+        }
+      }
+      // Cancel the S-BE invoice created at confirmation time
+      if (supplierOrder.invoiceId) {
+        await Invoice.findByIdAndUpdate(supplierOrder.invoiceId, { status: 'cancelled' });
+      }
+    }
+
+    supplierOrder.status = 'cancelled';
+    supplierOrder.cancellationReason = reason || 'Cancelled by dealer';
+    supplierOrder.cancelledAt = new Date();
+    await supplierOrder.save();
+
+    console.log(`[Webhook] dealer-order-cancel: cancelled S-BE order ${supplierOrder.orderNumber} (dbeOrderId=${dbeOrderId}, wasConfirmed=${wasConfirmed})`);
+    return res.json({ success: true, data: { orderNumber: supplierOrder.orderNumber, status: 'cancelled' } });
+  } catch (err) {
+    console.error('[Webhook] dealer-order-cancel error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
 module.exports = router;
