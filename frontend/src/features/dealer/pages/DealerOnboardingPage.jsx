@@ -364,7 +364,7 @@ const DealerOnboardingPage = () => {
               </div>
 
               {/* Documents */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              {/* <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <h3 className="text-sm font-semibold text-slate-800 mb-4">Documents</h3>
                 {docsLoading ? (
                   <div className="flex items-center justify-center h-16">
@@ -393,7 +393,7 @@ const DealerOnboardingPage = () => {
                     ))}
                   </div>
                 )}
-              </div>
+              </div> */}
 
               {/* Previously Requested Updates — shown when supplier flagged fields or dealer resubmitted */}
               {(selected.updateRequestedFields?.length > 0 || selected.lastResubmittedAt) && (
