@@ -224,8 +224,14 @@ const confirmOrder = async (orderId, userId) => {
     if (!dealer) throw new AppError('Dealer not found', 404);
     if (dealer.status !== 'active') throw new AppError('Dealer account is not active', 400);
 
-    // Credit limit check
-    if (dealer.creditUsed + order.netAmount > dealer.creditLimit) {
+    // D-BE webhook orders (dbeOrderId set) already have creditUsed managed by the dealer app:
+    //   - net-30: D-BE incremented creditUsed when the dealer placed the order
+    //   - card/UPI/bank: payment was already collected; creditUsed is not involved
+    // So only run credit checks/updates for supplier-created orders (no dbeOrderId).
+    const isSupplierCreatedOrder = !order.dbeOrderId;
+
+    // Credit limit check — only for supplier-created orders
+    if (isSupplierCreatedOrder && dealer.creditUsed + order.netAmount > dealer.creditLimit) {
       throw new AppError(
         `Order amount (₹${order.netAmount}) exceeds available credit (₹${dealer.availableCredit})`,
         400
@@ -244,27 +250,48 @@ const confirmOrder = async (orderId, userId) => {
       );
     }
 
+    // D-BE webhook orders embed items in order.items — OrderItem collection is empty for them.
+    // Fall back to embedded items so the invoice always has line items with product names.
+    const invoiceLineItems = items.length > 0
+      ? items.map((i) => ({
+          productId:   i.productId,
+          productName: i.productName,
+          productCode: i.productCode,
+          quantity:    i.quantity,
+          unitPrice:   i.unitPrice,
+          taxRate:     i.taxRate,
+          taxAmount:   i.taxAmount,
+          lineTotal:   i.lineTotal,
+        }))
+      : (order.items || []).map((i) => ({
+          productId:   i.productId,
+          productName: i.productName || i.name || '',
+          productCode: i.productCode || i.sku  || '',
+          quantity:    Number(i.quantity)  || 0,
+          unitPrice:   Number(i.unitPrice  || i.basePrice) || 0,
+          taxRate:     Number(i.taxRate)   || 0,
+          taxAmount:   Number(i.taxAmount) || 0,
+          lineTotal:   Number(i.lineTotal) || 0,
+        }));
+
+    // Orders paid upfront (card / UPI / bank transfer) arrive with paymentStatus:'completed'.
+    // Mark the invoice as paid immediately; net-30 and supplier-created orders stay as 'issued'.
+    const isAlreadyPaid = order.paymentStatus === 'completed';
+
     // Create Invoice
     const invoice = await Invoice.create(
       [{
-        orderId: order._id,
-        dealerId: order.dealerId,
-        lineItems: items.map((i) => ({
-          productId: i.productId,
-          productName: i.productName,
-          productCode: i.productCode,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          taxRate: i.taxRate,
-          taxAmount: i.taxAmount,
-          lineTotal: i.lineTotal,
-        })),
-        subtotal: order.subtotal,
-        taxAmount: order.taxAmount,
-        totalAmount: order.netAmount,
-        status: 'issued',
-        issuedAt: new Date(),
-        dueDate: addDays(new Date(), 30),
+        orderId:      order._id,
+        dealerId:     order.dealerId,
+        lineItems:    invoiceLineItems,
+        subtotal:     order.subtotal,
+        taxAmount:    order.taxAmount,
+        totalAmount:  order.netAmount,
+        amountPaid:   isAlreadyPaid ? order.netAmount : 0,
+        status:       isAlreadyPaid ? 'paid' : 'issued',
+        paymentMode:  order.paymentMethod || undefined,
+        issuedAt:     new Date(),
+        dueDate:      addDays(new Date(), 30),
       }],
       { session }
     );
@@ -277,13 +304,15 @@ const confirmOrder = async (orderId, userId) => {
     order.creditUsed = order.netAmount;
     await order.save({ session });
 
-    // Update dealer creditUsed — use $inc to avoid triggering full schema validation
-    // on dealer documents created by the dealer app (may have mismatched field shapes)
-    await Dealer.findByIdAndUpdate(
-      order.dealerId,
-      { $inc: { creditUsed: order.netAmount } },
-      { session }
-    );
+    // Update dealer creditUsed — only for supplier-created orders.
+    // D-BE webhook orders already had creditUsed incremented by the dealer app at order placement.
+    if (isSupplierCreatedOrder) {
+      await Dealer.findByIdAndUpdate(
+        order.dealerId,
+        { $inc: { creditUsed: order.netAmount } },
+        { session }
+      );
+    }
 
     // Create transaction record
     await Transaction.create([{
@@ -328,6 +357,9 @@ const cancelOrder = async (orderId, reason, userId) => {
     }
 
     const wasConfirmed = order.status === 'confirmed';
+    // D-BE webhook orders never had creditUsed incremented by S-BE (D-BE manages it).
+    // Only reverse creditUsed for supplier-created orders.
+    const isSupplierCreatedOrder = !order.dbeOrderId;
     const items = await OrderItem.find({ orderId }).session(session);
 
     if (wasConfirmed) {
@@ -341,15 +373,17 @@ const cancelOrder = async (orderId, reason, userId) => {
         );
       }
 
-      // Reverse creditUsed
-      const dealer = await Dealer.findById(order.dealerId).session(session).lean();
-      if (dealer) {
-        const decrement = Math.min(dealer.creditUsed, order.netAmount);
-        await Dealer.findByIdAndUpdate(
-          order.dealerId,
-          { $inc: { creditUsed: -decrement } },
-          { session }
-        );
+      // Reverse creditUsed — only for supplier-created orders
+      if (isSupplierCreatedOrder) {
+        const dealer = await Dealer.findById(order.dealerId).session(session).lean();
+        if (dealer) {
+          const decrement = Math.min(dealer.creditUsed, order.netAmount);
+          await Dealer.findByIdAndUpdate(
+            order.dealerId,
+            { $inc: { creditUsed: -decrement } },
+            { session }
+          );
+        }
       }
 
       // Cancel invoice
