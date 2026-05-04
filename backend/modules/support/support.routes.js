@@ -13,7 +13,7 @@ whRouter.post('/dealer-support-ticket', async (req, res) => {
   try {
     if (req.headers['x-webhook-secret'] !== WEBHOOK_SECRET)
       return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const ticket = await supportService.createFromWebhook(req.body, 'GENERAL');
+    const ticket = await supportService.createFromWebhook(req.body);
     return res.status(201).json({ success: true, data: ticket });
   } catch (err) {
     console.error('[SupportWebhook] error:', err.message);
@@ -25,8 +25,8 @@ whRouter.post('/dealer-service-request', async (req, res) => {
   try {
     if (req.headers['x-webhook-secret'] !== WEBHOOK_SECRET)
       return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const ticket = await supportService.createFromWebhook(req.body, 'SERVICE_REQUEST');
-    return res.status(201).json({ success: true, data: ticket });
+    const sr = await supportService.createServiceRequestFromWebhook(req.body);
+    return res.status(201).json({ success: true, data: sr });
   } catch (err) {
     console.error('[SupportWebhook] error:', err.message);
     return res.status(500).json({ success: false, message: 'Failed' });
