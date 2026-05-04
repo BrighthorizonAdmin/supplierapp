@@ -77,16 +77,7 @@ async function notifyDealerOrderStatus(order, status, extraFields = {}) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// pushStockStatusAfterConfirm
-// Called (non-blocking) right after an order is confirmed.
-// Reads current stock for each ordered product. For every product that is
-// low-stock or out-of-stock:
-//   1. Creates a warning notification for all active supplier admins.
-//   2. Calls the dealer backend's stock-alert endpoint so all active dealers
-//      also receive a STOCK_ALERT notification (dealer side dedupes per 24 h).
-// ─────────────────────────────────────────────────────────────────────────────
-async function pushStockStatusAfterConfirm(orderItems, orderNumber) {
+async function pushStockStatusAfterConfirm(orderItems, orderNumber, dealerId) {
   try {
     const notificationService = require('../notifications/notification.service');
     const User = require('../auth/model/User.model');
@@ -94,18 +85,24 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber) {
     const DEALER_WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET;
 
     const alertItems = [];
+
     for (const item of orderItems) {
       const pid = item.productId?._id || item.productId;
       if (!pid) continue;
+
       const product = await Product.findById(pid)
         .select('name productCode currentStockQty openingStockQty')
         .lean();
+
       if (!product) continue;
 
       const isOutOfStock = product.currentStockQty <= 0;
-      // Use 20% of openingStockQty as threshold; fall back to 10 units if openingStockQty not set
-      const lowStockThreshold = product.openingStockQty > 0 ? product.openingStockQty * 0.2 : 10;
-      const isLowStock = !isOutOfStock && product.currentStockQty < lowStockThreshold;
+      const lowStockThreshold =
+        product.openingStockQty > 0 ? product.openingStockQty * 0.2 : product.currentStockQty;
+
+      const isLowStock =
+        !isOutOfStock && product.currentStockQty < lowStockThreshold;
+
       if (!isOutOfStock && !isLowStock) continue;
 
       alertItems.push({
@@ -117,10 +114,7 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber) {
       });
     }
 
-    if (!alertItems.length) {
-      console.log(`[StockAlert] Order ${orderNumber}: all products in stock, no alerts needed`);
-      return;
-    }
+    if (!alertItems.length) return;
 
     const outCount = alertItems.filter(i => i.alertType === 'out-of-stock').length;
     const lowCount = alertItems.filter(i => i.alertType === 'low-stock').length;
@@ -140,20 +134,40 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber) {
       });
     }
 
-    // 2. Push STOCK_ALERT to dealer backend for each affected product (fire-and-forget)
-    if (DEALER_API_URL && DEALER_WEBHOOK_SECRET) {
-      for (const item of alertItems) {
-        axios.post(
-          `${DEALER_API_URL}/api/notifications/supplier/stock-alert`,
-          item,
-          { headers: { 'Content-Type': 'application/json', 'x-api-key': DEALER_WEBHOOK_SECRET }, timeout: 5000 }
-        ).catch(err => console.error('[StockAlert] push to dealer backend failed:', err.message));
-      }
-    } else {
-      console.warn('[StockAlert] DEALER_API_URL or DEALER_WEBHOOK_SECRET not set — skipping dealer notification');
-    }
+    await Promise.all(
+      admins.map((admin) =>
+        notificationService.create({
+          recipientId: admin._id,
+          title: `Stock Alert after Order #${orderNumber}`,
+          message: `${alertItems.length} product(s) need attention`,
+          type: 'warning',
+        })
+      )
+    );
 
-    console.log(`[StockAlert] Order ${orderNumber}: ${alertItems.length} alert(s) sent to supplier and dealer`);
+    // ✅ Send to dealer (single API call)
+    if (DEALER_API_URL && DEALER_WEBHOOK_SECRET) {
+      axios
+        .post(
+          `${DEALER_API_URL}/api/notifications/supplier/stock-alert`,
+          {
+            dealerId,
+            orderNumber,
+            items: alertItems,
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': DEALER_WEBHOOK_SECRET,
+            },
+            timeout: 5000,
+          }
+        )
+        console.log(`[StockAlert] Order ${orderNumber}: ${alertItems.length} alert(s) sent to dealer backend`)
+        .catch((err) =>
+          console.error('[StockAlert] dealer push failed:', err.message)
+        );
+    }
   } catch (err) {
     console.error('[pushStockStatusAfterConfirm] error:', err.message);
   }
@@ -343,7 +357,7 @@ const confirmOrder = async (orderId, userId) => {
   const confirmedItems = order.items?.length
     ? order.items
     : await OrderItem.find({ orderId }).lean();
-  pushStockStatusAfterConfirm(confirmedItems, order.orderNumber);
+  pushStockStatusAfterConfirm(confirmedItems, order.orderNumber,order.dealerId);
 
   return order;
 };
