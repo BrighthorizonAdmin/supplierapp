@@ -197,18 +197,18 @@ async function applyRefundSideEffects(ret, refundAmount) {
 
       await DealerInventory.findOneAndUpdate(
         { dealerId, productId: pid },
-        { $inc: { currentQty: -qty, receivedQty: -qty } },
+        { $inc: { currentQty: -qty } },
         { runValidators: false }
       );
-      // Clamp both fields to ≥ 0
+      // Clamp currentQty to ≥ 0
       await DealerInventory.updateOne(
         { dealerId, productId: pid, currentQty: { $lt: 0 } },
         { $set: { currentQty: 0 } }
       );
-      await DealerInventory.updateOne(
-        { dealerId, productId: pid, receivedQty: { $lt: 0 } },
-        { $set: { receivedQty: 0 } }
-      );
+      // NOTE: receivedQty is NOT decremented — it represents the historical
+      // total ever received and must stay positive so the low-stock query
+      // (filter: receivedQty > 0) continues to include this product after a
+      // return, correctly showing it as out-of-stock instead of hiding it.
       console.log(`[applyRefundSideEffects] DealerInventory −${qty} for product ${pid} ✓`);
     }
 

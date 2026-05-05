@@ -2,19 +2,18 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOrderById, confirmOrder, cancelOrder, clearSelected } from '../orderSlice';
-import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Package, Truck, MapPin, CreditCard, CheckCheck } from 'lucide-react';
+import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Truck, MapPin, CreditCard, CheckCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
 
 const STATUS_RANK = {
   draft: 0, pending: 1, confirmed: 2,
-  processing: 3, shipped: 4, out_for_delivery: 5, delivered: 6, cancelled: 7,
+  processing: 2, shipped: 3, out_for_delivery: 4, delivered: 5, cancelled: 6,
 };
 
 const PROGRESS_STEPS = [
   { label: 'Confirm', status: 'confirmed', Icon: CheckCircle },
-  { label: 'Mark Processing', status: 'processing', Icon: Package },
   { label: 'Mark Shipped', status: 'shipped', Icon: Truck },
   { label: 'Out for Delivery', status: 'out_for_delivery', Icon: MapPin },
   { label: 'Mark Delivered', status: 'delivered', Icon: CheckCheck },
