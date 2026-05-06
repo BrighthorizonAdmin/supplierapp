@@ -405,6 +405,7 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
               )}
             </div>
           </div>
+
         </div>
 
         {/* RIGHT */}
@@ -470,7 +471,7 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
           </div>
 
           {/* Shipping Method */}
-          <div className="card">
+          {/* <div className="card">
             <div className="px-5 py-4 border-b border-slate-100">
               <h2 className="font-semibold text-slate-900">Shipping Method</h2>
             </div>
@@ -487,12 +488,35 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
                 </p>
                 {(order.shippingCost > 0) && (
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Shipping Cost: ₹{order.shippingCost.toLocaleString('en-IN')}
+                    Shipping Cost: ₹{order.shippingCost.toLocaleString('en-')}
                   </p>
                 )}
               </div>
             </div>
+          </div> */}
+          <div className="card">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-900">Return Details</h2>
+            </div>
+            <div className="px-6 py-5">
+              {order.returns && order.returns.length > 0 ? (
+                order.returns.map((ret, idx) => (
+                  <div key={idx} className="mb-4 last:mb-0">
+                    <p className="font-medium text-sm text-slate-800">RMA: {ret.rmaNumber || ret.returnId}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Status: {ret.status} · Refund: ₹{(ret.refundAmount || 0).toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Refund Status: {ret.refundStatus || '—'}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-400 text-center py-2">No returns found</p>
+              )}
+            </div>
           </div>
+
 
         </div>
       </div>

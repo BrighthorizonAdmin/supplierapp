@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { fetchOrders, cancelOrder, fetchOrderById } from '../orderSlice';
+import { fetchOrders, cancelOrder, fetchOrderById, confirmOrder } from '../orderSlice';
 import Pagination from '../../../components/ui/Pagination';
 import {
   Search, Download, Eye,
@@ -63,12 +63,13 @@ const STATUS_CLS = {
   delivered:  'badge-solid-green',
   cancelled:  'badge-solid-red',
 };
-const StatusCell = ({ order, onView, onReject }) => {
+const StatusCell = ({ order, onView, onReject, onConfirm }) => {
   if (order.status === 'pending') {
     return (
       <div className="flex flex-col gap-0.5">
         <button
-          onClick={() => onView(order)}
+          // onClick={() => onView(order)}
+          onClick={() => onConfirm(order._id)}
           className="text-xs font-semibold text-primary-600 hover:underline text-left"
         >
           Accept Order
@@ -467,7 +468,7 @@ const filteredOrders = useMemo(() => {
 
                     {/* Status */}
                     <td className="px-4 py-3.5">
-                      <StatusCell order={order} onView={goToOrder} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
+                      <StatusCell order={order} onView={goToOrder} onConfirm={(id) => dispatch(confirmOrder(id))} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
                     </td>
 
                     {/* Actions */}
@@ -509,6 +510,11 @@ const filteredOrders = useMemo(() => {
                       >
                         <p className="font-semibold text-slate-800 hover:text-primary-600 transition-colors">
                           {order.orderNumber}
+                          {order.returns?.some((r) => r.status === 'refunded') && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-500">
+                              Refunded
+                            </span>
+                          )}
                         </p>
                         {order.dealerOrderNumber && (
                           <p className="text-xs text-slate-400 mt-0.5">
@@ -555,7 +561,7 @@ const filteredOrders = useMemo(() => {
 
                     {/* Status */}
                     <td className="px-4 py-3.5">
-                      <StatusCell order={order} onView={goToOrder} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
+                      <StatusCell order={order} onView={goToOrder} onConfirm={(id) => dispatch(confirmOrder(id))} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
                     </td>
 
                     {/* Actions */}
