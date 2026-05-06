@@ -14,6 +14,7 @@ const { ORDER_CONFIRMED, ORDER_CANCELLED } = require('../../websocket/events');
 const { addDays } = require('date-fns');
 const axios = require('axios');
 const mongoose = require('mongoose');
+const ReturnModel = require('../returns/model/Return.model');
 
 // ── DealerInventory — shared DB, so we access it directly ─────────────────────
 // Both S-BE and D-BE use the same MongoDB (dealer_app), so we can write
@@ -230,11 +231,13 @@ const createOrder = async ({ dealerId, items, notes, orderType }, userId) => {
 
 const confirmOrder = async (orderId, userId) => {
   const order = await withTransaction(async (session) => {
-    const order = await Order.findById(orderId).session(session);
+    const order = await Order.findById(orderId)
+     .populate('dealerId').session(session);
     if (!order) throw new AppError('Order not found', 404);
     if (!['draft', 'pending'].includes(order.status)) throw new AppError(`Order is already ${order.status}`, 400);
 
-    const dealer = await Dealer.findById(order.dealerId).session(session);
+    // const dealer = await Dealer.findById(order.dealerId).session(session);
+    const dealer = order.dealerId;
     if (!dealer) throw new AppError('Dealer not found', 404);
     if (dealer.status !== 'active') throw new AppError('Dealer account is not active', 400);
 
@@ -364,7 +367,8 @@ const confirmOrder = async (orderId, userId) => {
 
 const cancelOrder = async (orderId, reason, userId) => {
   return withTransaction(async (session) => {
-    const order = await Order.findById(orderId).session(session);
+    const order = await Order.findById(orderId)
+    .populate('dealerId').session(session);
     if (!order) throw new AppError('Order not found', 404);
     if (['delivered', 'cancelled'].includes(order.status)) {
       throw new AppError(`Cannot cancel an order with status: ${order.status}`, 400);
@@ -389,7 +393,8 @@ const cancelOrder = async (orderId, reason, userId) => {
 
       // Reverse creditUsed — only for supplier-created orders
       if (isSupplierCreatedOrder) {
-        const dealer = await Dealer.findById(order.dealerId).session(session).lean();
+        // const dealer = await Dealer.findById(order.dealerId).session(session).lean();
+        const dealer = order.dealerId;
         if (dealer) {
           const decrement = Math.min(dealer.creditUsed, order.netAmount);
           await Dealer.findByIdAndUpdate(
@@ -452,6 +457,38 @@ const getOrderStats = async () => {
   return counts;
 };
 
+const attachReturnsToOrders = async (orders) => {
+  if (!orders || orders.length === 0) return orders;
+  
+  const orderIds = orders.map((order) => order.dbeOrderId);
+  
+  try {
+    const returns = await ReturnModel.find({ orderId: { $in: orderIds } })
+      .select('orderId rmaNumber returnId status refundAmount refundStatus items createdAt')
+      .lean();
+    
+    console.log(`[attachReturnsToOrders] Found ${returns.length} returns for ${orderIds.length} orders`);
+    
+    const returnsByOrder = {};
+    returns.forEach((ret) => {
+      const key = String(ret.orderId);
+      if (!returnsByOrder[key]) returnsByOrder[key] = [];
+      returnsByOrder[key].push(ret);
+    });
+    
+    return orders.map((order) => ({
+      ...order,
+      returns: returnsByOrder[String(order.dbeOrderId)] || [],
+    }));
+  } catch (err) {
+    console.error('[attachReturnsToOrders] Error fetching returns:', err.message);
+    return orders.map((order) => ({
+      ...order,
+      returns: [],
+    }));
+  }
+};
+
 const getOrders = async (query = {}) => {
   const { page, limit, skip } = getPagination(query);
 
@@ -490,11 +527,21 @@ const getOrders = async (query = {}) => {
       .select("_id")
       .lean();
 
+      const returns = await ReturnModel.find({
+        $or: [
+          { rmaNumber: re },
+          { returnId: re },
+        ],
+      })
+      .select("orderId")
+      .lean();
+      console.log(returns)
     const dealerIds = dealers.map(d => d._id);
 
     match.$or = [
       { orderNumber: re },
-      ...(dealerIds.length ? [{ dealerId: { $in: dealerIds } }] : [])
+      ...(dealerIds.length ? [{ dealerId: { $in: dealerIds } }] : []),
+      ...(returns.length ? [{ _id: { $in: returns.map(r => r.orderId) } }] : []),
     ];
   }
 
@@ -502,6 +549,7 @@ const getOrders = async (query = {}) => {
     Order.find(match)
       .populate("dealerId") // full dealer info
       .populate("confirmedBy", "name")
+      .populate()
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -510,7 +558,11 @@ const getOrders = async (query = {}) => {
     Order.countDocuments(match),
   ]);
 
-  return { data, pagination: buildMeta(total, page, limit) };
+  const dataWithReturns = data.length
+    ? await attachReturnsToOrders(data)
+    : data;
+
+  return { data: dataWithReturns, pagination: buildMeta(total, page, limit) };
 };
 
 const getOrderById = async (id) => {
@@ -529,7 +581,13 @@ const getOrderById = async (id) => {
       .populate('warehouseId', 'name code')
       .lean();
 
-  return { ...order, items };
+  const returns = await ReturnModel.find({ orderId: order.dbeOrderId })
+    .select('rmaNumber returnId status refundAmount refundStatus items createdAt updatedAt reason processedBy dealerId')
+    .lean();
+
+  console.log(`[getOrderById] Order ${id}: Found ${returns.length} returns`);
+
+  return { ...order, items, returns };
 };
 
 const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
