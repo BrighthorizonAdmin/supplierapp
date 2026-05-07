@@ -51,6 +51,25 @@ app.use('/uploads', cors({ origin: '*' }), (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'uploads')));
 
+// Proxy dealer document files to D-BE — mirrors the Vite dev proxy for production.
+// The frontend uses /dealer-uploads/... URLs. In dev, Vite rewrites them to D-BE.
+// In production (built frontend served by S-BE), this route does the same rewrite.
+app.use('/dealer-uploads', cors({ origin: '*' }), async (req, res) => {
+  const axios = require('axios');
+  const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5000';
+  const targetUrl = `${DEALER_API_URL}/uploads${req.path}`;
+  try {
+    const response = await axios.get(targetUrl, { responseType: 'stream', timeout: 10000 });
+    res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    response.data.pipe(res);
+  } catch (err) {
+    console.error('[DealerUploadsProxy] Failed to fetch from D-BE:', err.message);
+    res.status(502).json({ success: false, message: 'Could not fetch dealer document' });
+  }
+});
+
 // ─── WEBHOOK CORS (server-to-server — bypass all origin restrictions) ──────────
 // All webhook endpoints are called by D-BE backend, not a browser.
 // They need: x-webhook-secret (retail invoice, support) and x-api-key (dealership apply).

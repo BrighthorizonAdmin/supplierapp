@@ -4,6 +4,7 @@ const {
   rejectDealer, suspendDealer, reactivateDealer, updateDealer, getDealerStats,
   requestUpdate, 
 } = require('./dealer.controller');
+const { resolveDocuments, mirrorDocuments } = require('./dealer.service');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { authorize } = require('../../middlewares/rbac.middleware');
 
@@ -35,6 +36,11 @@ router.post('/webhook/application', async (req, res) => {
       body.submittedDocuments = body.documents;
     }
     delete body.documents; // remove so it doesn't get spread as an unknown field
+
+    // Download docs from D-BE and save to S-BE disk (mirrors how product images work)
+    if (body.submittedDocuments) {
+      body.submittedDocuments = await mirrorDocuments(body.submittedDocuments);
+    }
 
     console.log('[Webhook] creating dealer for applicationId:', body.applicationId, 'email:', body.email);
     const dealer = await require('./dealer.service').createFromWebhook(body);
@@ -95,12 +101,13 @@ router.post('/webhook/application-updated', async (req, res) => {
       };
     }
 
-    // Store the updated documents so the supplier can review them inline
+    // Download updated docs from D-BE and save to S-BE disk
     if (documents && typeof documents === 'object') {
+      const resolved = await mirrorDocuments(documents);
       dealer.submittedDocuments = {
-        gst:  documents.gst  || dealer.submittedDocuments?.gst,
-        pan:  documents.pan  || dealer.submittedDocuments?.pan,
-        bank: documents.bank || dealer.submittedDocuments?.bank,
+        gst:  resolved.gst  || dealer.submittedDocuments?.gst,
+        pan:  resolved.pan  || dealer.submittedDocuments?.pan,
+        bank: resolved.bank || dealer.submittedDocuments?.bank,
       };
     }
 
