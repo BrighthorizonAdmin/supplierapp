@@ -216,7 +216,7 @@ const getDealerById = async (id) => {
   return withResolvedDocs(dealer);
 };
 
-const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => {
+const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms, assignedManager }, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
   if (!['pending', 'updates-required'].includes(dealer.status)) throw new AppError(`Cannot approve dealer with status: ${dealer.status}`, 400);
@@ -228,8 +228,9 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => 
 
   dealer.status = 'active';
   dealer.kycStatus = 'verified';
-  dealer.creditLimit = creditLimit || 0;
-  dealer.pricingTier = pricingTier || 'standard';
+  dealer.creditLimit  = creditLimit || 0;
+  dealer.pricingTier  = pricingTier || 'standard';
+  dealer.paymentTerms = paymentTerms || '';
   dealer.approvedBy = userId;
   dealer.approvedAt = new Date();
   dealer.password = randomPassword; // pre-save hook will hash this
@@ -256,7 +257,10 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => 
   emitToRole('admin', DEALER_APPROVED, { dealerId, dealerCode: dealer.dealerCode, businessName: dealer.businessName });
   emitToAll(DEALER_APPROVED, { dealerId, businessName: dealer.businessName });
 
-  await syncToDealerApp(dealer.applicationId, 'APPROVE');
+  await syncToDealerApp(dealer.applicationId, 'APPROVE', {
+    creditLimit:  creditLimit || 0,
+    paymentTerms: paymentTerms || '',
+  });
 
   // Return plain object; tempPassword is exposed once here (not stored in response elsewhere)
   return { ...dealer.toJSON(), tempPassword: randomPassword };

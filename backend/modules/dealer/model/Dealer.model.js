@@ -127,6 +127,7 @@ const dealerSchema = new mongoose.Schema(
       },
       default: 'standard',
     },
+    paymentTerms: { type: String, default: '' },
     bankDetails: {
       type: bankDetailsSchema,
     },
