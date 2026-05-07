@@ -401,7 +401,7 @@ const DealerOnboardingPage = () => {
                   <div className="flex items-center gap-2 mb-3">
                     <AlertTriangle size={15} className="text-amber-500 flex-shrink-0" />
                     <h3 className="text-sm font-semibold text-amber-800">
-                      {selected.lastResubmittedAt ? 'Update Request — Dealer Resubmitted' : 'Update Requested from Dealer'}
+                      {selected.lastResubmittedAt ? 'Update Request — Dealer Resubmitted' : 'Update Requested to Dealer'}
                     </h3>
                   </div>
 
@@ -455,11 +455,14 @@ const DealerOnboardingPage = () => {
                       {['gst', 'pan', 'bank'].map((key) => {
                         const doc = selected.submittedDocuments[key];
                         if (!doc?.fileUrl) return null;
-                        // Use the /dealer-uploads Vite proxy which rewrites to D-BE /uploads
-                        const rawPath = doc.fileUrl.replace(/^\/uploads/, '');
-                        const url = doc.fileUrl.startsWith('http')
+                        // New records: mirrored to S-BE disk, fileUrl = "/uploads/dealership/..."
+                        // Old records: absolute D-BE URL — route through /dealer-uploads proxy
+                        const url = doc.fileUrl.startsWith('/uploads/')
                           ? doc.fileUrl
-                          : `/dealer-uploads${rawPath}`;
+                          : (() => {
+                              const m = doc.fileUrl.match(/\/uploads(\/.*)/);
+                              return m ? `/dealer-uploads${m[1]}` : doc.fileUrl;
+                            })();
                         const labels = { gst: 'GST Certificate', pan: 'PAN Card', bank: 'Bank Statement' };
                         return (
                           <a

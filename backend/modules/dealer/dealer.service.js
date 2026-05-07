@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const Dealer = require('./model/Dealer.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
@@ -8,7 +10,86 @@ const { DEALER_APPLICATION, DEALER_APPROVED, DEALER_REJECTED, DEALER_SUSPENDED }
 const axios = require('axios');
 const { generateRandomPassword, sendDealerApprovalEmail } = require('../../utils/mailer');
 
-const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5001';
+const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5000';
+const DEALER_UPLOADS_DIR = path.join(__dirname, '../../uploads/dealership');
+
+// Downloads a dealer document file from D-BE and saves it on S-BE's disk.
+// Returns the doc with fileUrl updated to a relative S-BE path (/uploads/dealership/...).
+// This mirrors exactly how product images work: file lives on S-BE, served as static.
+const mirrorDocFile = async (doc) => {
+  if (!doc?.fileUrl) return doc;
+  // Already mirrored to S-BE — skip only if file actually exists on disk
+  if (doc.fileUrl.startsWith('/uploads/dealership/')) {
+    const localPath = path.join(__dirname, '../../', doc.fileUrl);
+    if (fs.existsSync(localPath)) return doc;
+    // File not on disk (came from D-BE with same path prefix) — fall through to mirror
+  }
+
+  // Build the source URL on D-BE, normalising /api/uploads/ → /uploads/
+  let sourceUrl = doc.fileUrl.replace(/\/api\/uploads\//, '/uploads/');
+  if (!sourceUrl.startsWith('http')) {
+    const clean = sourceUrl.replace(/^\//, '');
+    sourceUrl = `${DEALER_API_URL}/${clean}`;
+  }
+
+  try {
+    fs.mkdirSync(DEALER_UPLOADS_DIR, { recursive: true });
+
+    const ext = path.extname(doc.fileName || '') || path.extname(new URL(sourceUrl).pathname) || '.jpg';
+    const newFileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const savePath = path.join(DEALER_UPLOADS_DIR, newFileName);
+
+    const response = await axios.get(sourceUrl, { responseType: 'stream', timeout: 15000 });
+    await new Promise((resolve, reject) => {
+      const writer = fs.createWriteStream(savePath);
+      response.data.pipe(writer);
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    console.log(`[DealerDoc] Mirrored ${doc.fileName || ''} → /uploads/dealership/${newFileName}`);
+    return { ...doc, fileUrl: `/uploads/dealership/${newFileName}` };
+  } catch (err) {
+    console.error('[DealerDoc] Mirror failed for', sourceUrl, ':', err.message);
+    return { ...doc, fileUrl: sourceUrl }; // fallback: store the D-BE URL
+  }
+};
+
+// Async: mirrors all docs in a submittedDocuments object — used in webhook handlers.
+const mirrorDocuments = async (docs) => {
+  if (!docs) return docs;
+  const result = {};
+  for (const [key, val] of Object.entries(docs)) {
+    result[key] = val ? await mirrorDocFile(val) : val;
+  }
+  return result;
+};
+
+// Sync: normalises already-stored URLs when reading from DB — no downloading.
+// Relative S-BE paths and absolute URLs are returned as-is.
+const resolveDocUrl = (doc) => {
+  if (!doc?.fileUrl) return doc;
+  const url = doc.fileUrl;
+  if (url.startsWith('/uploads/') || url.startsWith('http://') || url.startsWith('https://')) return doc;
+  // Legacy relative D-BE path — build absolute D-BE URL as fallback
+  const clean = url.replace(/\/api\/uploads\//, '/uploads/').replace(/^\//, '');
+  return { ...doc, fileUrl: `${DEALER_API_URL}/${clean}` };
+};
+
+const resolveDocuments = (docs) => {
+  if (!docs) return docs;
+  const resolved = {};
+  for (const [key, val] of Object.entries(docs)) {
+    resolved[key] = resolveDocUrl(val);
+  }
+  return resolved;
+};
+
+// Apply resolveDocuments to a dealer object (plain object from .lean())
+const withResolvedDocs = (dealer) => {
+  if (!dealer) return dealer;
+  return { ...dealer, submittedDocuments: resolveDocuments(dealer.submittedDocuments) };
+};
 
 const syncToDealerApp = async (applicationId, action, payload = {}) => {
   if (!applicationId) return;
@@ -123,7 +204,7 @@ const getDealers = async (query = {}) => {
     Dealer.countDocuments(match),
   ]);
 
-  return { data, pagination: buildMeta(total, page, limit) };
+  return { data: data.map(withResolvedDocs), pagination: buildMeta(total, page, limit) };
 };
 
 const getDealerById = async (id) => {
@@ -132,7 +213,7 @@ const getDealerById = async (id) => {
     .populate('approvedBy', 'name email role')
     .lean({ virtuals: true });
   if (!dealer) throw new AppError('Dealer not found', 404);
-  return dealer;
+  return withResolvedDocs(dealer);
 };
 
 const approveDealer = async (dealerId, { creditLimit, pricingTier }, userId) => {
@@ -307,5 +388,5 @@ const getDealerStats = async (dealerId) => {
 module.exports = {
   createDealer, createFromWebhook, getDealers, getDealerById, approveDealer,
   rejectDealer, suspendDealer, reactivateDealer, updateDealer, getDealerStats,
-  requestUpdate,
+  requestUpdate, resolveDocuments, mirrorDocuments, withResolvedDocs,
 };
