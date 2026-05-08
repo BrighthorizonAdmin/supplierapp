@@ -137,8 +137,8 @@ const OrderDetailPage = () => {
 <div>
 <div class="section-title">Payment & Shipping</div>
 <div class="label">Payment Status</div><div class="value">${order.paymentStatus || 'Pending'}</div>
-<div class="label">Payment Method</div><div class="value">${order.paymentMethod || 'Credit Card'}</div>
-<div class="label">Credit Terms</div><div class="value">${order.paymentTerms || 'Net 30'}</div>
+<div class="label">Payment Method</div><div class="value">${/^net-\d+$/.test(order.paymentMethod) ? order.paymentMethod.replace('net-', 'Credit Limit · Net ') : (order.paymentMethod || 'Credit Card')}</div>
+<div class="label">Credit Terms</div><div class="value">${/^net-\d+$/.test(order.paymentMethod) ? order.paymentMethod.replace('net-', 'Net ') : (order.paymentTerms || '—')}</div>
 <div class="label">Carrier</div><div class="value">${order.shippingMethod || order.deliveryMethod || '—'}</div>
 <div class="label">Tracking No.</div><div class="value">${order.trackingNumber || 'Pending'}</div>
 </div>
@@ -454,7 +454,9 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500">Payment Method</span>
                   <span className="font-medium text-slate-700 capitalize">
-                    {order.paymentMethod === 'net-30' ? 'Credit Limit · Net 30' : order.paymentMethod}
+                    {/^net-\d+$/.test(order.paymentMethod)
+                      ? `Credit Limit · ${order.paymentMethod.replace('net-', 'Net ')}`
+                      : order.paymentMethod}
                   </span>
                 </div>
               )}
