@@ -157,7 +157,7 @@ const NotificationPage = () => {
                   <select value={settings.defaultCreditPeriod} onChange={(e) => set('defaultCreditPeriod', e.target.value)}
                     className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36">
                     <option value="net15">Net 15 days</option><option value="net30">Net 30 days</option>
-                    <option value="net45">Net 45 days</option><option value="net60">Net 60 days</option>
+                    <option value="net45">Net 45 days</option><option value="net60">Net 60 days</option><option value="net90">Net 90 days</option>
                   </select>
                 </div>
                 <div className="flex items-center justify-between">
