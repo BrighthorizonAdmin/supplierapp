@@ -327,11 +327,13 @@ const DealerDetailPage = () => {
             ) : (
               <div className="space-y-2">
                 {submittedDocs.map((doc) => {
-                  // Resolve URL through the /dealer-uploads Vite proxy → D-BE /uploads
-                  const rawPath = (doc.fileUrl || '').replace(/^\/uploads/, '');
-                  const url = (doc.fileUrl || '').startsWith('http')
+                  // Mirrored files live on S-BE — serve directly. Legacy D-BE URLs go via proxy.
+                  const url = (doc.fileUrl || '').startsWith('/uploads/')
                     ? doc.fileUrl
-                    : `/dealer-uploads${rawPath}`;
+                    : (() => {
+                        const m = (doc.fileUrl || '').match(/\/uploads(\/.*)/);
+                        return m ? `/dealer-uploads${m[1]}` : doc.fileUrl;
+                      })();
                   return (
                     <div
                       key={doc.key}
