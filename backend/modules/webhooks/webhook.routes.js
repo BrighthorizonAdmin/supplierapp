@@ -24,6 +24,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       invoiceNumber,
       invoiceDate,
       dealerRef,
+      dealerEmail,
       dealerName,
       dealerPhone,
       customerName,
@@ -48,14 +49,20 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       return res.json({ success: true, message: 'Already synced', data: existing });
     }
 
-    // 3. Try to find the dealer in Sup-BE by phone or name
+    // 3. Resolve dealer — email first (unique key), then phone, then businessName
     let dealer = null;
-    if (dealerPhone) {
-      dealer = await Dealer.findOne({ phone: dealerPhone }).lean();
+    if (dealerEmail) {
+      dealer = await Dealer.findOne({ email: dealerEmail.toLowerCase().trim() }).lean();
+    }
+    if (!dealer && dealerPhone) {
+      const digits = String(dealerPhone).replace(/\D/g, '');
+      const phone10 = digits.length >= 10 ? digits.slice(-10) : digits;
+      if (phone10) dealer = await Dealer.findOne({ phone: phone10 }).lean();
     }
     if (!dealer && dealerName) {
+      const escaped = dealerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       dealer = await Dealer.findOne({
-        businessName: { $regex: dealerName.trim(), $options: 'i' },
+        businessName: { $regex: `^${escaped}$`, $options: 'i' },
       }).lean();
     }
 
@@ -172,7 +179,7 @@ router.post('/dealer-order', async (req, res) => {
 
     const {
       dbeOrderId, orderNumber, dealerId: dealerRef,
-      dealerName, dealerPhone,
+      dealerEmail, dealerName, dealerPhone,
       items, subtotal, taxAmount, netAmount, paymentMethod, paymentStatus,
     } = req.body;
 
@@ -180,12 +187,23 @@ router.post('/dealer-order', async (req, res) => {
     const { generateCode } = require('../../utils/autoCode');
 
     // ── 1. Resolve the supplier-side Dealer record ──
+    // Resolution priority: email (unique shared key) > phone > businessName regex.
+    // Email is the reliable link because the supplier approves dealers by email,
+    // so the S-BE dealer record's email always matches the D-BE dealer account email.
     const Dealer = require('../dealer/model/Dealer.model');
     let supplierDealer = null;
-    if (dealerPhone) supplierDealer = await Dealer.findOne({ phone: dealerPhone }).lean();
+    if (dealerEmail) {
+      supplierDealer = await Dealer.findOne({ email: dealerEmail.toLowerCase().trim() }).lean();
+    }
+    if (!supplierDealer && dealerPhone) {
+      const digits = String(dealerPhone).replace(/\D/g, '');
+      const phone10 = digits.length >= 10 ? digits.slice(-10) : digits;
+      if (phone10) supplierDealer = await Dealer.findOne({ phone: phone10 }).lean();
+    }
     if (!supplierDealer && dealerName) {
+      const escaped = dealerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       supplierDealer = await Dealer.findOne({
-        businessName: { $regex: dealerName.trim(), $options: 'i' },
+        businessName: { $regex: `^${escaped}$`, $options: 'i' },
       }).lean();
     }
 
