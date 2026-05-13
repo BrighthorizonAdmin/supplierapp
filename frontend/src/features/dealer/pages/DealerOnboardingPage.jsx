@@ -223,7 +223,7 @@ const DealerOnboardingPage = () => {
       {/* Page header: title + pill tabs */}
       <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 flex-shrink-0">
         <div>
-          <h1 className="text-xl font-bold text-blue-700">Dealer Onboarding.</h1>
+          <h1 className="text-xl font-bold text-slate-900">Dealer Onboarding</h1>
           <p className="text-sm text-slate-500 mt-0.5">Review pending applications and manage new dealer approvals.</p>
         </div>
         <div className="flex items-center gap-1">
@@ -234,7 +234,7 @@ const DealerOnboardingPage = () => {
               <button
                 key={tab.value}
                 onClick={() => setActiveTab(tab.value)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${isActive
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isActive
                   ? 'border border-blue-600 text-blue-600 bg-white'
                   : 'text-slate-500 hover:text-slate-800'
                   }`}
@@ -296,38 +296,42 @@ const DealerOnboardingPage = () => {
 
         {/* Right: Detail panel */}
         {selected ? (
-          <div className="flex-1 overflow-y-auto bg-slate-50">
-            <div className="p-6 space-y-5">
+          <div className="flex-1 overflow-y-auto bg-slate-50/60">
+            <div className="p-6 space-y-4">
 
               {/* Header row */}
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-slate-900">{selected.businessName}</h2>
                 <div className="flex items-center gap-3">
                   <StatusBadgeOutline status={selected.status} />
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <span className="text-xs text-slate-500">In-Review</span>
-                    <div
-                      role="switch"
-                      aria-checked={inReview}
-                      onClick={() => setInReview((v) => !v)}
-                      className={`relative w-9 h-5 rounded-full transition-colors ${inReview ? 'bg-blue-600' : 'bg-slate-300'}`}
-                    >
-                      <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-150 ${inReview ? 'translate-x-4' : ''}`} />
-                    </div>
-                  </label>
+                  {selected.status !== 'active' && selected.status !== 'rejected' && (
+                    <label className="flex flex-col items-center gap-0.5 cursor-pointer select-none">
+                      <div
+                        role="switch"
+                        aria-checked={inReview}
+                        onClick={() => setInReview((v) => !v)}
+                        className={`relative w-9 h-5 rounded-full transition-colors ${inReview ? 'bg-blue-600' : 'bg-slate-300'}`}
+                      >
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-150 ${inReview ? 'translate-x-4' : ''}`} />
+                      </div>
+                      <span className="text-[10px] text-slate-500">In-Review</span>
+                    </label>
+                  )}
                 </div>
               </div>
 
               {/* Meta info */}
-              <div className="flex items-center gap-6 text-sm text-slate-500 flex-wrap">
+              <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
                 <span className="flex items-center gap-1.5">
-                  <MapPin size={14} className="text-slate-400" />
+                  <MapPin size={14} className="text-blue-500" />
                   {location}
                 </span>
+                <span className="text-slate-300">|</span>
                 <span className="flex items-center gap-1.5">
                   <Calendar size={14} className="text-slate-400" />
                   Applied {selected.createdAt ? format(new Date(selected.createdAt), 'MMM d, yyyy') : '—'}
                 </span>
+                <span className="text-slate-300">|</span>
                 <span className="flex items-center gap-1.5">
                   <Hash size={14} className="text-slate-400" />
                   App ID: {appId}
@@ -362,38 +366,6 @@ const DealerOnboardingPage = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Documents */}
-              {/* <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="text-sm font-semibold text-slate-800 mb-4">Documents</h3>
-                {docsLoading ? (
-                  <div className="flex items-center justify-center h-16">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
-                  </div>
-                ) : dealerDocs.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-4">No documents uploaded</p>
-                ) : (
-                  <div className="grid grid-cols-3 gap-3">
-                    {dealerDocs.map((doc) => (
-                      <a
-                        key={doc._id}
-                        href={doc.fileUrl || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex flex-col items-center gap-2 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-center"
-                      >
-                        <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                          <FileText size={20} className="text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-slate-700">{doc.documentType || 'Document'}</p>
-                          <p className="text-xs text-slate-400 capitalize">{doc.verificationStatus || 'pending'}</p>
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div> */}
 
               {/* Previously Requested Updates — shown when supplier flagged fields or dealer resubmitted */}
               {(selected.updateRequestedFields?.length > 0 || selected.lastResubmittedAt) && (
@@ -439,10 +411,10 @@ const DealerOnboardingPage = () => {
                 </div>
               )}
 
-              {/* Submitted Documents from dealer app — visible once dealer uploads and resubmits */}
+              {/* Submitted Documents */}
               {selected?.submittedDocuments &&
                 Object.values(selected.submittedDocuments).some((d) => d?.fileUrl) && (
-                  <div className="bg-white rounded-xl border border-amber-200 p-5">
+                  <div className="bg-white rounded-xl border border-slate-200 p-5">
                     <div className="flex items-center gap-2 mb-4">
                       <h3 className="text-sm font-semibold text-slate-800">Submitted Documents</h3>
                       {selected.lastResubmittedAt && (
@@ -455,15 +427,15 @@ const DealerOnboardingPage = () => {
                       {['gst', 'pan', 'bank'].map((key) => {
                         const doc = selected.submittedDocuments[key];
                         if (!doc?.fileUrl) return null;
-                        // New records: mirrored to S-BE disk, fileUrl = "/uploads/dealership/..."
-                        // Old records: absolute D-BE URL — route through /dealer-uploads proxy
                         const url = doc.fileUrl.startsWith('/uploads/')
                           ? doc.fileUrl
                           : (() => {
                               const m = doc.fileUrl.match(/\/uploads(\/.*)/);
                               return m ? `/dealer-uploads${m[1]}` : doc.fileUrl;
                             })();
-                        const labels = { gst: 'GST Certificate', pan: 'PAN Card', bank: 'Bank Statement' };
+                        const labels = { gst: 'GST Certificate', pan: 'PAN Card Copy', bank: 'Bank Statement' };
+                        const ext = doc.fileName ? doc.fileName.split('.').pop()?.toUpperCase() : 'FILE';
+                        const sizeKb = doc.fileSize ? (doc.fileSize / (1024 * 1024)).toFixed(1) : null;
                         return (
                           <a
                             key={key}
@@ -477,9 +449,7 @@ const DealerOnboardingPage = () => {
                             </div>
                             <div>
                               <p className="text-xs font-medium text-slate-700">{labels[key]}</p>
-                              <p className="text-xs text-slate-400 truncate max-w-[80px]" title={doc.fileName}>
-                                {doc.fileName}
-                              </p>
+                              <p className="text-xs text-slate-400">{ext}{sizeKb ? ` • ${sizeKb} MB` : ''}</p>
                             </div>
                           </a>
                         );
@@ -487,6 +457,17 @@ const DealerOnboardingPage = () => {
                     </div>
                   </div>
                 )}
+
+              {/* Rejection Details */}
+              {selected.status === 'rejected' && selected.rejectionReason && (
+                <div className="bg-red-50 rounded-xl border border-red-200 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle size={15} className="text-red-500 flex-shrink-0" />
+                    <h3 className="text-sm font-semibold text-red-800">Rejection Reason</h3>
+                  </div>
+                  <p className="text-sm text-red-700 leading-relaxed">{selected.rejectionReason}</p>
+                </div>
+              )}
 
               {/* Approval Actions */}
               {(selected.status === 'pending' || selected.status === 'updates-required') && (
