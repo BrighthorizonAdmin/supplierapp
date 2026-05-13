@@ -544,7 +544,16 @@ router.post('/dealer-order-cancel', async (req, res) => {
     order.cancellationReason = reason || 'Cancelled by dealer';
     order.cancelledAt       = new Date();
     await order.save();
-
+      const User = require('../auth/model/User.model');
+      const notificationService = require('../notifications/notification.service');
+      const admins = await User.find({ isActive: true }).lean();
+    await notificationService.create({
+      recipientId: admins.map(a => a._id), // notify all admins
+      title:       `Order Cancelled: ${order.orderNumber}`,
+      message:     `Your order has been marked as cancelled. Reason: ${reason || 'Cancelled by dealer'}`,
+      type:        'order',
+      relatedEntity: { entityType: 'Order', entityId: order._id },
+    });
     console.log(`[Webhook] dealer-order-cancel: S-BE order ${order.orderNumber} → cancelled (dbeOrderId=${dbeOrderId})`);
     return res.json({ success: true, message: 'Supplier order marked as cancelled' });
   } catch (err) {

@@ -94,7 +94,7 @@ const getPayments = async (query = {}) => {
 
   const [data, total] = await Promise.all([
     Payment.find(match)
-      .populate('dealerId', 'name')
+      .populate('dealerId', 'ownerName businessName email')
       .populate('receivedBy', 'name')
       .populate('confirmedBy', 'name')
       .sort({ createdAt: -1 })
@@ -109,7 +109,7 @@ const getPayments = async (query = {}) => {
 
 const getPaymentById = async (id) => {
   const payment = await Payment.findById(id)
-    .populate('dealerId', 'businessName dealerCode email')
+    .populate('dealerId', 'ownerName businessName email')
     .populate('receivedBy', 'name email')
     .populate('confirmedBy', 'name email')
     .lean();
