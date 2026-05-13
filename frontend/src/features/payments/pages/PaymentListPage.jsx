@@ -20,6 +20,7 @@ const METHOD_LABELS = {
   cheque: 'Cheque',
   neft: 'NEFT',
   rtgs: 'RTGS',
+  card: 'Card',
 };
 
 const PaymentListPage = () => {
@@ -123,6 +124,7 @@ const PaymentListPage = () => {
                 <option value="pending">Pending</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="rejected">Rejected</option>
+                <option value="completed">Completed</option>
               </select>
             </div>
             <div>
@@ -183,7 +185,7 @@ const PaymentListPage = () => {
                         {row.paymentNumber || '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
-                        {row.dealerId?.businessName || row.dealerId?.name || '—'}
+                        {row.dealerId?.ownerName || '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
                         {row.invoiceId?.invoiceNumber || '—'}
@@ -236,7 +238,7 @@ const PaymentListPage = () => {
               {[
                 ['Payment ID', viewModal.paymentNumber],
                 ['Status', viewModal.status],
-                ['Distributor', viewModal.dealerId?.businessName || '—'],
+                ['Distributor', viewModal.dealerId?.ownerName || '—'],
                 ['Invoice', viewModal.invoiceId?.invoiceNumber || '—'],
                 ['Method', METHOD_LABELS[viewModal.method] || viewModal.method || '—'],
                 ['Amount', `₹${(viewModal.amount || 0).toLocaleString('en-IN')}`],

@@ -13,10 +13,10 @@ import {
 } from 'lucide-react';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
-
+ 
 const TABS = ['Orders', 'Invoices', 'Activity Logs'];
 const ORDER_FILTER_TABS = ['All Orders', 'Pending', 'Processing', 'Delivered'];
-
+ 
 /* ── tiny reusable modal shell ── */
 const Modal = ({ title, onClose, children }) => (
   <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -31,43 +31,44 @@ const Modal = ({ title, onClose, children }) => (
     </div>
   </div>
 );
-
+ 
 const DealerDetailPage = () => {
   const { id } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { selected: dealer, stats } = useSelector((s) => s.dealer);
-
+ 
   /* tab state */
   const [activeTab, setActiveTab] = useState('Orders');
   const [orderFilter, setOrderFilter] = useState('All Orders');
   const [orderSearch, setOrderSearch] = useState('');
-
+ 
   /* data */
   const [orders, setOrders] = useState([]);
+  const [ordersTotalCount, setOrdersTotalCount] = useState(0);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [payments, setPayments] = useState([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const fetchedTabs = useRef(new Set());
-
+ 
   /* modals */
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [suspendReason, setSuspendReason] = useState('');
   const [suspending, setSuspending] = useState(false);
-
+ 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editCredit, setEditCredit] = useState('');
   const [editPricingTier, setEditPricingTier] = useState('');
   const [editSaving, setEditSaving] = useState(false);
-
+ 
   const [showFullscreen, setShowFullscreen] = useState(false);
-
+ 
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [msgChannel, setMsgChannel] = useState('email'); // 'email' | 'sms'
   const [msgSubject, setMsgSubject] = useState('');
   const [msgBody, setMsgBody] = useState('');
   const [msgSending, setMsgSending] = useState(false);
-
+ 
   /* ── initial fetch ── */
   useEffect(() => {
     dispatch(clearSelected());
@@ -75,15 +76,18 @@ const DealerDetailPage = () => {
     dispatch(fetchDealerStats(id));
     fetchedTabs.current = new Set();
   }, [dispatch, id]);
-
+ 
   /* fetch tab data lazily */
   useEffect(() => {
     if (activeTab === 'Orders' && !fetchedTabs.current.has('Orders')) {
       fetchedTabs.current.add('Orders');
       setOrdersLoading(true);
       api.get('/orders', { params: { dealerId: id, limit: 50 } })
-        .then((res) => setOrders(res.data.data || []))
-        .catch(() => setOrders([]))
+        .then((res) => {
+          setOrders(res.data.data || []);
+          setOrdersTotalCount(res.data.pagination?.total ?? res.data.data?.length ?? 0);
+        })
+        .catch(() => { setOrders([]); setOrdersTotalCount(0); })
         .finally(() => setOrdersLoading(false));
     }
     if (activeTab === 'Invoices' && !fetchedTabs.current.has('Invoices')) {
@@ -95,14 +99,14 @@ const DealerDetailPage = () => {
         .finally(() => setPaymentsLoading(false));
     }
   }, [activeTab, id]);
-
+ 
   /* ── open edit modal pre-filled ── */
   const openEditModal = () => {
     setEditCredit(dealer?.creditLimit ?? '');
     setEditPricingTier(dealer?.pricingTier ?? 'standard');
     setShowEditModal(true);
   };
-
+ 
   /* ── save credit limit / tier ── */
   const handleSaveEdit = async () => {
     setEditSaving(true);
@@ -123,7 +127,7 @@ const DealerDetailPage = () => {
       setEditSaving(false);
     }
   };
-
+ 
   /* ── suspend ── */
   const handleSuspend = async () => {
     if (!suspendReason.trim()) return;
@@ -135,7 +139,7 @@ const DealerDetailPage = () => {
     } catch (_) { }
     finally { setSuspending(false); }
   };
-
+ 
   /* ── send message (opens mailto / sms: link) ── */
   const handleSendMessage = () => {
     setMsgSending(true);
@@ -151,7 +155,7 @@ const DealerDetailPage = () => {
     setMsgSubject('');
     setMsgBody('');
   };
-
+ 
   /* ── order filtering ── */
   const filteredOrders = orders.filter((o) => {
     const matchSearch = !orderSearch ||
@@ -166,17 +170,17 @@ const DealerDetailPage = () => {
       (statusMap[orderFilter] || []).includes(o.status?.toLowerCase());
     return matchSearch && matchFilter;
   });
-
+ 
   /* ── derived stats ── */
   const totalRevenue = stats?.stats?.totalPayments || 0;
-  const totalOrders = stats?.stats?.totalOrders || 0;
+  const totalOrders = ordersTotalCount;
   const creditLimit = dealer?.creditLimit || 0;
   const creditUsed = dealer?.creditUsed || 0;
   const outstanding = creditUsed;
   const creditPct = creditLimit > 0 ? Math.round((creditUsed / creditLimit) * 100) : 0;
   const pendingCount = orders.filter(o =>
     ['draft', 'pending', 'order_confirmed', 'processing'].includes(o.status)).length;
-
+ 
   /* derived submittedDocuments — normalise into a flat array for display */
   const submittedDocs = dealer?.submittedDocuments
     ? [
@@ -185,7 +189,7 @@ const DealerDetailPage = () => {
         { key: 'bank', label: 'Bank Statement',    ...dealer.submittedDocuments.bank },
       ].filter((d) => d.fileUrl)
     : [];
-
+ 
   if (!dealer) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -193,7 +197,7 @@ const DealerDetailPage = () => {
       </div>
     );
   }
-
+ 
   return (
     <div className="space-y-5 h-[calc(100vh-80px)] overflow-hidden flex flex-col relative">
       {/* ── Breadcrumb ── */}
@@ -204,7 +208,7 @@ const DealerDetailPage = () => {
         <span>›</span>
         <span className="text-slate-800 font-medium">{dealer.businessName}</span>
       </div>
-
+ 
       {/* ── Profile Card ── */}
       <div className="card p-5">
         <div className="flex items-start gap-4">
@@ -212,7 +216,7 @@ const DealerDetailPage = () => {
           <div className="w-14 h-14 rounded-full bg-primary-500 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
             {(dealer.businessName || dealer.ownerName || 'D')[0].toUpperCase()}
           </div>
-
+ 
           {/* Info */}
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-slate-900">{dealer.businessName}</h1>
@@ -233,7 +237,7 @@ const DealerDetailPage = () => {
               )}
             </div>
           </div>
-
+ 
           {/* Action buttons */}
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
             <button
@@ -257,7 +261,7 @@ const DealerDetailPage = () => {
           </div>
         </div>
       </div>
-
+ 
       {/* ── Stats Row (dynamic) ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="card p-4">
@@ -281,13 +285,13 @@ const DealerDetailPage = () => {
           <p className="text-xs text-slate-400 mt-1">due in 14 days</p>
         </div>
       </div>
-
+ 
       {/* ── Two-column layout ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 flex-1 min-h-0">
-
+ 
         {/* ── Left column ── */}
         <div className="flex flex-col gap-4 min-h-0 h-full">
-
+ 
           {/* Contact Details — read-only, no Edit button */}
           <div className="card p-4">
             <h3 className="font-semibold text-slate-800 text-sm mb-3">Contact Details</h3>
@@ -312,7 +316,7 @@ const DealerDetailPage = () => {
               </div>
             </div>
           </div>
-
+ 
           {/* KYC Documents — from dealer app submissions */}
           <div className="card p-4 flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
@@ -321,7 +325,7 @@ const DealerDetailPage = () => {
                 <span className="text-xs text-slate-400">{submittedDocs.length} file{submittedDocs.length > 1 ? 's' : ''}</span>
               )}
             </div>
-
+ 
             {submittedDocs.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-3">No documents uploaded</p>
             ) : (
@@ -371,7 +375,7 @@ const DealerDetailPage = () => {
             )}
           </div>
         </div>
-
+ 
         {/* ── Right column ── */}
         <div className="lg:col-span-2 card flex flex-col min-h-0">
           {/* Tab headers */}
@@ -397,7 +401,7 @@ const DealerDetailPage = () => {
               </button>
             </div>
           </div>
-
+ 
           {/* ── Orders tab ── */}
           {activeTab === 'Orders' && (
             <div className="flex flex-col h-full min-h-0">
@@ -430,7 +434,7 @@ const DealerDetailPage = () => {
                   </button>
                 </div>
               </div>
-
+ 
               {/* Table */}
               {ordersLoading ? (
                 <div className="flex justify-center py-8">
@@ -481,7 +485,7 @@ const DealerDetailPage = () => {
               )}
             </div>
           )}
-
+ 
           {/* ── Invoices tab ── */}
           {activeTab === 'Invoices' && (
             <div className="flex flex-col h-full min-h-0">
@@ -530,14 +534,14 @@ const DealerDetailPage = () => {
               )}
             </div>
           )}
-
+ 
           {/* ── Activity Logs tab ── */}
           {activeTab === 'Activity Logs' && (
             <div className="p-8 text-center text-slate-400 text-sm">Activity logs coming soon</div>
           )}
         </div>
       </div>
-
+ 
       {/* ════════════════════════════════════════
           FULLSCREEN: Table overlay
       ════════════════════════════════════════ */}
@@ -558,7 +562,7 @@ const DealerDetailPage = () => {
               <X size={18} />
             </button>
           </div>
-
+ 
           {/* Orders fullscreen */}
           {activeTab === 'Orders' && (
             <div className="flex flex-col flex-1 min-h-0">
@@ -615,7 +619,7 @@ const DealerDetailPage = () => {
               </div>
             </div>
           )}
-
+ 
           {/* Invoices fullscreen */}
           {activeTab === 'Invoices' && (
             <div className="flex flex-col flex-1 min-h-0">
@@ -644,7 +648,7 @@ const DealerDetailPage = () => {
               </div>
             </div>
           )}
-
+ 
           {activeTab === 'Activity Logs' && (
             <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
               Activity logs coming soon
@@ -652,7 +656,7 @@ const DealerDetailPage = () => {
           )}
         </div>
       )}
-
+ 
       {/* ════════════════════════════════════════
           MODAL: Edit Profile (Credit Limit + Tier)
       ════════════════════════════════════════ */}
@@ -673,7 +677,7 @@ const DealerDetailPage = () => {
                 placeholder="e.g. 200000"
               />
             </div>
-
+ 
             {/* Pricing Tier */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -690,7 +694,7 @@ const DealerDetailPage = () => {
               </select>
             </div>
           </div>
-
+ 
           <div className="flex justify-end gap-2 mt-6">
             <button
               onClick={() => setShowEditModal(false)}
@@ -708,7 +712,7 @@ const DealerDetailPage = () => {
           </div>
         </Modal>
       )}
-
+ 
       {/* ════════════════════════════════════════
           MODAL: Message Dealer
       ════════════════════════════════════════ */}
@@ -735,7 +739,7 @@ const DealerDetailPage = () => {
               <Phone size={12} /> SMS
             </button>
           </div>
-
+ 
           <div className="space-y-3">
             {/* Recipient read-only */}
             <div>
@@ -748,7 +752,7 @@ const DealerDetailPage = () => {
                 className="w-full border border-slate-100 bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-500 cursor-not-allowed"
               />
             </div>
-
+ 
             {/* Subject — only for email */}
             {msgChannel === 'email' && (
               <div>
@@ -762,7 +766,7 @@ const DealerDetailPage = () => {
                 />
               </div>
             )}
-
+ 
             {/* Body */}
             <div>
               <label className="block text-xs text-slate-500 mb-1">Message</label>
@@ -775,7 +779,7 @@ const DealerDetailPage = () => {
               />
             </div>
           </div>
-
+ 
           <div className="flex justify-end gap-2 mt-4">
             <button
               onClick={() => setShowMsgModal(false)}
@@ -793,7 +797,7 @@ const DealerDetailPage = () => {
           </div>
         </Modal>
       )}
-
+ 
       {/* ════════════════════════════════════════
           MODAL: Suspend Dealer
       ════════════════════════════════════════ */}
@@ -826,9 +830,9 @@ const DealerDetailPage = () => {
           </div>
         </Modal>
       )}
-
+ 
     </div>
   );
 };
-
+ 
 export default DealerDetailPage;
