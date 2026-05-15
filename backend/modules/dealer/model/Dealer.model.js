@@ -127,6 +127,7 @@ const dealerSchema = new mongoose.Schema(
       },
       default: 'standard',
     },
+    requestUpdatedAt: { type: Date },
     paymentTerms: { type: String, default: '' },
     bankDetails: {
       type: bankDetailsSchema,
@@ -169,6 +170,7 @@ const dealerSchema = new mongoose.Schema(
     updateRequestedFields: [{ type: String }],
     // Timestamp of dealer's last resubmission after an update request
     lastResubmittedAt: { type: Date },
+    rejectedAt: { type: Date },
     // Auto-set on approval — hashed with bcrypt, never returned in API responses
     password: {
       type: String,

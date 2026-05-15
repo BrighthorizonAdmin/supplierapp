@@ -275,6 +275,7 @@ const rejectDealer = async (dealerId, reason, userId) => {
   dealer.status = 'rejected';
   dealer.kycStatus = 'rejected';
   dealer.rejectionReason = reason;
+  dealer.rejectedAt = new Date();
   await dealer.save();
 
   await auditService.log('dealer', dealerId, 'reject', userId, { before, after: { status: 'rejected', reason } });
@@ -302,6 +303,7 @@ const requestUpdate = async (dealerId, { field, fields, updateFields, instructio
   dealer.status               = 'updates-required';
   dealer.notes                = `[Update Requested] ${fieldsArray.join(', ')}: ${instructions}`;
   dealer.updateRequestedFields = fieldsArray;
+  dealer.requestUpdatedAt = new Date();
 
   await dealer.save();
 
