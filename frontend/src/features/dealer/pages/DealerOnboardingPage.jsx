@@ -283,9 +283,15 @@ const DealerOnboardingPage = () => {
                   </div>
                   <p className="text-xs text-slate-500 truncate mb-1.5">{dealer.businessName}</p>
                   <StatusPill status={dealer.status} />
-                  {dealer.status === 'pending' && dealer.lastResubmittedAt && (
+                  
+                  {dealer.status === 'pending' && dealer.requestUpdatedAt && (
                     <span className="mt-1 inline-block text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
                       Resubmitted
+                    </span>
+                  )}
+                   {dealer.status === 'pending' && dealer.rejectedAt && (
+                    <span className="mt-1 inline-block text-xs bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-medium">
+                      Reapplied
                     </span>
                   )}
                 </div>
@@ -336,10 +342,16 @@ const DealerOnboardingPage = () => {
                   <Hash size={14} className="text-slate-400" />
                   App ID: {appId}
                 </span>
-                {selected.lastResubmittedAt && (
+                {selected.requestUpdatedAt && (
                   <span className="flex items-center gap-1.5 text-amber-600 font-medium">
                     <AlertTriangle size={13} className="text-amber-500" />
-                    Resubmitted {format(new Date(selected.lastResubmittedAt), 'MMM d, yyyy h:mm a')}
+                    Request Updated {format(new Date(selected.requestUpdatedAt), 'MMM d, yyyy h:mm a')}
+                  </span>
+                )}
+                {selected.rejectedAt && (
+                  <span className="flex items-center gap-1.5 text-red-600 font-medium">
+                    <AlertTriangle size={13} className="text-red-500" />
+                    Reapplied {format(new Date(selected.rejectedAt), 'MMM d, yyyy h:mm a')}
                   </span>
                 )}
               </div>
@@ -368,12 +380,12 @@ const DealerOnboardingPage = () => {
               </div>
 
               {/* Previously Requested Updates — shown when supplier flagged fields or dealer resubmitted */}
-              {(selected.updateRequestedFields?.length > 0 || selected.lastResubmittedAt) && (
+              {(selected.updateRequestedFields?.length > 0 || selected.requestUpdatedAt) && (
                 <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <AlertTriangle size={15} className="text-amber-500 flex-shrink-0" />
                     <h3 className="text-sm font-semibold text-amber-800">
-                      {selected.lastResubmittedAt ? 'Update Request — Dealer Resubmitted' : 'Update Requested to Dealer'}
+                      {selected.requestUpdatedAt ? 'Update Request — Dealer Resubmitted' : 'Update Requested to Dealer'}
                     </h3>
                   </div>
 
@@ -411,13 +423,27 @@ const DealerOnboardingPage = () => {
                 </div>
               )}
 
+              {/* Rejected At */}
+              {selected.rejectedAt && (
+                <div className="bg-red-50 rounded-xl border border-red-200 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle size={15} className="text-red-500 flex-shrink-0" />
+                    <h3 className="text-sm font-semibold text-red-800">
+                      Dealer Reapplied
+                    </h3>
+                  </div>
+                  <p className="text-sm text-blue-700 leading-relaxed">
+                    This dealer reapplied on {format(new Date(selected.rejectedAt), 'MMM d, yyyy h:mm a')}. Please review their updated application details and documents.
+                  </p>
+                </div>
+              )}
               {/* Submitted Documents */}
               {selected?.submittedDocuments &&
                 Object.values(selected.submittedDocuments).some((d) => d?.fileUrl) && (
                   <div className="bg-white rounded-xl border border-slate-200 p-5">
                     <div className="flex items-center gap-2 mb-4">
                       <h3 className="text-sm font-semibold text-slate-800">Submitted Documents</h3>
-                      {selected.lastResubmittedAt && (
+                      {selected.requestUpdatedAt && (
                         <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
                           Resubmitted
                         </span>
