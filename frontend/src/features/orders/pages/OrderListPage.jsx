@@ -406,7 +406,7 @@ const filteredOrders = useMemo(() => {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  {['ORDER ID','TYPE','CUSTOMER','DATE & TIME','ITEMS','AMOUNT','PAYMENT','STATUS','ACTIONS'].map((h) => (
+                  {['ORDER ID','TYPE','CUSTOMER','DATE & TIME','ITEMS','AMOUNT','PAYMENT','STATUS'].map((h) => (
                     <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -416,19 +416,16 @@ const filteredOrders = useMemo(() => {
               <tbody className="divide-y divide-slate-100">
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-14 text-center text-slate-400">No orders found</td>
+                    <td colSpan={8} className="px-4 py-14 text-center text-slate-400">No orders found</td>
                   </tr>
                 ) : filteredOrders.map((order) => (
-                  <tr key={order._id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={order._id} onClick={() => goToOrder(order)} className="hover:bg-slate-50 transition-colors cursor-pointer">
 
                     {/* Order ID */}
                     <td className="px-4 py-3.5">
-                      <button
-                        onClick={() => navigate(`/orders/${order._id}`)}
-                        className="font-semibold text-slate-800 hover:text-primary-600 transition-colors"
-                      >
+                      <p className="font-semibold text-slate-800">
                         Order #{order.orderNumber || order._id?.slice(-4)}
-                      </button>
+                      </p>
                     </td>
 
                     {/* Type badge */}
@@ -471,11 +468,6 @@ const filteredOrders = useMemo(() => {
                       <StatusCell order={order} onView={goToOrder} onConfirm={(id) => dispatch(confirmOrder(id))} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
                     </td>
 
-                    {/* Actions */}
-                    <td className="px-4 py-3.5">
-                      <RowActions row={order} onView={goToOrder} />
-                    </td>
-
                   </tr>
                 ))}
               </tbody>
@@ -487,7 +479,7 @@ const filteredOrders = useMemo(() => {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  {['ORDER ID','DEALER','DATE & TIME','ITEMS','AMOUNT','PAYMENT','PRIORITY','STATUS','ACTIONS'].map((h) => (
+                  {['ORDER ID','DEALER','DATE & TIME','ITEMS','AMOUNT','PAYMENT','PRIORITY','STATUS'].map((h) => (
                     <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -497,10 +489,10 @@ const filteredOrders = useMemo(() => {
               <tbody className="divide-y divide-slate-100">
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-14 text-center text-slate-400">No orders found</td>
+                    <td colSpan={8} className="px-4 py-14 text-center text-slate-400">No orders found</td>
                   </tr>
                 ) : filteredOrders.map((order) => (
-                  <tr key={order._id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={order._id} onClick={() => goToOrder(order)} className="hover:bg-slate-50 transition-colors cursor-pointer">
 
                     {/* Order ID */}
                     <td className="px-4 py-3.5">
@@ -512,7 +504,7 @@ const filteredOrders = useMemo(() => {
                           {order.orderNumber}
                           {order.returns?.some((r) => r.status === 'refunded') && (
                             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-500">
-                              Refunded
+                              Returned
                             </span>
                           )}
                         </p>
@@ -562,11 +554,6 @@ const filteredOrders = useMemo(() => {
                     {/* Status */}
                     <td className="px-4 py-3.5">
                       <StatusCell order={order} onView={goToOrder} onConfirm={(id) => dispatch(confirmOrder(id))} onReject={(id) => dispatch(cancelOrder({ id, reason: 'Rejected by admin' }))} />
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-4 py-3.5">
-                      <RowActions row={order} onView={goToOrder} />
                     </td>
 
                   </tr>
