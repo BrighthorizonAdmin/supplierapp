@@ -84,8 +84,16 @@ export default function InvoiceDetailPage() {
 
   const isRetail = inv.invoiceType === 'retail';
   const noteParts = (inv.notes || '').replace('Retail sale to: ', '').split(' | ');
-  const custName = isRetail ? noteParts[0] : inv.partyName;
-  const custPhone = isRetail ? noteParts[1] : inv.partyPhone;
+
+  // For retail: customer info lives in notes ("Retail sale to: Name | Phone")
+  // For B2B: partyName/partyPhone are snapshots; fall back to populated dealerId
+  const dealerObj = !isRetail && inv.dealerId && typeof inv.dealerId === 'object' ? inv.dealerId : null;
+  const custName  = isRetail ? noteParts[0] : (inv.partyName || dealerObj?.businessName || '');
+  const custPhone = isRetail ? noteParts[1] : (inv.partyPhone || dealerObj?.phone || '');
+  const billAddress = inv.partyAddress ||
+    (dealerObj ? [dealerObj.address?.street, dealerObj.address?.city, dealerObj.address?.state, dealerObj.address?.pincode].filter(Boolean).join(', ') : '');
+  const billGST   = inv.partyGST || dealerObj?.gstin || '';
+
   const cgst = +((inv.taxAmount || 0) / 2).toFixed(2);
   const sgst = cgst;
   const taxableAmount = inv.subtotal || 0;
@@ -168,16 +176,18 @@ export default function InvoiceDetailPage() {
         <div style={{ display: 'flex', borderBottom: '1px solid #ccc' }}>
           <div style={{ flex: 1, padding: '10px 24px', borderRight: '1px solid #ccc' }}>
             <div style={{ fontWeight: 'bold', fontSize: '11px', marginBottom: '4px' }}>BILL TO</div>
-            <div style={{ fontWeight: 'bold' }}>{custName || inv.partyName}</div>
+            <div style={{ fontWeight: 'bold' }}>{custName}</div>
             {custPhone && <div style={{ fontSize: '11px', color: '#444' }}>Mobile: {custPhone}</div>}
-            {inv.partyAddress && <div style={{ fontSize: '11px', color: '#444' }}>{inv.partyAddress}</div>}
-            {inv.partyGST && <div style={{ fontSize: '11px', color: '#444' }}>GSTIN: {inv.partyGST}</div>}
+            {billAddress && <div style={{ fontSize: '11px', color: '#444' }}>{billAddress}</div>}
+            {billGST && <div style={{ fontSize: '11px', color: '#444' }}>GSTIN: {billGST}</div>}
             {inv.shippingAddress?.state && <div style={{ fontSize: '11px', color: '#444' }}>Place of Supply: {inv.shippingAddress.state}</div>}
           </div>
           <div style={{ flex: 1, padding: '10px 24px', borderRight: '1px solid #ccc' }}>
             <div style={{ fontWeight: 'bold', fontSize: '11px', marginBottom: '4px' }}>SHIP TO</div>
-            <div style={{ fontWeight: 'bold' }}>{inv.shippingAddress?.label || custName || inv.partyName}</div>
-            {inv.shippingAddress?.street && <div style={{ fontSize: '11px', color: '#444' }}>{inv.shippingAddress.street}</div>}
+            <div style={{ fontWeight: 'bold' }}>{inv.shippingAddress?.label || custName}</div>
+            {(inv.shippingAddress?.street || billAddress) && (
+              <div style={{ fontSize: '11px', color: '#444' }}>{inv.shippingAddress?.street || billAddress}</div>
+            )}
           </div>
           <div style={{ flex: 1, padding: '10px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>

@@ -29,6 +29,8 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       dealerPhone,
       customerName,
       customerPhone,
+      customerAddress,
+      shipToAddress,
       items,
       subtotal,
       taxAmount,
@@ -99,6 +101,22 @@ router.post('/dealer-retail-invoice', async (req, res) => {
     // 6. Create invoice — catch E11000 in case of race condition / D-BE retry after timeout
     let invoice;
     try {
+      // Build customer address string from the customerAddress object if provided
+      const custAddrStr = customerAddress && typeof customerAddress === 'object'
+        ? [customerAddress.street, customerAddress.city, customerAddress.state, customerAddress.pincode].filter(Boolean).join(', ')
+        : (typeof customerAddress === 'string' ? customerAddress : '');
+
+      // Build shippingAddress subdocument from shipToAddress if provided
+      const shipAddrDoc = shipToAddress && typeof shipToAddress === 'object' && (shipToAddress.street || shipToAddress.city)
+        ? {
+            label:   shipToAddress.label || customerName || '',
+            street:  shipToAddress.street || '',
+            city:    shipToAddress.city || '',
+            state:   shipToAddress.state || '',
+            pincode: shipToAddress.pincode || shipToAddress.postalCode || '',
+          }
+        : undefined;
+
       invoice = await Invoice.create({
         invoiceType:  'retail',
         dbeInvoiceId,
@@ -106,6 +124,8 @@ router.post('/dealer-retail-invoice', async (req, res) => {
         dealerId:     dealer?._id || undefined,
         partyName:    dealerName || 'Unknown Dealer',
         partyPhone:   dealerPhone || '',
+        partyAddress: custAddrStr || '',
+        shippingAddress: shipAddrDoc,
         notes:        `Retail sale to: ${customerName}${customerPhone ? ' | ' + customerPhone : ''}`,
         lineItems,
         subtotal:     Number(subtotal),
