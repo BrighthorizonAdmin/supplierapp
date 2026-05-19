@@ -5,7 +5,6 @@ import { MapPin, Calendar, Hash, FileText, CheckCircle, AlertCircle, AlertTriang
 import { fetchDealers, approveDealer, rejectDealer, requestDealerUpdate } from '../dealerSlice';
 import Modal from '../../../components/ui/Modal';
 import api from '../../../services/api';
-import toast from 'react-hot-toast';
 
 const STATUS_TABS = [
   { label: 'Pending', value: 'pending' },
@@ -51,6 +50,12 @@ const REJECTION_REASONS = [
   'Other',
 ];
 
+const FIELD_LABELS = {
+  gst: 'GST Certificate', pan: 'PAN Card Copy', bank: 'Bank Statement',
+  businessName: 'Business Name', city: 'City / Address',
+  contactName: 'Contact Name', phone: 'Phone Number',
+  gstNumber: 'GST Number', other: 'Other',
+};
 
 const getInitials = (name) =>
   name ? name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() : '??';
@@ -58,6 +63,11 @@ const getInitials = (name) =>
 const timeAgo = (date) => {
   try { return formatDistanceToNow(new Date(date), { addSuffix: true }); }
   catch { return ''; }
+};
+
+const fmt = (date, f = 'MMM d, yyyy h:mm a') => {
+  try { return format(new Date(date), f); }
+  catch { return '—'; }
 };
 
 const STATUS_STYLES = {
@@ -160,10 +170,6 @@ const DealerOnboardingPage = () => {
       .finally(() => setDocsLoading(false));
   }, [selected?._id]);
 
-  const resetAndClose = (setter) => {
-    setter(false);
-  };
-
   const handleConfirmApprove = () => {
     if (!selected) return;
     dispatch(approveDealer({
@@ -174,8 +180,6 @@ const DealerOnboardingPage = () => {
       assignedManager: approveForm.assignedManager,
     })).then((res) => {
       if (!res.error) {
-        // Slice updates the item in-place; dealer no longer matches this tab's status
-        // so deselect and clear — list will visually update on next filter change
         setSelected(null);
         setShowApproveModal(false);
         setApproveForm({ creditLimit: '', paymentTerms: '', pricingTier: '', assignedManager: '' });
@@ -217,6 +221,33 @@ const DealerOnboardingPage = () => {
   const appId = selected?.applicationId || (selected?._id ? `DLR-${selected._id.slice(-4).toUpperCase()}` : '—');
   const location = [selected?.address?.city, selected?.address?.state].filter(Boolean).join(', ') || '—';
 
+  // ── Derived state for the three history states ────────────────────────────
+  // Re-applied after rejection: dealer was rejected then came back
+  const isReapplied = Boolean(
+    selected?.status === 'pending' &&
+    selected?.rejectedAt &&
+    selected?.lastResubmittedAt
+  );
+
+  // Resubmitted after update request: supplier requested changes, dealer fixed and resubmitted
+  const isResubmitted = Boolean(
+    selected?.status === 'pending' &&
+    selected?.requestUpdatedAt &&
+    selected?.lastResubmittedAt &&
+    !selected?.rejectedAt
+  );
+
+  // Update request sent, waiting for dealer (status is still updates-required)
+  const isAwaitingUpdate = Boolean(
+    selected?.status === 'updates-required' ||
+    (selected?.updateRequestedFields?.length > 0 && !selected?.lastResubmittedAt && !isReapplied)
+  );
+
+  // Show approval actions for reviewable statuses
+  const canTakeAction = ['pending', 'updates-required', 'in-review'].includes(selected?.status);
+
+  const activeTabLabel = STATUS_TABS.find((t) => t.value === activeTab)?.label || 'Applications';
+
   return (
     <div className="-m-6 flex flex-col" style={{ height: 'calc(100vh - 4rem)' }}>
 
@@ -253,10 +284,10 @@ const DealerOnboardingPage = () => {
         {/* Left: Application list */}
         <div className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 flex-shrink-0">
-            <p className="text-sm font-semibold text-slate-800">Pending Applications</p>
+            <p className="text-sm font-semibold text-slate-800">{activeTabLabel} Applications</p>
             {pagination?.total > 0 && (
               <span className="text-xs bg-slate-800 text-white px-2 py-0.5 rounded-full font-semibold">
-                {pagination.total} new
+                {pagination.total}
               </span>
             )}
           </div>
@@ -266,37 +297,46 @@ const DealerOnboardingPage = () => {
             {!loading && list.length === 0 && (
               <p className="text-center text-slate-400 text-sm py-10">No applications</p>
             )}
-            {list.map((dealer) => (
-              <button
-                key={dealer._id}
-                onClick={() => { setSelected(dealer); setInReview(false); }}
-                className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-l-2 ${selected?._id === dealer._id ? 'border-blue-600 bg-blue-50/50' : 'border-transparent'
-                  }`}
-              >
-                <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                  {getInitials(dealer.ownerName || dealer.businessName)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <p className="text-sm font-semibold text-slate-800 truncate">{dealer.ownerName || '—'}</p>
-                    <span className="text-xs text-slate-400 flex-shrink-0">{timeAgo(dealer.createdAt)}</span>
+            {list.map((dealer) => {
+              // Mutually exclusive badges
+              const dealerIsReapplied = dealer.status === 'pending' && dealer.rejectedAt && dealer.lastResubmittedAt;
+              const dealerIsResubmitted = dealer.status === 'pending' && dealer.requestUpdatedAt && dealer.lastResubmittedAt && !dealer.rejectedAt;
+
+              return (
+                <button
+                  key={dealer._id}
+                  onClick={() => { setSelected(dealer); setInReview(false); }}
+                  className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-l-2 ${selected?._id === dealer._id ? 'border-blue-600 bg-blue-50/50' : 'border-transparent'
+                    }`}
+                >
+                  <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                    {getInitials(dealer.ownerName || dealer.businessName)}
                   </div>
-                  <p className="text-xs text-slate-500 truncate mb-1.5">{dealer.businessName}</p>
-                  <StatusPill status={dealer.status} />
-                  
-                  {dealer.status === 'pending' && dealer.requestUpdatedAt && (
-                    <span className="mt-1 inline-block text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
-                      Resubmitted
-                    </span>
-                  )}
-                   {dealer.status === 'pending' && dealer.rejectedAt && (
-                    <span className="mt-1 inline-block text-xs bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-medium">
-                      Reapplied
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{dealer.ownerName || '—'}</p>
+                      <span className="text-xs text-slate-400 flex-shrink-0">{timeAgo(dealer.createdAt)}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 truncate mb-1.5">{dealer.businessName}</p>
+                    <StatusPill status={dealer.status} />
+
+                    {/* Resubmitted badge — only when resubmitted after update request (not re-apply) */}
+                    {dealerIsResubmitted && (
+                      <span className="mt-1 ml-1 inline-block text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                        Resubmitted
+                      </span>
+                    )}
+
+                    {/* Reapplied badge — only when re-applied after rejection */}
+                    {dealerIsReapplied && (
+                      <span className="mt-1 ml-1 inline-block text-xs bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-medium">
+                        Reapplied
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -326,7 +366,7 @@ const DealerOnboardingPage = () => {
                 </div>
               </div>
 
-              {/* Meta info */}
+              {/* Meta info row */}
               <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <MapPin size={14} className="text-blue-500" />
@@ -335,23 +375,27 @@ const DealerOnboardingPage = () => {
                 <span className="text-slate-300">|</span>
                 <span className="flex items-center gap-1.5">
                   <Calendar size={14} className="text-slate-400" />
-                  Applied {selected.createdAt ? format(new Date(selected.createdAt), 'MMM d, yyyy') : '—'}
+                  Applied {selected.createdAt ? fmt(selected.createdAt, 'MMM d, yyyy') : '—'}
                 </span>
                 <span className="text-slate-300">|</span>
                 <span className="flex items-center gap-1.5">
                   <Hash size={14} className="text-slate-400" />
                   App ID: {appId}
                 </span>
-                {selected.requestUpdatedAt && (
+
+                {/* Show "Resubmitted on" only for update-request resubmission */}
+                {isResubmitted && (
                   <span className="flex items-center gap-1.5 text-amber-600 font-medium">
                     <AlertTriangle size={13} className="text-amber-500" />
-                    Request Updated {format(new Date(selected.requestUpdatedAt), 'MMM d, yyyy h:mm a')}
+                    Resubmitted {fmt(selected.lastResubmittedAt)}
                   </span>
                 )}
-                {selected.rejectedAt && (
+
+                {/* Show "Reapplied on" only for re-apply after rejection */}
+                {isReapplied && (
                   <span className="flex items-center gap-1.5 text-red-600 font-medium">
-                    <AlertTriangle size={13} className="text-red-500" />
-                    Reapplied {format(new Date(selected.rejectedAt), 'MMM d, yyyy h:mm a')}
+                    <AlertCircle size={13} className="text-red-500" />
+                    Reapplied {fmt(selected.lastResubmittedAt)}
                   </span>
                 )}
               </div>
@@ -379,39 +423,28 @@ const DealerOnboardingPage = () => {
                 </div>
               </div>
 
-              {/* Previously Requested Updates — shown when supplier flagged fields or dealer resubmitted */}
-              {(selected.updateRequestedFields?.length > 0 || selected.requestUpdatedAt) && (
+              {/* ── CASE 1: Update Requested — waiting for dealer to fix (status = updates-required) ── */}
+              {isAwaitingUpdate && (
                 <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <AlertTriangle size={15} className="text-amber-500 flex-shrink-0" />
-                    <h3 className="text-sm font-semibold text-amber-800">
-                      {selected.requestUpdatedAt ? 'Update Request — Dealer Resubmitted' : 'Update Requested to Dealer'}
-                    </h3>
+                    <h3 className="text-sm font-semibold text-amber-800">Update Requested to Dealer</h3>
                   </div>
-
-                  {/* Which fields were flagged */}
+                  <p className="text-xs text-amber-700 mb-3">
+                    The dealer has been notified to correct the following. Waiting for resubmission.
+                  </p>
                   {selected.updateRequestedFields?.length > 0 && (
                     <div className="mb-3">
                       <p className="text-xs text-amber-700 font-medium mb-1.5">Fields flagged for update:</p>
                       <div className="flex flex-wrap gap-1.5">
-                        {selected.updateRequestedFields.map((f) => {
-                          const fieldLabels = {
-                            gst: 'GST Certificate', pan: 'PAN Card Copy', bank: 'Bank Statement',
-                            businessName: 'Business Name', city: 'City / Address',
-                            contactName: 'Contact Name', phone: 'Phone Number',
-                            gstNumber: 'GST Number', other: 'Other',
-                          };
-                          return (
-                            <span key={f} className="text-xs bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-medium">
-                              {fieldLabels[f] || f}
-                            </span>
-                          );
-                        })}
+                        {selected.updateRequestedFields.map((f) => (
+                          <span key={f} className="text-xs bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-medium">
+                            {FIELD_LABELS[f] || f}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   )}
-
-                  {/* Supplier's own instructions they sent to the dealer */}
                   {selected.notes && selected.notes.startsWith('[Update Requested]') && (
                     <div className="bg-white rounded-lg border border-amber-200 px-3 py-2.5">
                       <p className="text-xs text-slate-400 mb-0.5">Instructions sent to dealer</p>
@@ -423,29 +456,78 @@ const DealerOnboardingPage = () => {
                 </div>
               )}
 
-              {/* Rejected At */}
-              {selected.rejectedAt && (
+              {/* ── CASE 2: Resubmitted — dealer fixed and sent back (status = pending, came from update-request) ── */}
+              {isResubmitted && (
+                <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle size={15} className="text-amber-500 flex-shrink-0" />
+                    <h3 className="text-sm font-semibold text-amber-800">Update Request — Dealer Resubmitted</h3>
+                  </div>
+                  <p className="text-xs text-amber-700 mb-3">
+                    The dealer resubmitted their application on{' '}
+                    <span className="font-semibold">{fmt(selected.lastResubmittedAt)}</span>.
+                    Please review the updated documents and information.
+                  </p>
+                  {selected.updateRequestedFields?.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-amber-700 font-medium mb-1.5">Fields that were flagged:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selected.updateRequestedFields.map((f) => (
+                          <span key={f} className="text-xs bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-medium">
+                            {FIELD_LABELS[f] || f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {selected.notes && selected.notes.startsWith('[Update Requested]') && (
+                    <div className="bg-white rounded-lg border border-amber-200 px-3 py-2.5">
+                      <p className="text-xs text-slate-400 mb-0.5">Original instructions sent to dealer</p>
+                      <p className="text-xs text-slate-700 leading-relaxed">
+                        {selected.notes.replace(/^\[Update Requested\]\s*[^:]*:\s*/, '')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── CASE 3: Reapplied — dealer came back after rejection (status = pending, came from rejection) ── */}
+              {isReapplied && (
                 <div className="bg-red-50 rounded-xl border border-red-200 p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <AlertCircle size={15} className="text-red-500 flex-shrink-0" />
-                    <h3 className="text-sm font-semibold text-red-800">
-                      Dealer Reapplied
-                    </h3>
+                    <h3 className="text-sm font-semibold text-red-800">Dealer Reapplied After Rejection</h3>
                   </div>
-                  <p className="text-sm text-blue-700 leading-relaxed">
-                    This dealer reapplied on {format(new Date(selected.rejectedAt), 'MMM d, yyyy h:mm a')}. Please review their updated application details and documents.
+                  <p className="text-sm text-red-700 leading-relaxed mb-3">
+                    This dealer was previously rejected on{' '}
+                    <span className="font-semibold">{fmt(selected.rejectedAt)}</span> and has
+                    reapplied on{' '}
+                    <span className="font-semibold">{fmt(selected.lastResubmittedAt)}</span>.
+                    Please review the updated application details and documents.
                   </p>
+                  {selected.rejectionReason && (
+                    <div className="bg-white rounded-lg border border-red-200 px-3 py-2.5">
+                      <p className="text-xs text-slate-400 mb-0.5">Previous rejection reason</p>
+                      <p className="text-xs text-red-700 leading-relaxed">{selected.rejectionReason}</p>
+                    </div>
+                  )}
                 </div>
               )}
-              {/* Submitted Documents */}
+
+              {/* ── Submitted Documents ── */}
               {selected?.submittedDocuments &&
                 Object.values(selected.submittedDocuments).some((d) => d?.fileUrl) && (
                   <div className="bg-white rounded-xl border border-slate-200 p-5">
                     <div className="flex items-center gap-2 mb-4">
                       <h3 className="text-sm font-semibold text-slate-800">Submitted Documents</h3>
-                      {selected.requestUpdatedAt && (
+                      {isResubmitted && (
                         <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
                           Resubmitted
+                        </span>
+                      )}
+                      {isReapplied && (
+                        <span className="text-xs bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-medium">
+                          Reapplied
                         </span>
                       )}
                     </div>
@@ -484,7 +566,7 @@ const DealerOnboardingPage = () => {
                   </div>
                 )}
 
-              {/* Rejection Details */}
+              {/* ── Rejection Details — only shown when status IS rejected (not re-applied) ── */}
               {selected.status === 'rejected' && selected.rejectionReason && (
                 <div className="bg-red-50 rounded-xl border border-red-200 p-5">
                   <div className="flex items-center gap-2 mb-3">
@@ -492,11 +574,14 @@ const DealerOnboardingPage = () => {
                     <h3 className="text-sm font-semibold text-red-800">Rejection Reason</h3>
                   </div>
                   <p className="text-sm text-red-700 leading-relaxed">{selected.rejectionReason}</p>
+                  {selected.rejectedAt && (
+                    <p className="text-xs text-red-500 mt-2">Rejected on {fmt(selected.rejectedAt)}</p>
+                  )}
                 </div>
               )}
 
-              {/* Approval Actions */}
-              {(selected.status === 'pending' || selected.status === 'updates-required') && (
+              {/* ── Approval Actions — shown for pending, updates-required, in-review ── */}
+              {canTakeAction && (
                 <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <h3 className="text-sm font-semibold text-slate-800 mb-4">Approval Actions</h3>
                   <div className="flex items-center gap-3">
@@ -525,9 +610,8 @@ const DealerOnboardingPage = () => {
                   </div>
                 </div>
               )}
+
             </div>
-
-
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-slate-50 text-slate-400 text-sm">
@@ -537,13 +621,13 @@ const DealerOnboardingPage = () => {
       </div>
 
       {/* ── Reject Application Modal ── */}
-      <Modal isOpen={showRejectModal} onClose={() => resetAndClose(setShowRejectModal)} title="Reject Application">
+      <Modal isOpen={showRejectModal} onClose={() => setShowRejectModal(false)} title="Reject Application">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex gap-3 mb-5">
           <AlertCircle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-red-700">This Action cannot be undone</p>
+            <p className="text-sm font-semibold text-red-700">This action cannot be undone</p>
             <p className="text-xs text-red-600 mt-0.5">
-              The applicant will be notified immediately. They will need to re-apply if they wish to join the platform again.
+              The applicant will be notified. They can re-apply if they wish to join the platform.
             </p>
           </div>
         </div>
@@ -586,13 +670,13 @@ const DealerOnboardingPage = () => {
       </Modal>
 
       {/* ── Request Application Update Modal ── */}
-      <Modal isOpen={showRequestModal} onClose={() => resetAndClose(setShowRequestModal)} title="Request Application Update">
+      <Modal isOpen={showRequestModal} onClose={() => setShowRequestModal(false)} title="Request Application Update">
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3 mb-5">
           <AlertTriangle size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-amber-700">Action Required by Applicant</p>
             <p className="text-xs text-amber-700 mt-0.5">
-              The Application will move to "Updates Required". The applicant will be notified to correct specific details.
+              The application will move to "Updates Required". The applicant will be notified to correct specific details.
             </p>
           </div>
         </div>
@@ -654,7 +738,7 @@ const DealerOnboardingPage = () => {
       </Modal>
 
       {/* ── Approve Application Modal ── */}
-      <Modal isOpen={showApproveModal} onClose={() => resetAndClose(setShowApproveModal)} title="Approve Application">
+      <Modal isOpen={showApproveModal} onClose={() => setShowApproveModal(false)} title="Approve Application">
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex gap-3 mb-5">
           <CheckCircle size={18} className="text-green-600 flex-shrink-0 mt-0.5" />
           <div>
@@ -718,11 +802,10 @@ const DealerOnboardingPage = () => {
             onClick={handleConfirmApprove}
             className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
           >
-            Confirm approval
+            Confirm Approval
           </button>
         </div>
       </Modal>
-
 
     </div>
   );

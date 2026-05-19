@@ -77,12 +77,19 @@ router.post('/webhook/application-updated', async (req, res) => {
     }
 
     const Dealer = require('./model/Dealer.model');
-    const dealer = await Dealer.findOne({ applicationId });
+    let dealer = await Dealer.findOne({ applicationId });
+    if (!dealer && email) {
+      dealer = await Dealer.findOne({ email: email.toLowerCase().trim() });
+      if (dealer) {
+        dealer.applicationId = applicationId; // link so future lookups work
+        console.log(`[Webhook] application-updated: linked applicationId ${applicationId} to dealer found by email ${email}`);
+      }
+    }
 
     if (!dealer) {
       return res
         .status(404)
-        .json({ success: false, message: 'Dealer record not found for this applicationId' });
+        .json({ success: false, message: 'Dealer record not found for this applicationId or email' });
     }
 
     // Update core fields from the resubmission payload
@@ -111,10 +118,24 @@ router.post('/webhook/application-updated', async (req, res) => {
       };
     }
 
+    const wasRejected = dealer.status === 'rejected';
+
     // Reset to pending so the application reappears in the Pending tab
     dealer.status            = 'pending';
     dealer.kycStatus         = 'pending';
     dealer.lastResubmittedAt = new Date();
+
+    if (wasRejected) {
+      // Re-apply after rejection: clear update-request history so only "Reapplied" banner shows
+      dealer.updateRequestedFields = [];
+      dealer.requestUpdatedAt      = undefined;
+      // rejectedAt + rejectionReason are kept — frontend uses them for the "Reapplied" banner
+    } else {
+      // Resubmission after UPDATE_REQUESTED: clear rejection history so only "Resubmitted" banner shows
+      dealer.rejectedAt      = undefined;
+      dealer.rejectionReason = undefined;
+      // requestUpdatedAt + updateRequestedFields are kept — frontend uses them for the "Resubmitted" banner
+    }
 
     await dealer.save();
 
