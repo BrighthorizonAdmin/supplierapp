@@ -582,4 +582,95 @@ router.post('/dealer-order-cancel', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-warranty-claim
+// Called by D-BE when a dealer submits a warranty claim for a retail invoice.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-warranty-claim', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      console.warn('[Webhook] Unauthorized dealer-warranty-claim attempt from:', req.ip);
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const {
+      dbeClaimId, invoiceNumber, dbeInvoiceId, invoiceDate, warrantyPeriod,
+      dealerName, dealerPhone, dealerEmail,
+      customerName, customerPhone,
+      items, issueDescription,
+    } = req.body;
+
+    if (!dbeClaimId) {
+      return res.status(400).json({ success: false, message: 'dbeClaimId required' });
+    }
+
+    const WarrantyRequest = require('../warranty/model/WarrantyRequest.model');
+
+    // Idempotency — skip if already synced
+    const existing = await WarrantyRequest.findOne({ dbeClaimId });
+    if (existing) {
+      console.warn(`[Webhook] dealer-warranty-claim already synced: ${dbeClaimId}`);
+      return res.json({ success: true, message: 'Already synced', data: existing });
+    }
+
+    // Resolve dealer
+    let dealer = null;
+    if (dealerEmail) {
+      dealer = await Dealer.findOne({ email: dealerEmail.toLowerCase().trim() }).lean();
+    }
+    if (!dealer && dealerPhone) {
+      const digits = String(dealerPhone).replace(/\D/g, '');
+      const phone10 = digits.length >= 10 ? digits.slice(-10) : digits;
+      if (phone10) dealer = await Dealer.findOne({ phone: phone10 }).lean();
+    }
+    if (!dealer && dealerName) {
+      const escaped = dealerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      dealer = await Dealer.findOne({
+        businessName: { $regex: `^${escaped}$`, $options: 'i' },
+      }).lean();
+    }
+
+    // If warrantyPeriod not provided by D-BE, look it up from S-BE product by SKU
+    let resolvedWarrantyPeriod = warrantyPeriod || '';
+    if (!resolvedWarrantyPeriod && Array.isArray(items) && items.length > 0) {
+      const Product = require('../products/model/Product.model');
+      const firstItem = items[0];
+      let product = null;
+      if (firstItem.productId) {
+        product = await Product.findById(firstItem.productId).select('warrantyPeriod').lean();
+      }
+      if (!product?.warrantyPeriod && firstItem.sku) {
+        product = await Product.findOne({ sku: firstItem.sku.toUpperCase() }).select('warrantyPeriod').lean();
+      }
+      resolvedWarrantyPeriod = product?.warrantyPeriod || '';
+    }
+
+    const warrantyReq = await WarrantyRequest.create({
+      dbeClaimId,
+      dealerId:       dealer?._id || undefined,
+      dbeInvoiceId,
+      invoiceNumber,
+      invoiceDate:    invoiceDate ? new Date(invoiceDate) : undefined,
+      warrantyPeriod: resolvedWarrantyPeriod,
+      customerName,
+      customerPhone:  customerPhone || '',
+      items:          (items || []).map((i) => ({
+        productId: i.productId || '',
+        name:      i.name || '',
+        sku:       i.sku || '',
+        quantity:  Number(i.quantity) || 1,
+        reason:    i.reason || '',
+      })),
+      issueDescription: issueDescription || '',
+    });
+
+    console.log(`[Webhook] Warranty claim synced: ${warrantyReq.claimNumber} for dealer: ${dealerName}`);
+    return res.status(201).json({ success: true, data: warrantyReq });
+  } catch (err) {
+    console.error('[Webhook] dealer-warranty-claim error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
 module.exports = router;
