@@ -128,15 +128,25 @@ const createFromWebhook = async (data) => {
   if (orConditions.length > 0) {
     const existing = await Dealer.findOne({ $or: orConditions });
     if (existing) {
-      console.log(`[createFromWebhook] Dealer already exists (${existing.applicationId || existing.email}), checking for missing submittedDocuments`);
+      console.log(`[createFromWebhook] Dealer already exists (${existing.applicationId || existing.email}), syncing latest application data`);
+      let changed = false;
+      if (data.applicationId && existing.applicationId !== data.applicationId) {
+        existing.applicationId = data.applicationId;
+        changed = true;
+      }
+
       // Patch submittedDocuments if the existing record is missing them
       const hasDocs = existing.submittedDocuments &&
         Object.values(existing.submittedDocuments).some(d => d?.fileUrl);
       if (!hasDocs && data.submittedDocuments &&
           Object.values(data.submittedDocuments).some(d => d?.fileUrl)) {
         existing.submittedDocuments = data.submittedDocuments;
+        changed = true;
+      }
+
+      if (changed) {
         await existing.save();
-        console.log(`[createFromWebhook] Patched submittedDocuments for ${existing.applicationId}`);
+        console.log(`[createFromWebhook] Synced applicationId/docs for ${existing.applicationId || existing.email}`);
       }
       return existing;
     }
