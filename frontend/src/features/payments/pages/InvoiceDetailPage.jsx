@@ -221,9 +221,21 @@ export default function InvoiceDetailPage() {
                 return (
                   <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '10px 6px', verticalAlign: 'top' }}>
-                      <div style={{ fontWeight: 'bold' }}>{item.productName}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 'bold' }}>{item.productName}</span>
+                        {item.productSource === 'own' ? (
+                          <span style={{ fontSize: '10px', fontWeight: '600', color: '#1D4ED8', background: '#DBEAFE', borderRadius: 4, padding: '1px 6px' }}>Dealer's Own</span>
+                        ) : (
+                          <span style={{ fontSize: '10px', fontWeight: '600', color: '#065F46', background: '#D1FAE5', borderRadius: 4, padding: '1px 6px' }}>Supplier</span>
+                        )}
+                      </div>
                       {item.productCode && <div style={{ fontSize: '11px', color: '#666' }}>SKU: {item.productCode}</div>}
                       {item.description && <div style={{ fontSize: '11px', color: '#666' }}>{item.description}</div>}
+                      {Array.isArray(item.serialNumbers) && item.serialNumbers.length > 0 && (
+                        <div style={{ fontSize: '11px', color: '#444', marginTop: '4px' }}>
+                          <strong>Serial No:</strong> {item.serialNumbers.join(', ')}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '10px 6px', textAlign: 'center', verticalAlign: 'top' }}>{item.hsnCode || '—'}</td>
                     <td style={{ padding: '10px 6px', textAlign: 'center', verticalAlign: 'top' }}>{item.quantity} {item.unit || 'PCS'}</td>

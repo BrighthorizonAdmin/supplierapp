@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { createInvoice, updateInvoice, fetchInvoiceById } from '../paymentSlice';
@@ -182,6 +182,9 @@ export default function InvoiceFormPage() {
   const [dealerSearch,   setDealerSearch]   = useState('');
   const [showDealerDrop, setShowDealerDrop] = useState(false);
   const dealerRef = useRef(null);
+
+  // ── Serial numbers per row (comma-separated input string) ────────────────
+  const [serialInputs, setSerialInputs] = useState({}); // { idx: "SN-001, SN-002" }
 
   // ── Product search per row ────────────────────────────────────────────────
   const [prodSearch,   setProdSearch]   = useState({});
@@ -422,6 +425,16 @@ export default function InvoiceFormPage() {
     const e = {};
     if (!dealer && !dealerSearch.trim()) e.dealer = 'Please select or enter a party name';
     if (items.every((i) => !i.productName?.trim())) e.items = 'Add at least one item';
+    // Serial count must match quantity when serials are entered
+    items.forEach((item, idx) => {
+      const raw = serialInputs[idx] || '';
+      if (!raw.trim()) return;
+      const serials = raw.split(',').map((s) => s.trim()).filter(Boolean);
+      const qty = toNum(item.quantity);
+      if (serials.length !== qty) {
+        e[`serial_${idx}`] = `"${item.productName || `Item ${idx + 1}`}" needs ${qty} serial(s), got ${serials.length}`;
+      }
+    });
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -443,7 +456,11 @@ export default function InvoiceFormPage() {
       paymentTerms: `Net ${paymentDays}`,
       notes:        showNotes ? notes : '',
       termsAndConditions: showTerms ? terms : '',
-      lineItems:    calcedItems,
+      lineItems:    calcedItems.map((item, idx) => {
+        const raw = serialInputs[idx] || '';
+        const serials = raw.split(',').map((s) => s.trim()).filter(Boolean);
+        return serials.length > 0 ? { ...item, serialNumbers: serials } : item;
+      }),
       invoiceDiscount: showDisc ? toNum(invoiceDisc) : 0,
       amountPaid:   markPaid ? summary.total : toNum(amtReceived),
       status:       asDraft ? 'draft' : 'issued',
@@ -484,7 +501,7 @@ export default function InvoiceFormPage() {
         setNotes(''); setInvoiceDisc(0); setAmtReceived(0); setMarkPaid(false);
         setShowDisc(false); setShowNotes(false); setInvoiceNo(''); setInvoiceDate(today);
         setAddlCharges(0); setShowAddlChg(false); setBankAccount(null); setErrors({});
-        setPayMode('Cash'); setRoundOff(false); setShipAddress(null);
+        setPayMode('Cash'); setRoundOff(false); setShipAddress(null); setSerialInputs({});
       } else { navigate('/invoices'); }
     }
   };
@@ -623,7 +640,8 @@ export default function InvoiceFormPage() {
                     const searchVal = prodSearch[idx] ?? item.productName ?? '';
                     const filteredProd = getFilteredProds(idx);
                     return (
-                      <tr key={idx} className="hover:bg-gray-50/40 group align-top">
+                      <React.Fragment key={idx}>
+                      <tr className="hover:bg-gray-50/40 group align-top">
                         <td className="px-3 pt-4 pb-3 text-gray-400 text-xs">{idx+1}</td>
                         <td className="px-3 py-3">
                           <div className="relative" ref={(el)=>{if(el)prodRefs.current[idx]=el;}}>
@@ -704,6 +722,49 @@ export default function InvoiceFormPage() {
                           )}
                         </td>
                       </tr>
+                      {/* Serial numbers row */}
+                      {item.productName?.trim() && (
+                        <tr key={`serial-${idx}`} className="bg-blue-50/40 border-b border-blue-100">
+                          <td />
+                          <td colSpan={7} className="px-3 py-2">
+                            <div className="flex items-start gap-2">
+                              <Barcode size={13} className="text-blue-400 mt-2 flex-shrink-0" />
+                              <div className="flex-1">
+                                <input
+                                  className={`w-full text-xs border rounded-md px-2.5 py-1.5 outline-none bg-white placeholder-gray-300 transition-colors ${
+                                    errors[`serial_${idx}`]
+                                      ? 'border-red-400 focus:border-red-500'
+                                      : 'border-blue-200 focus:border-blue-400'
+                                  }`}
+                                  placeholder={`Serial numbers, comma-separated — e.g. SN-001, SN-002 (${toNum(item.quantity)} required)`}
+                                  value={serialInputs[idx] || ''}
+                                  onChange={(e) => {
+                                    setSerialInputs((p) => ({ ...p, [idx]: e.target.value }));
+                                    setErrors((er) => { const n = { ...er }; delete n[`serial_${idx}`]; return n; });
+                                  }}
+                                />
+                                {errors[`serial_${idx}`] && (
+                                  <p className="text-xs text-red-500 mt-0.5">{errors[`serial_${idx}`]}</p>
+                                )}
+                                {(() => {
+                                  const raw = serialInputs[idx] || '';
+                                  if (!raw.trim()) return null;
+                                  const count = raw.split(',').map(s => s.trim()).filter(Boolean).length;
+                                  const qty = toNum(item.quantity);
+                                  const ok = count === qty;
+                                  return (
+                                    <p className={`text-xs mt-0.5 font-medium ${ok ? 'text-green-600' : 'text-orange-500'}`}>
+                                      {count} of {qty} serial(s) entered {ok ? '✓' : ''}
+                                    </p>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </td>
+                          <td />
+                        </tr>
+                      )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

@@ -104,6 +104,11 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    warrantyPeriod: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     moq: {
       type: Number,
       min: [0, 'MOQ cannot be negative'],

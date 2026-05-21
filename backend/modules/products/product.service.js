@@ -65,6 +65,8 @@ const notifyDealersAboutProduct = async (product, action) => {
           category: product.category,
           brand: product.brand,
           basePrice: product.basePrice,
+          sku: product.sku,
+          warrantyPeriod: product.warrantyPeriod || '',
         },
         {
           headers: { 'Content-Type': 'application/json', 'x-api-key': dealerApiKey },

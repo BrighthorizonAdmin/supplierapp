@@ -36,6 +36,9 @@ import InvoiceDetailPage from '../features/payments/pages/InvoiceDetailPage';
 import ChangePassword from '../features/usermanagement/pages/ChangePassword';
 import SupportDetailPage from '../features/support/pages/SupportDetailPage';
 import SupportListPage from '../features/support/pages/SupportListPage';
+import WarrantyListPage from '../features/warranty/pages/WarrantyListPage';
+import WarrantyDetailPage from '../features/warranty/pages/WarrantyDetailPage';
+import WarrantyLookupPage from '../features/warranty/pages/WarrantyLookupPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -197,6 +200,21 @@ const AppRouter = () => {
           <Route path="support/:id" element={
             <ProtectedRoute permission="support:read">
               <SupportDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="warranty" element={
+            <ProtectedRoute permission="orders:read">
+              <WarrantyListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="warranty-lookup" element={
+            <ProtectedRoute permission="orders:read">
+              <WarrantyLookupPage />
+            </ProtectedRoute>
+          } />
+          <Route path="warranty/:id" element={
+            <ProtectedRoute permission="orders:read">
+              <WarrantyDetailPage />
             </ProtectedRoute>
           } />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />

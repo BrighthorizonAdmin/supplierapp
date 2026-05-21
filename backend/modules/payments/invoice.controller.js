@@ -30,5 +30,9 @@ const deleteInvoice   = asyncHandler(async (req, res) => {
   await invoiceService.deleteInvoice(req.params.id);
   return success(res, null, 'Invoice deleted');
 });
+const saveSerialNumbers = asyncHandler(async (req, res) => {
+  const inv = await invoiceService.saveSerialNumbers(req.params.id, req.body.lineSerials);
+  return success(res, inv, 'Serial numbers saved');
+});
 
-module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, issueInvoice, cancelInvoice, deleteInvoice };
+module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, issueInvoice, cancelInvoice, deleteInvoice, saveSerialNumbers };

@@ -17,6 +17,7 @@ import uiReducer from './uiSlice';
 import roleReducer from '../features/usermanagement/roleSlice';
 import userReducer from '../features/usermanagement/userSlice';
 import supportReducer from '../features/support/supportSlice';
+import warrantyReducer from '../features/warranty/warrantySlice';
 
 
 const store = configureStore({
@@ -39,6 +40,7 @@ const store = configureStore({
     roles:roleReducer,
     users: userReducer,
     support: supportReducer,
+    warranty: warrantyReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

@@ -575,9 +575,15 @@ const ProductFormPage = () => {
                 </select>
               </div>
             </div>
-            <div className="flex-1 flex flex-col">
-              <label className="label">Description</label>
-              <textarea className="input resize-none flex-1" placeholder="Enter product description..." {...register('description')} />
+            <div className="flex-1 flex flex-col gap-3">
+              <div>
+                <label className="label">Warranty Period</label>
+                <input className="input" placeholder="e.g. 1 Year, 6 Months, 2 Years" {...register('warrantyPeriod')} />
+              </div>
+              <div className="flex-1 flex flex-col">
+                <label className="label">Description</label>
+                <textarea className="input resize-none flex-1" placeholder="Enter product description..." {...register('description')} />
+              </div>
             </div>
           </div>
 
