@@ -26,6 +26,18 @@ export const fetchWarrantyById = createAsyncThunk(
   }
 );
 
+export const lookupBySerial = createAsyncThunk(
+  'warranty/lookupBySerial',
+  async (serial, { rejectWithValue }) => {
+    try {
+      const { data } = await api.get('/dispatched-units/lookup', { params: { serial } });
+      return data.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'No product found for this serial number');
+    }
+  }
+);
+
 export const updateWarrantyStatus = createAsyncThunk(
   'warranty/updateStatus',
   async ({ id, status, supplierNotes }, { rejectWithValue }) => {
@@ -43,14 +55,18 @@ export const updateWarrantyStatus = createAsyncThunk(
 const warrantySlice = createSlice({
   name: 'warranty',
   initialState: {
-    list:       [],
-    selected:   null,
-    pagination: null,
-    loading:    false,
-    error:      null,
+    list:          [],
+    selected:      null,
+    pagination:    null,
+    loading:       false,
+    error:         null,
+    lookupResult:  null,
+    lookupLoading: false,
+    lookupError:   null,
   },
   reducers: {
     clearSelectedWarranty: (state) => { state.selected = null; },
+    clearLookupResult: (state) => { state.lookupResult = null; state.lookupError = null; },
   },
   extraReducers: (builder) => {
     builder
@@ -69,6 +85,10 @@ const warrantySlice = createSlice({
       })
       .addCase(fetchWarrantyById.rejected,  (state, action) => { state.loading = false; state.error = action.payload; })
 
+      .addCase(lookupBySerial.pending,   (state) => { state.lookupLoading = true; state.lookupError = null; state.lookupResult = null; })
+      .addCase(lookupBySerial.fulfilled, (state, action) => { state.lookupLoading = false; state.lookupResult = action.payload; })
+      .addCase(lookupBySerial.rejected,  (state, action) => { state.lookupLoading = false; state.lookupError = action.payload; })
+
       .addCase(updateWarrantyStatus.fulfilled, (state, action) => {
         state.selected = action.payload;
         const idx = state.list.findIndex((w) => w._id === action.payload._id);
@@ -77,5 +97,5 @@ const warrantySlice = createSlice({
   },
 });
 
-export const { clearSelectedWarranty } = warrantySlice.actions;
+export const { clearSelectedWarranty, clearLookupResult } = warrantySlice.actions;
 export default warrantySlice.reducer;

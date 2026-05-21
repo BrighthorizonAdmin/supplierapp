@@ -224,6 +224,11 @@ export default function InvoiceDetailPage() {
                       <div style={{ fontWeight: 'bold' }}>{item.productName}</div>
                       {item.productCode && <div style={{ fontSize: '11px', color: '#666' }}>SKU: {item.productCode}</div>}
                       {item.description && <div style={{ fontSize: '11px', color: '#666' }}>{item.description}</div>}
+                      {Array.isArray(item.serialNumbers) && item.serialNumbers.length > 0 && (
+                        <div style={{ fontSize: '11px', color: '#444', marginTop: '4px' }}>
+                          <strong>Serial No:</strong> {item.serialNumbers.join(', ')}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '10px 6px', textAlign: 'center', verticalAlign: 'top' }}>{item.hsnCode || '—'}</td>
                     <td style={{ padding: '10px 6px', textAlign: 'center', verticalAlign: 'top' }}>{item.quantity} {item.unit || 'PCS'}</td>

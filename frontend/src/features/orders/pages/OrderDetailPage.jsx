@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOrderById, confirmOrder, cancelOrder, clearSelected } from '../orderSlice';
-import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Truck, MapPin, CreditCard, CheckCheck } from 'lucide-react';
+import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Truck, MapPin, CreditCard, CheckCheck, Hash, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
@@ -21,7 +21,7 @@ const PROGRESS_STEPS = [
 
 const fmt = (n) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`;
 
-const OrderProgress = ({ order, onStatusUpdate, loading }) => {
+const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
   const currentRank = STATUS_RANK[order.status] ?? 0;
   if (order.status === 'cancelled') return null;
 
@@ -30,6 +30,10 @@ const OrderProgress = ({ order, onStatusUpdate, loading }) => {
     ? Math.min(100, ((doneCount - 1) / (PROGRESS_STEPS.length - 1)) * 100)
     : 0;
 
+  // Serial numbers must be entered before moving from confirmed → shipped
+  const serialsBlocking = (step) =>
+    step.status === 'shipped' && order.status === 'confirmed' && !serialsComplete;
+
   return (
     <div className="mb-6">
       <div className="relative flex items-start justify-between">
@@ -37,35 +41,59 @@ const OrderProgress = ({ order, onStatusUpdate, loading }) => {
         <div className="absolute top-5 left-0 h-0.5 bg-green-500 z-0 transition-all duration-500" style={{ width: `${pct}%` }} />
 
         {PROGRESS_STEPS.map((step) => {
-          const stepRank = STATUS_RANK[step.status];
-          const done = currentRank >= stepRank;
-          const isNext = stepRank === currentRank + 1;
-          const { Icon } = step;
+          const stepRank  = STATUS_RANK[step.status];
+          const done      = currentRank >= stepRank;
+          const isNext    = stepRank === currentRank + 1;
+          const blocked   = isNext && serialsBlocking(step);
+          const { Icon }  = step;
 
           return (
             <div key={step.status} className="flex flex-col items-center z-10 flex-1">
               <button
                 onClick={() => isNext && onStatusUpdate(step.status)}
                 disabled={!isNext || loading}
-                title={isNext ? `Click to ${step.label}` : undefined}
+                title={
+                  blocked
+                    ? 'Enter serial numbers below before shipping'
+                    : isNext ? `Click to ${step.label}` : undefined
+                }
                 className={[
                   'w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all',
                   done
                     ? 'bg-green-500 border-green-500 text-white'
-                    : isNext
-                      ? 'bg-white border-green-400 text-green-600 hover:bg-green-50 cursor-pointer'
-                      : 'bg-white border-slate-200 text-slate-300 cursor-default',
+                    : blocked
+                      ? 'bg-amber-50 border-amber-400 text-amber-500 cursor-pointer'
+                      : isNext
+                        ? 'bg-white border-green-400 text-green-600 hover:bg-green-50 cursor-pointer'
+                        : 'bg-white border-slate-200 text-slate-300 cursor-default',
                 ].join(' ')}
               >
                 <Icon size={17} strokeWidth={2.2} />
               </button>
-              <span className={`mt-2 text-xs font-medium text-center leading-tight max-w-[72px] ${done ? 'text-green-600' : isNext ? 'text-green-500' : 'text-slate-400'}`}>
+              <span className={`mt-2 text-xs font-medium text-center leading-tight max-w-[72px] ${
+                done ? 'text-green-600' : blocked ? 'text-amber-500' : isNext ? 'text-green-500' : 'text-slate-400'
+              }`}>
                 {step.label}
               </span>
+              {blocked && (
+                <span className="mt-1 text-[10px] text-amber-500 font-semibold text-center leading-tight max-w-[80px]">
+                  Serials required
+                </span>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Serial numbers reminder banner — shown when confirmed and serials not yet entered */}
+      {order.status === 'confirmed' && !serialsComplete && (
+        <div className="mt-5 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+          <Hash size={15} className="mt-0.5 shrink-0 text-amber-500" />
+          <span>
+            <strong>Action required:</strong> Enter serial numbers for all items below before marking this order as Shipped.
+          </span>
+        </div>
+      )}
 
       {order.status === 'delivered' && (
         <div className="mt-5 flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">
@@ -77,13 +105,178 @@ const OrderProgress = ({ order, onStatusUpdate, loading }) => {
   );
 };
 
+// ── Serial Number Section ─────────────────────────────────────────────────────
+const SerialNumberSection = ({ order, onSerialsComplete }) => {
+  const [invoice, setInvoice]       = useState(null);
+  const [inputs,  setInputs]        = useState({});   // { idx: "SN-001, SN-002" }
+  const [saving,  setSaving]        = useState(false);
+  const [saved,   setSaved]         = useState(false);
+  const [errors,  setErrors]        = useState({});
+
+  const markComplete = useCallback((val) => {
+    setSaved(val);
+    onSerialsComplete?.(val);
+  }, [onSerialsComplete]);
+
+  // Fetch the auto-generated invoice for this order
+  const load = useCallback(async () => {
+    if (!order?.invoiceId) return;
+    try {
+      const { data } = await api.get(`/invoices/${order.invoiceId}`);
+      const inv = data.data;
+      setInvoice(inv);
+      // Pre-fill any serials already saved
+      const pre = {};
+      (inv.lineItems || []).forEach((li, i) => {
+        if (li.serialNumbers?.length) pre[i] = li.serialNumbers.join(', ');
+      });
+      setInputs(pre);
+      // Check if all items already have serials
+      const allDone = (inv.lineItems || []).every(li => li.serialNumbers?.length === li.quantity);
+      markComplete(allDone);
+    } catch {
+      // invoice not yet available — silently ignore
+    }
+  }, [order?.invoiceId, markComplete]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (!invoice) return null;
+
+  const lineItems = invoice.lineItems || [];
+
+  const getSerials = (idx) =>
+    (inputs[idx] || '').split(',').map(s => s.trim()).filter(Boolean);
+
+  const validate = () => {
+    const e = {};
+    lineItems.forEach((item, i) => {
+      const serials = getSerials(i);
+      if (serials.length === 0) {
+        e[i] = `Enter ${item.quantity} serial(s) for "${item.productName}"`;
+      } else if (serials.length !== item.quantity) {
+        e[i] = `"${item.productName}" needs ${item.quantity} serial(s), got ${serials.length}`;
+      }
+    });
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const lineSerials = lineItems.map((_, i) => ({
+        index: i,
+        serialNumbers: getSerials(i),
+      }));
+      await api.patch(`/invoices/${invoice._id}/serials`, { lineSerials });
+      toast.success('Serial numbers saved successfully');
+      markComplete(true);
+      setErrors({});
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to save serial numbers');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Only show for confirmed/processing/shipped orders
+  const showStatuses = ['confirmed', 'processing', 'shipped', 'out_for_delivery'];
+  if (!showStatuses.includes(order.status)) return null;
+
+  return (
+    <div className="card">
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Hash size={16} className="text-blue-500" />
+          <h2 className="font-semibold text-slate-900">Serial Numbers</h2>
+          {saved && (
+            <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+              All Saved ✓
+            </span>
+          )}
+        </div>
+        {!saved && (
+          <p className="text-xs text-slate-400">Enter serial numbers for each item before dispatch</p>
+        )}
+      </div>
+
+      <div className="px-6 py-4 space-y-4">
+        {lineItems.map((item, i) => {
+          const serials  = getSerials(i);
+          const qty      = item.quantity;
+          const count    = serials.length;
+          const isOk     = count === qty;
+          const alreadySaved = item.serialNumbers?.length === qty;
+
+          return (
+            <div key={i} className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-800">
+                  {item.productName}
+                  <span className="ml-2 text-xs font-normal text-slate-400">× {qty} units</span>
+                </p>
+                {alreadySaved && !inputs[i] && (
+                  <span className="text-xs text-green-600 font-semibold">Already saved ✓</span>
+                )}
+                {inputs[i] && (
+                  <span className={`text-xs font-semibold ${isOk ? 'text-green-600' : 'text-orange-500'}`}>
+                    {count} of {qty} {isOk ? '✓' : ''}
+                  </span>
+                )}
+              </div>
+              <input
+                type="text"
+                className={`w-full text-sm border rounded-lg px-3 py-2 outline-none transition-colors placeholder-slate-300 ${
+                  errors[i]
+                    ? 'border-red-400 focus:border-red-500 bg-red-50'
+                    : isOk && inputs[i]
+                    ? 'border-green-400 bg-green-50 focus:border-green-500'
+                    : 'border-slate-200 focus:border-blue-400'
+                }`}
+                placeholder={`e.g. SN-001, SN-002${qty > 1 ? `, … (${qty} required)` : ''}`}
+                value={inputs[i] || ''}
+                onChange={(e) => {
+                  setInputs(p => ({ ...p, [i]: e.target.value }));
+                  setErrors(p => { const n = { ...p }; delete n[i]; return n; });
+                  markComplete(false);
+                }}
+              />
+              {errors[i] && <p className="text-xs text-red-500">{errors[i]}</p>}
+            </div>
+          );
+        })}
+
+        {!saved && (
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="mt-2 flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            <Save size={14} />
+            {saving ? 'Saving…' : 'Save Serial Numbers'}
+          </button>
+        )}
+
+        {saved && (
+          <div className="mt-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700 font-medium">
+            All serial numbers saved. DispatchedUnit records created for warranty tracking.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const OrderDetailPage = () => {
   const { id } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { selected: order, loading } = useSelector((s) => s.order);
-  const [attempted, setAttempted] = useState(false);
-  const [statusLoading, setStatusLoading] = useState(false);
+  const [attempted,       setAttempted]       = useState(false);
+  const [statusLoading,   setStatusLoading]   = useState(false);
+  const [serialsComplete, setSerialsComplete] = useState(false);
 
   const handlePrint = () => {
     const printContent = `<!DOCTYPE html>
@@ -218,6 +411,11 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
   };
 
   const handleStatusUpdate = (status) => {
+    // Block moving to shipped if serials are not yet saved
+    if (status === 'shipped' && order.status === 'confirmed' && !serialsComplete) {
+      toast.error('Enter serial numbers for all items before marking as Shipped.', { duration: 4000 });
+      return;
+    }
     if (status !== 'confirmed') {
       executeStatusUpdate(status);
       return;
@@ -375,6 +573,9 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
             </div>
           </div>
 
+          {/* Serial Numbers — shown after order is confirmed */}
+          <SerialNumberSection order={order} onSerialsComplete={setSerialsComplete} />
+
           {/* Timeline card — progress stepper + events */}
           <div className="card">
             <div className="px-6 py-4 border-b border-slate-100">
@@ -383,7 +584,7 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
             <div className="px-6 py-5">
 
               {/* ORDER PROGRESS stepper (Image 3) */}
-              <OrderProgress order={order} onStatusUpdate={handleStatusUpdate} loading={statusLoading || loading} />
+              <OrderProgress order={order} onStatusUpdate={handleStatusUpdate} loading={statusLoading || loading} serialsComplete={serialsComplete} />
 
               {/* Timeline events */}
               {timeline.length > 0 ? (

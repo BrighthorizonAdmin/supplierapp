@@ -1,5 +1,7 @@
 const Invoice = require('./model/Invoice.model');
 const Dealer = require('../dealer/model/Dealer.model');
+const Product = require('../products/model/Product.model');
+const DispatchedUnit = require('../dispatchedUnits/model/DispatchedUnit.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 
@@ -42,6 +44,42 @@ const calcTotals = (lineItems = [], invoiceDiscount = 0, additionalCharges = 0, 
     totalAmount = Math.round(totalAmount);
   }
   return { items, subtotal: +subtotal.toFixed(2), taxAmount: +taxAmount.toFixed(2), discountAmt, totalAmount, roundOffAmt };
+};
+
+// ── Serial uniqueness helper ──────────────────────────────────
+// Validates:
+//   1. No duplicates within the current batch (across all line items)
+//   2. No serial already recorded in DispatchedUnit for a different invoice
+const checkSerialUniqueness = async (allSerials, currentInvoiceId = null) => {
+  if (!allSerials.length) return;
+
+  // Within-batch duplicates
+  const seen = new Set();
+  const dupes = [];
+  for (const sn of allSerials) {
+    if (seen.has(sn)) dupes.push(sn);
+    seen.add(sn);
+  }
+  if (dupes.length) {
+    throw new AppError(
+      `Duplicate serial number(s) in this invoice: ${dupes.join(', ')}`,
+      400
+    );
+  }
+
+  // Already used in DB — exclude current invoice so re-saves are allowed
+  const filter = { serialNumber: { $in: allSerials } };
+  if (currentInvoiceId) filter.invoiceId = { $ne: currentInvoiceId };
+  const existing = await DispatchedUnit.find(filter).select('serialNumber invoiceNumber').lean();
+  if (existing.length) {
+    const details = existing
+      .map(u => `${u.serialNumber} (Invoice: ${u.invoiceNumber || u.invoiceId})`)
+      .join(', ');
+    throw new AppError(
+      `Serial number(s) already used in a previous invoice: ${details}`,
+      400
+    );
+  }
 };
 
 // ── CRUD ─────────────────────────────────────────────────
@@ -92,6 +130,23 @@ const createInvoice = async (body, user) => {
     ...rest
   } = body;
 
+  // Validate serial numbers: count match + uniqueness
+  const allSerials = [];
+  for (const item of lineItems) {
+    if (!item.serialNumbers || item.serialNumbers.length === 0) continue;
+    const qty = Number(item.quantity) || 0;
+    const cleaned = item.serialNumbers.map(s => s.trim().toUpperCase()).filter(Boolean);
+    if (cleaned.length !== qty) {
+      throw new AppError(
+        `"${item.productName || 'Item'}" requires ${qty} serial number(s), but ${cleaned.length} provided`,
+        400
+      );
+    }
+    item.serialNumbers = cleaned;
+    allSerials.push(...cleaned);
+  }
+  await checkSerialUniqueness(allSerials);
+
   const { items, subtotal, taxAmount, discountAmt, totalAmount, roundOffAmt } =
     calcTotals(lineItems, Number(invoiceDiscount) || 0, Number(additionalCharges) || 0, roundOff);
 
@@ -125,11 +180,39 @@ const createInvoice = async (body, user) => {
     invoicePrefix: invoicePrefix || undefined,
     invoiceSequence: invoiceSequence || undefined,
   });
+
   if (dealerId && bankDetails && Object.keys(bankDetails).length > 0) {
-    await Dealer.findByIdAndUpdate(dealerId, {
-      bankDetails
-    });
+    await Dealer.findByIdAndUpdate(dealerId, { bankDetails });
   }
+
+  // Create one DispatchedUnit record per serial number entered
+  const dispatchedUnits = [];
+  for (const item of lineItems) {
+    if (!item.serialNumbers || item.serialNumbers.length === 0) continue;
+    const product = item.productId
+      ? await Product.findById(item.productId).select('warrantyMonths').lean()
+      : null;
+    const warrantyMonths = product?.warrantyMonths || 0;
+    for (const serial of item.serialNumbers) {
+      const sn = serial.trim().toUpperCase();
+      if (!sn) continue;
+      dispatchedUnits.push({
+        serialNumber:   sn,
+        productId:      item.productId || undefined,
+        productName:    item.productName || '',
+        warrantyMonths,
+        invoiceId:      invoice._id,
+        invoiceNumber:  invoice.invoiceNumber,
+        orderId:        rest.orderId || undefined,
+        dealerId:       dealerId || undefined,
+        dispatchedAt:   invoice.invoiceDate || new Date(),
+      });
+    }
+  }
+  if (dispatchedUnits.length > 0) {
+    await DispatchedUnit.insertMany(dispatchedUnits, { ordered: false });
+  }
+
   return invoice;
 };
 
@@ -204,4 +287,66 @@ const deleteInvoice = async (id) => {
   await invoice.deleteOne();
 };
 
-module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, issueInvoice, cancelInvoice, deleteInvoice };
+// Save serial numbers for line items of an auto-generated invoice
+// lineSerials = [{ index: 0, serialNumbers: ['SN-001', 'SN-002'] }, ...]
+const saveSerialNumbers = async (id, lineSerials) => {
+  const invoice = await Invoice.findById(id);
+  if (!invoice) throw new AppError('Invoice not found', 404);
+  if (invoice.status === 'cancelled') throw new AppError('Cannot update a cancelled invoice', 400);
+
+  // Validate count per entry and collect all serials for uniqueness check
+  const allSerials = [];
+  for (const entry of lineSerials) {
+    const item = invoice.lineItems[entry.index];
+    if (!item) throw new AppError(`Line item at index ${entry.index} not found`, 400);
+    const serials = (entry.serialNumbers || []).map(s => s.trim().toUpperCase()).filter(Boolean);
+    if (serials.length !== item.quantity) {
+      throw new AppError(
+        `"${item.productName}" requires ${item.quantity} serial(s), got ${serials.length}`,
+        400
+      );
+    }
+    entry._resolved = serials;
+    allSerials.push(...serials);
+  }
+  // Uniqueness: within-batch + DB (exclude this invoice so re-saves are allowed)
+  await checkSerialUniqueness(allSerials, invoice._id);
+
+  // Write serials onto the invoice line items
+  for (const entry of lineSerials) {
+    invoice.lineItems[entry.index].serialNumbers = entry._resolved;
+  }
+  invoice.markModified('lineItems');
+  await invoice.save();
+
+  // Create DispatchedUnit records (skip any serial that already exists)
+  const dispatchedUnits = [];
+  for (const entry of lineSerials) {
+    const item = invoice.lineItems[entry.index];
+    const product = item.productId
+      ? await Product.findById(item.productId).select('warrantyMonths').lean()
+      : null;
+    const warrantyMonths = product?.warrantyMonths || 0;
+    for (const sn of entry._resolved) {
+      dispatchedUnits.push({
+        serialNumber:  sn,
+        productId:     item.productId || undefined,
+        productName:   item.productName || '',
+        warrantyMonths,
+        invoiceId:     invoice._id,
+        invoiceNumber: invoice.invoiceNumber,
+        orderId:       invoice.orderId || undefined,
+        dealerId:      invoice.dealerId || undefined,
+        dispatchedAt:  invoice.invoiceDate || new Date(),
+      });
+    }
+  }
+  if (dispatchedUnits.length > 0) {
+    // ordered:false — skip duplicates instead of aborting the whole batch
+    await DispatchedUnit.insertMany(dispatchedUnits, { ordered: false }).catch(() => {});
+  }
+
+  return invoice;
+};
+
+module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, issueInvoice, cancelInvoice, deleteInvoice, saveSerialNumbers };

@@ -38,6 +38,7 @@ import SupportDetailPage from '../features/support/pages/SupportDetailPage';
 import SupportListPage from '../features/support/pages/SupportListPage';
 import WarrantyListPage from '../features/warranty/pages/WarrantyListPage';
 import WarrantyDetailPage from '../features/warranty/pages/WarrantyDetailPage';
+import WarrantyLookupPage from '../features/warranty/pages/WarrantyLookupPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -204,6 +205,11 @@ const AppRouter = () => {
           <Route path="warranty" element={
             <ProtectedRoute permission="orders:read">
               <WarrantyListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="warranty-lookup" element={
+            <ProtectedRoute permission="orders:read">
+              <WarrantyLookupPage />
             </ProtectedRoute>
           } />
           <Route path="warranty/:id" element={
