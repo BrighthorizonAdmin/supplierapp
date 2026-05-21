@@ -33,12 +33,20 @@ export default function WarrantyListPage() {
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <ShieldCheck size={24} className="text-blue-600" />
-        <h1 className="text-2xl font-bold text-slate-800">Warranty Requests</h1>
-        {pagination?.total !== undefined && (
-          <span className="ml-2 text-sm text-slate-500">({pagination.total} total)</span>
-        )}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <ShieldCheck size={24} className="text-blue-600" />
+          <h1 className="text-2xl font-bold text-slate-800">Warranty Requests</h1>
+          {pagination?.total !== undefined && (
+            <span className="ml-2 text-sm text-slate-500">({pagination.total} total)</span>
+          )}
+        </div>
+        <button
+          onClick={() => navigate('/warranty-lookup')}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
+        >
+          Warranty Lookup
+        </button>
       </div>
 
       {/* Filters */}
