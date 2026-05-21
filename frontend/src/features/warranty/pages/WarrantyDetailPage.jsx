@@ -137,8 +137,11 @@ export default function WarrantyDetailPage() {
                   <div key={i} className="flex items-start justify-between py-2 border-b border-slate-50 last:border-0">
                     <div>
                       <p className="text-sm font-semibold text-slate-800">{item.name || '—'}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">SKU: {item.sku || '—'}</p>
-                      {item.reason && <p className="text-xs text-slate-500 mt-0.5 italic">"{item.reason}"</p>}
+                      <p className="text-xs mt-0.5"><span className="text-slate-500">SKU: </span><span className="text-slate-900 font-medium">{item.sku || '—'}</span></p>
+                      {item.serialNumbers?.length > 0 && (
+                        <p className="text-xs mt-0.5"><span className="text-slate-500">Serial No: </span><span className="font-semibold text-blue-700">{item.serialNumbers.join(', ')}</span></p>
+                      )}
+                      {item.reason && <p className="text-xs text-slate-900 mt-0.5 italic">"{item.reason}"</p>}
                     </div>
                     <span className="text-xs font-semibold text-slate-600 ml-3">Qty: {item.quantity}</span>
                   </div>

@@ -46,6 +46,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 router.get('/:id', authenticate, asyncHandler(async (req, res) => {
   const item = await WarrantyRequest.findById(req.params.id)
     .populate('dealerId', 'businessName dealerCode phone email')
+    .populate('dbeInvoiceId')
     .lean();
   if (!item) throw new AppError('Warranty request not found', 404);
   return success(res, item, 'Warranty request fetched');

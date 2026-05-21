@@ -77,18 +77,19 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       const lineBase  = price * qty;
       const lineTax   = lineBase * (taxR / 100);
       return {
-        productId:    item.productId || undefined,
-        productName:  item.productName || item.name || '',
-        productCode:  item.productCode || item.sku || '',
-        hsnCode:      item.hsnCode || '',
-        quantity:     qty,
-        unitPrice:    price,
-        taxRate:      taxR,
-        taxAmount:    +lineTax.toFixed(2),
-        lineTotal:    +Number(item.lineTotal || (lineBase + lineTax)).toFixed(2),
-        discount:     0,
-        discountType: '%',
+        productId:     item.productId || undefined,
+        productName:   item.productName || item.name || '',
+        productCode:   item.productCode || item.sku || '',
+        hsnCode:       item.hsnCode || '',
+        quantity:      qty,
+        unitPrice:     price,
+        taxRate:       taxR,
+        taxAmount:     +lineTax.toFixed(2),
+        lineTotal:     +Number(item.lineTotal || (lineBase + lineTax)).toFixed(2),
+        discount:      0,
+        discountType:  '%',
         discountValue: 0,
+        productSource: item.productSource || 'supplier',
       };
     });
 
@@ -656,11 +657,12 @@ router.post('/dealer-warranty-claim', async (req, res) => {
       customerName,
       customerPhone:  customerPhone || '',
       items:          (items || []).map((i) => ({
-        productId: i.productId || '',
-        name:      i.name || '',
-        sku:       i.sku || '',
-        quantity:  Number(i.quantity) || 1,
-        reason:    i.reason || '',
+        productId:     i.productId || '',
+        name:          i.name || '',
+        sku:           i.sku || '',
+        quantity:      Number(i.quantity) || 1,
+        reason:        i.reason || '',
+        serialNumbers: Array.isArray(i.serialNumbers) ? i.serialNumbers : [],
       })),
       issueDescription: issueDescription || '',
     });

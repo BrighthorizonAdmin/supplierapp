@@ -1,11 +1,12 @@
 const mongoose = require('mongoose');
 
 const claimItemSchema = new mongoose.Schema({
-  productId: { type: String },
-  name:      { type: String },
-  sku:       { type: String },
-  quantity:  { type: Number, default: 1 },
-  reason:    { type: String, default: '' },
+  productId:     { type: String },
+  name:          { type: String },
+  sku:           { type: String },
+  quantity:      { type: Number, default: 1 },
+  reason:        { type: String, default: '' },
+  serialNumbers: { type: [String], default: [] },
 }, { _id: false });
 
 const warrantyRequestSchema = new mongoose.Schema({
@@ -13,7 +14,7 @@ const warrantyRequestSchema = new mongoose.Schema({
   dbeClaimId:    { type: String, sparse: true },
 
   dealerId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Dealer' },
-
+  invoiceId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice' },
   dbeInvoiceId:  { type: String },
   invoiceNumber: { type: String },
   invoiceDate:   { type: Date },

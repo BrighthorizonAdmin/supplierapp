@@ -13,7 +13,7 @@ router.get('/lookup', authenticate, asyncHandler(async (req, res) => {
   if (!serial) throw new AppError('Serial number is required', 400);
 
   const unit = await DispatchedUnit.findOne({ serialNumber: serial })
-    .populate('productId', 'name category brand sku warrantyMonths basePrice')
+    .populate('productId', 'name category brand sku warrantyPeriod basePrice')
     .populate('dealerId', 'businessName dealerCode phone email address')
     .populate('invoiceId', 'invoiceNumber invoiceDate totalAmount')
     .populate('orderId', 'orderNumber')
@@ -21,7 +21,13 @@ router.get('/lookup', authenticate, asyncHandler(async (req, res) => {
 
   if (!unit) throw new AppError('No product found for this serial number', 404);
 
-  const warrantyMonths = unit.warrantyMonths || unit.productId?.warrantyMonths || 0;
+  const parseWarrantyMonths = (period = '') => {
+    const m = (period || '').toLowerCase().trim().match(/^(\d+)\s*(month|year)/);
+    if (!m) return 0;
+    const n = parseInt(m[1], 10);
+    return m[2].startsWith('year') ? n * 12 : n;
+  };
+  const warrantyMonths = unit.warrantyMonths || parseWarrantyMonths(unit.productId?.warrantyPeriod);
   const dispatchedAt = unit.dispatchedAt;
   const warrantyExpiresAt = warrantyMonths > 0 ? addMonths(new Date(dispatchedAt), warrantyMonths) : null;
   const isWarrantyValid = warrantyExpiresAt ? !isPast(warrantyExpiresAt) : false;

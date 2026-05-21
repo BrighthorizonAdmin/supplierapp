@@ -54,7 +54,7 @@ const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
                 disabled={!isNext || loading}
                 title={
                   blocked
-                    ? 'Enter serial numbers below before shipping'
+                    ? 'Enter/Scan serial numbers below before shipping'
                     : isNext ? `Click to ${step.label}` : undefined
                 }
                 className={[
@@ -90,7 +90,7 @@ const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
         <div className="mt-5 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
           <Hash size={15} className="mt-0.5 shrink-0 text-amber-500" />
           <span>
-            <strong>Action required:</strong> Enter serial numbers for all items below before marking this order as Shipped.
+            <strong>Action required:</strong> Enter/Scan serial numbers for all items below before marking this order as Shipped.
           </span>
         </div>
       )}
@@ -150,14 +150,41 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
 
   const validate = () => {
     const e = {};
+    const crossMap = new Map(); // uppercase serial → first field index
+
     lineItems.forEach((item, i) => {
       const serials = getSerials(i);
       if (serials.length === 0) {
         e[i] = `Enter ${item.quantity} serial(s) for "${item.productName}"`;
-      } else if (serials.length !== item.quantity) {
+        return;
+      }
+      if (serials.length !== item.quantity) {
         e[i] = `"${item.productName}" needs ${item.quantity} serial(s), got ${serials.length}`;
       }
+
+      // Intra-field duplicates
+      const seen = new Set();
+      const dupes = [];
+      for (const sn of serials) {
+        const upper = sn.toUpperCase();
+        if (seen.has(upper)) dupes.push(sn);
+        else seen.add(upper);
+      }
+      if (dupes.length) e[i] = `Duplicate serial(s): ${dupes.join(', ')}`;
+
+      // Cross-field duplicates
+      for (const sn of serials) {
+        const upper = sn.toUpperCase();
+        if (crossMap.has(upper)) {
+          const otherIdx = crossMap.get(upper);
+          e[i] = (e[i] ? e[i] + '; ' : '') + `"${sn}" also in another item`;
+          if (!e[otherIdx]) e[otherIdx] = `"${sn}" also in another item`;
+        } else {
+          crossMap.set(upper, i);
+        }
+      }
     });
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -175,7 +202,24 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
       markComplete(true);
       setErrors({});
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to save serial numbers');
+      const msg = err?.response?.data?.message || 'Failed to save serial numbers';
+      toast.error(msg);
+      // Highlight inputs whose serials appear in the error message
+      const dupMatch = msg.match(/Duplicate serial number\(s\)[^:]*:\s*(.+)/i);
+      const usedMatch = msg.match(/already used[^:]*:\s*(.+)/i);
+      const errorSerials = new Set(
+        [...(dupMatch?.[1] || '').split(','), ...(usedMatch?.[1] || '').split(',')]
+          .map(s => s.replace(/\s*\(.*?\)/g, '').trim().toUpperCase())
+          .filter(Boolean)
+      );
+      if (errorSerials.size > 0) {
+        const e = {};
+        lineItems.forEach((_, i) => {
+          if (getSerials(i).map(s => s.toUpperCase()).some(s => errorSerials.has(s)))
+            e[i] = 'Contains invalid or already-used serial number(s)';
+        });
+        if (Object.keys(e).length > 0) setErrors(e);
+      }
     } finally {
       setSaving(false);
     }
@@ -198,7 +242,7 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
           )}
         </div>
         {!saved && (
-          <p className="text-xs text-slate-400">Enter serial numbers for each item before dispatch</p>
+          <p className="text-xs text-slate-400">Enter/Scan serial numbers for each item before dispatch</p>
         )}
       </div>
 

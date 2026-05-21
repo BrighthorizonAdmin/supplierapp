@@ -15,6 +15,7 @@ const { addDays } = require('date-fns');
 const axios = require('axios');
 const mongoose = require('mongoose');
 const ReturnModel = require('../returns/model/Return.model');
+const DispatchedUnit = require('../dispatchedUnits/model/DispatchedUnit.model');
 
 // ── DealerInventory — shared DB, so we access it directly ─────────────────────
 // Both S-BE and D-BE use the same MongoDB (dealer_app), so we can write
@@ -654,6 +655,13 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
     } catch (invErr) {
       // Never block the status update if inventory write fails — log and continue
       console.error(`[updateOrderStatus] Inventory write failed for order ${order.orderNumber}:`, invErr.message);
+    }
+
+    // Mark all dispatched units for this order as 'delivered' so the dealer can use them in retail sales
+    try {
+      await DispatchedUnit.updateMany({ orderId: order._id }, { status: 'delivered' });
+    } catch (duErr) {
+      console.error(`[updateOrderStatus] DispatchedUnit status update failed for order ${order.orderNumber}:`, duErr.message);
     }
   }
 

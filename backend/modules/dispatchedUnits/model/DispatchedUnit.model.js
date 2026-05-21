@@ -32,6 +32,11 @@ const dispatchedUnitSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    status: {
+      type: String,
+      enum: ['dispatched', 'delivered'],
+      default: 'dispatched',
+    },
   },
   {
     timestamps: true,

@@ -5,6 +5,15 @@ const DispatchedUnit = require('../dispatchedUnits/model/DispatchedUnit.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 
+// Converts "12 months" / "1 year" / "2 years" → number of months
+const parseWarrantyMonths = (period = '') => {
+  if (!period) return 0;
+  const m = period.toLowerCase().trim().match(/^(\d+)\s*(month|year)/);
+  if (!m) return 0;
+  const n = parseInt(m[1], 10);
+  return m[2].startsWith('year') ? n * 12 : n;
+};
+
 // ── helpers ──────────────────────────────────────────────
 const calcTotals = (lineItems = [], invoiceDiscount = 0, additionalCharges = 0, roundOff = false) => {
   const discount = Number(invoiceDiscount) || 0;
@@ -190,9 +199,9 @@ const createInvoice = async (body, user) => {
   for (const item of lineItems) {
     if (!item.serialNumbers || item.serialNumbers.length === 0) continue;
     const product = item.productId
-      ? await Product.findById(item.productId).select('warrantyMonths').lean()
+      ? await Product.findById(item.productId).select('warrantyPeriod').lean()
       : null;
-    const warrantyMonths = product?.warrantyMonths || 0;
+    const warrantyMonths = parseWarrantyMonths(product?.warrantyPeriod);
     for (const serial of item.serialNumbers) {
       const sn = serial.trim().toUpperCase();
       if (!sn) continue;
@@ -232,6 +241,56 @@ const updateInvoice = async (id, body) => {
   } = body;
 
   if (lineItems) {
+    // Compute serial number diff so DispatchedUnit stays in sync with the invoice
+    const oldSerials = [];
+    for (const li of invoice.lineItems) {
+      if (li.serialNumbers?.length) oldSerials.push(...li.serialNumbers.map(s => s.toUpperCase()));
+    }
+    const newSerials = [];
+    for (const li of lineItems) {
+      if (li.serialNumbers?.length)
+        newSerials.push(...li.serialNumbers.map(s => s.trim().toUpperCase()).filter(Boolean));
+    }
+    const oldSet      = new Set(oldSerials);
+    const newSet      = new Set(newSerials);
+    const removed     = [...oldSet].filter(s => !newSet.has(s));
+    const added       = [...newSet].filter(s => !oldSet.has(s));
+
+    // Reject new serials already dispatched in OTHER invoices
+    await checkSerialUniqueness(added, invoice._id);
+
+    // Remove stale DispatchedUnit records
+    if (removed.length > 0)
+      await DispatchedUnit.deleteMany({ serialNumber: { $in: removed }, invoiceId: invoice._id });
+
+    // Create DispatchedUnit records for newly added serials
+    if (added.length > 0) {
+      const units = [];
+      for (const li of lineItems) {
+        if (!li.serialNumbers?.length) continue;
+        const cleaned = li.serialNumbers.map(s => s.trim().toUpperCase()).filter(Boolean);
+        const newForItem = cleaned.filter(s => added.includes(s));
+        if (!newForItem.length) continue;
+        const product = li.productId
+          ? await Product.findById(li.productId).select('warrantyPeriod').lean()
+          : null;
+        for (const sn of newForItem) {
+          units.push({
+            serialNumber:  sn,
+            productId:     li.productId || undefined,
+            productName:   li.productName || '',
+            warrantyMonths: parseWarrantyMonths(product?.warrantyPeriod),
+            invoiceId:     invoice._id,
+            invoiceNumber: invoice.invoiceNumber,
+            dealerId:      invoice.dealerId || undefined,
+            dispatchedAt:  invoice.invoiceDate || new Date(),
+          });
+        }
+      }
+      if (units.length > 0)
+        await DispatchedUnit.insertMany(units, { ordered: false });
+    }
+
     const addl = Number(additionalCharges ?? invoice.additionalCharges) || 0;
     const ro = roundOff !== undefined ? roundOff : invoice.roundOff;
     const { items, subtotal, taxAmount, discountAmt, totalAmount, roundOffAmt } =
@@ -312,6 +371,16 @@ const saveSerialNumbers = async (id, lineSerials) => {
   // Uniqueness: within-batch + DB (exclude this invoice so re-saves are allowed)
   await checkSerialUniqueness(allSerials, invoice._id);
 
+  // Compute diff so DispatchedUnit stays in sync (same pattern as updateInvoice)
+  const oldSerials = [];
+  for (const li of invoice.lineItems) {
+    if (li.serialNumbers?.length) oldSerials.push(...li.serialNumbers.map(s => s.toUpperCase()));
+  }
+  const newSet = new Set(allSerials); // already uppercased above
+  const oldSet = new Set(oldSerials);
+  const removed = [...oldSet].filter(s => !newSet.has(s));
+  const added   = [...newSet].filter(s => !oldSet.has(s));
+
   // Write serials onto the invoice line items
   for (const entry of lineSerials) {
     invoice.lineItems[entry.index].serialNumbers = entry._resolved;
@@ -319,15 +388,21 @@ const saveSerialNumbers = async (id, lineSerials) => {
   invoice.markModified('lineItems');
   await invoice.save();
 
-  // Create DispatchedUnit records (skip any serial that already exists)
+  // Remove stale DispatchedUnit records for serials no longer in this invoice
+  if (removed.length > 0)
+    await DispatchedUnit.deleteMany({ serialNumber: { $in: removed }, invoiceId: invoice._id });
+
+  // Create DispatchedUnit records only for newly added serials
   const dispatchedUnits = [];
   for (const entry of lineSerials) {
+    const newForEntry = entry._resolved.filter(s => added.includes(s));
+    if (!newForEntry.length) continue;
     const item = invoice.lineItems[entry.index];
     const product = item.productId
-      ? await Product.findById(item.productId).select('warrantyMonths').lean()
+      ? await Product.findById(item.productId).select('warrantyPeriod').lean()
       : null;
-    const warrantyMonths = product?.warrantyMonths || 0;
-    for (const sn of entry._resolved) {
+    const warrantyMonths = parseWarrantyMonths(product?.warrantyPeriod);
+    for (const sn of newForEntry) {
       dispatchedUnits.push({
         serialNumber:  sn,
         productId:     item.productId || undefined,
@@ -342,8 +417,7 @@ const saveSerialNumbers = async (id, lineSerials) => {
     }
   }
   if (dispatchedUnits.length > 0) {
-    // ordered:false — skip duplicates instead of aborting the whole batch
-    await DispatchedUnit.insertMany(dispatchedUnits, { ordered: false }).catch(() => {});
+    await DispatchedUnit.insertMany(dispatchedUnits, { ordered: false });
   }
 
   return invoice;

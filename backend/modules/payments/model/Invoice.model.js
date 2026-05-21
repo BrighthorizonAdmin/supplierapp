@@ -17,6 +17,7 @@ const lineItemSchema = new mongoose.Schema({
   taxAmount: { type: Number, default: 0 },
   lineTotal: { type: Number, default: 0 },
   serialNumbers: [{ type: String, trim: true }],
+  productSource: { type: String, enum: ['supplier', 'own'], default: 'supplier' },
 }, { _id: false });
 
 const bankDetailsSchema = new mongoose.Schema({
