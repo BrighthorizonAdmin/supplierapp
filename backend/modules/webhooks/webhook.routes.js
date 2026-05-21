@@ -90,6 +90,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
         discountType:  '%',
         discountValue: 0,
         productSource: item.productSource || 'supplier',
+        serialNumbers: (item.serialNumbers || []).map(s => String(s).trim().toUpperCase()).filter(Boolean),
       };
     });
 

@@ -25,7 +25,6 @@ const NAV_ITEMS = [
   { to: '/invoices', icon: FileText, label: 'Sales Invoices', perm: 'invoices:read' },
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
   { to: '/warranty', icon: WarrantyIcon, label: 'Warranty', perm: 'orders:read' },
-  {to:'/warranty-lookup', icon: WarrantyIcon, label: 'Warranty Lookup', perm: 'orders:read'},
   { to: '/audit', icon: BarChart2, label: 'Analytics', perm: 'audit:read' },
   { to: '/notifications', icon: Settings, label: 'Settings', perm: 'notifications:read' },
   { to: '/rolemanagement', icon: ShieldCheck, label: 'Role Permissions', perm: 'users:manage' },

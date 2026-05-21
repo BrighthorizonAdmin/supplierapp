@@ -226,7 +226,7 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
   };
 
   // Only show for confirmed/processing/shipped orders
-  const showStatuses = ['confirmed', 'processing', 'shipped', 'out_for_delivery'];
+  const showStatuses = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered'];
   if (!showStatuses.includes(order.status)) return null;
 
   return (
@@ -286,6 +286,7 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
                   setErrors(p => { const n = { ...p }; delete n[i]; return n; });
                   markComplete(false);
                 }}
+                disabled={order.status === 'delivered'}
               />
               {errors[i] && <p className="text-xs text-red-500">{errors[i]}</p>}
             </div>

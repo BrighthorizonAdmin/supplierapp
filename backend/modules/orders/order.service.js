@@ -350,7 +350,30 @@ const confirmOrder = async (orderId, userId) => {
     emitToAll(ORDER_CONFIRMED, { orderId, orderNumber: order.orderNumber, dealerId: order.dealerId });
 
     // Notify D-BE so the dealer's order status updates to 'confirmed'
-    notifyDealerOrderStatus(order, 'confirmed');
+    // Also pass invoice data so the dealer backend can create the invoice record.
+    notifyDealerOrderStatus(order, 'confirmed', {
+      invoice: {
+        supplierInvoiceId: invoice[0]._id.toString(),
+        invoiceNumber:     invoice[0].invoiceNumber,
+        amount:            invoice[0].totalAmount,
+        subtotal:          invoice[0].subtotal,
+        taxAmount:         invoice[0].taxAmount || 0,
+        status:            invoice[0].status,
+        dueDate:           invoice[0].dueDate,
+        paymentMode:       invoice[0].paymentMode || null,
+        lineItems: (invoice[0].lineItems || []).map(i => ({
+          productId:    i.productId ? i.productId.toString() : null,
+          productName:  i.productName  || '',
+          productCode:  i.productCode  || '',
+          quantity:     i.quantity     || 0,
+          unitPrice:    i.unitPrice    || 0,
+          taxRate:      i.taxRate      || 0,
+          taxAmount:    i.taxAmount    || 0,
+          lineTotal:    i.lineTotal    || 0,
+          serialNumbers: (i.serialNumbers || []).map(s => String(s).trim().toUpperCase()).filter(Boolean),
+        })),
+      },
+    });
 
     return order;
   });
