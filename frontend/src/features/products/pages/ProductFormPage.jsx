@@ -366,7 +366,8 @@ const ProductFormPage = () => {
   const [productImages,   setProductImages]   = useState([]);
   const [interfaceGroups, setInterfaceGroups] = useState([]);
 
-  const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm();
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isDirty } } = useForm({ defaultValues: { isActive: true } });
+  const isActiveValue = watch('isActive');
 
   const isEdit = !!id;
 
@@ -438,7 +439,8 @@ const ProductFormPage = () => {
       return;
     }
 
-    const { stockDate, stockQty, specWeight, specDimensions, specColor, ...productData } = data;
+    const { stockDate, stockQty, specWeight, specDimensions, specColor, isActive, ...productData } = data;
+    productData.isActive = isActiveValue;
 
     if (!isEdit) {
       productData.openingStockDate = stockDate || undefined;
@@ -575,6 +577,25 @@ const ProductFormPage = () => {
                 </select>
               </div>
             </div>
+            {/* ── Status toggle ── */}
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Product Status</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {isActiveValue ? 'Visible to dealers' : 'Hidden from dealers'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setValue('isActive', !isActiveValue, { shouldDirty: true })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isActiveValue ? 'bg-green-500' : 'bg-gray-300'}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isActiveValue ? 'translate-x-6' : 'translate-x-1'}`}
+                />
+              </button>
+            </div>
+
             <div className="flex-1 flex flex-col gap-3">
               <div>
                 <label className="label">Warranty Period</label>
