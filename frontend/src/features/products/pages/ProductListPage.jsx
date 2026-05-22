@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchProducts, fetchCategories } from '../productSlice';
+import { fetchProducts, fetchCategories, updateProductStatus } from '../productSlice';
 import Pagination from '../../../components/ui/Pagination';
-import { Plus, Search, Upload, Package, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Package, Pencil, ChevronLeft, ChevronRight, ToggleLeft, ToggleRight } from 'lucide-react';
 
 // Build a URL from a single image object (handles Windows backslashes, leading "./")
 const buildSrc = (img) => {
@@ -115,17 +115,23 @@ const StockBadge = ({ product }) => {
   return <span className={cls}>{label}</span>;
 };
 
-const ProductCard = ({ product, onEdit }) => {
+const ProductCard = ({ product, onEdit, onToggleStatus, togglingId }) => {
   const srcs = getImageSrcs(product);
   const cur = product.currentStockQty ?? 0;
   const open = product.openingStockQty ?? 0;
   const status = getStockStatus(cur, open);
+  const isActive = product.isActive !== false;
+  const isToggling = togglingId === product._id;
 
   return (
-    <div className="card overflow-hidden group hover:shadow-md transition-shadow">
+    <div className={`card overflow-hidden group hover:shadow-md transition-shadow ${!isActive ? 'opacity-60' : ''}`}>
       {/* Image area */}
       <div className="relative bg-slate-100 h-44 flex items-center justify-center overflow-hidden">
         <ImageCarousel srcs={srcs} name={product.name} />
+        {/* Active/Inactive overlay badge */}
+        <div className={`absolute top-2 left-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${isActive ? 'bg-green-500 text-white' : 'bg-slate-500 text-white'}`}>
+          {isActive ? 'Active' : 'Inactive'}
+        </div>
       </div>
 
       {/* Card body */}
@@ -158,7 +164,7 @@ const ProductCard = ({ product, onEdit }) => {
           </span>
         </div>
 
-        {/* Price row */}
+        {/* Price + actions row */}
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[10px] text-slate-400 font-medium">Dealer Price</p>
@@ -166,12 +172,26 @@ const ProductCard = ({ product, onEdit }) => {
               ₹{(product.basePrice || 0).toLocaleString('en-IN')}
             </p>
           </div>
-          <button
-            onClick={() => onEdit(product._id)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium transition-colors shadow-sm"
-          >
-            <Pencil size={11} /> Edit
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => onToggleStatus(product._id, !isActive)}
+              disabled={isToggling}
+              title={isActive ? 'Deactivate product' : 'Activate product'}
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors shadow-sm disabled:opacity-50 ${isActive
+                ? 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                : 'bg-green-50 hover:bg-green-100 text-green-700'}`}
+            >
+              {isToggling
+                ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                : isActive ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
+            </button>
+            <button
+              onClick={() => onEdit(product._id)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium transition-colors shadow-sm"
+            >
+              <Pencil size={11} /> Edit
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -184,11 +204,12 @@ const ProductListPage = () => {
   const navigate = useNavigate();
   const { list, categories, pagination, loading } = useSelector((s) => s.product);
 
-
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [togglingId, setTogglingId] = useState(null);
 
   useEffect(() => { dispatch(fetchCategories()); }, [dispatch]);
 
@@ -199,8 +220,16 @@ const ProductListPage = () => {
   }, [searchInput]);
 
   useEffect(() => {
-    dispatch(fetchProducts({ page, limit: 20, search, category }));
-  }, [dispatch, page, search, category]);
+    const params = { page, limit: 20, search, category };
+    if (statusFilter !== '') params.isActive = statusFilter === 'active';
+    dispatch(fetchProducts(params));
+  }, [dispatch, page, search, category, statusFilter]);
+
+  const handleToggleStatus = async (id, isActive) => {
+    setTogglingId(id);
+    await dispatch(updateProductStatus({ id, isActive }));
+    setTogglingId(null);
+  };
 
   return (
     <div className="space-y-5">
@@ -209,9 +238,6 @@ const ProductListPage = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Product Catalog</h1>
         <div className="flex items-center gap-2">
-          {/* <button className="btn-secondary flex items-center gap-2 text-sm py-2 px-4">
-            <Upload size={14} /> Bulk Upload
-          </button> */}
           <button
             onClick={() => navigate('/products/new')}
             className="btn-primary flex items-center gap-2 text-sm py-2 px-4"
@@ -241,6 +267,15 @@ const ProductListPage = () => {
           <option value="">All Categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
+        <select
+          className="input w-36 text-sm"
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+        >
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
       </div>
 
       {/* ── Grid ── */}
@@ -260,13 +295,14 @@ const ProductListPage = () => {
                 key={product._id}
                 product={product}
                 onEdit={(id) => navigate(`/products/${id}/edit`)}
+                onToggleStatus={handleToggleStatus}
+                togglingId={togglingId}
               />
             ))}
           </div>
           <Pagination pagination={pagination} onPageChange={setPage} />
         </>
       )}
-
 
     </div>
   );

@@ -43,6 +43,13 @@ const deleteProduct = asyncHandler(async (req, res) => {
   return success(res, null, 'Product deactivated');
 });
 
+const updateProductStatus = asyncHandler(async (req, res) => {
+  const { isActive } = req.body;
+  if (typeof isActive !== 'boolean') throw new AppError('isActive must be a boolean', 400);
+  const product = await productService.updateProduct(req.params.id, { isActive }, req.user.id);
+  return success(res, product, isActive ? 'Product activated' : 'Product deactivated');
+});
+
 const addProductImage = asyncHandler(async (req, res) => {
   if (!req.file) throw new AppError('No image uploaded', 400);
   const product = await productService.addProductImage(req.params.id, req.file, req.user.id);
@@ -66,5 +73,5 @@ const getCategories = asyncHandler(async (req, res) => {
 
 module.exports = {
   createProduct, getProducts, getProductById, updateProduct,
-  deleteProduct, addProductImage, deleteProductImage, setPrimaryImage, getCategories,
+  deleteProduct, updateProductStatus, addProductImage, deleteProductImage, setPrimaryImage, getCategories,
 };

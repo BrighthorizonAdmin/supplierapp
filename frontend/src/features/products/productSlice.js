@@ -73,6 +73,14 @@ export const setPrimaryImage = createAsyncThunk(
   }
 );
 
+export const updateProductStatus = createAsyncThunk('product/updateStatus', async ({ id, isActive }, { rejectWithValue }) => {
+  try {
+    const { data } = await api.patch(`/products/${id}/status`, { isActive });
+    toast.success(isActive ? 'Product activated' : 'Product deactivated');
+    return data.data;
+  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+});
+
 export const fetchCategories = createAsyncThunk('product/categories', async (_, { rejectWithValue }) => {
   try {
     const { data } = await api.get('/products/categories');
@@ -148,6 +156,15 @@ const productSlice = createSlice({
       })
       .addCase(setPrimaryImage.rejected, (state, action) => {
         toast.error(action.payload || 'Failed to set primary image');
+      })
+
+      .addCase(updateProductStatus.fulfilled, (state, action) => {
+        const idx = state.list.findIndex((p) => p._id === action.payload._id);
+        if (idx !== -1) state.list[idx] = action.payload;
+        if (state.selected?._id === action.payload._id) state.selected = action.payload;
+      })
+      .addCase(updateProductStatus.rejected, (state, action) => {
+        toast.error(action.payload || 'Failed to update status');
       })
 
       .addCase(fetchCategories.fulfilled, (state, action) => { state.categories = action.payload; });

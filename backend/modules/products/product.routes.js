@@ -1,7 +1,7 @@
 const express = require('express');
 const {
   createProduct, getProducts, getProductById, updateProduct,
-  deleteProduct, addProductImage, deleteProductImage, setPrimaryImage, getCategories,
+  deleteProduct, updateProductStatus, addProductImage, deleteProductImage, setPrimaryImage, getCategories,
 } = require('./product.controller');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { authorize } = require('../../middlewares/rbac.middleware');
@@ -16,6 +16,7 @@ router.get('/',                             authorize('products:read'),  getProd
 router.post('/',                            authorize('products:write'), createProduct);
 router.get('/:id',                          authorize('products:read'),  getProductById);
 router.put('/:id',                          authorize('products:write'), updateProduct);
+router.patch('/:id/status',                 authorize('products:write'), updateProductStatus);
 router.delete('/:id',                       authorize('products:write'), deleteProduct);
 
 // Image management
