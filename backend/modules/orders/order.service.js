@@ -256,16 +256,17 @@ const confirmOrder = async (orderId, userId) => {
       );
     }
 
-    const items = await OrderItem.find({ orderId }).session(session);
+    // orderitems collection is empty for D-BE webhook orders — fall back to embedded items
+    const orderItemDocs = await OrderItem.find({ orderId }).session(session);
+    const items = orderItemDocs.length > 0 ? orderItemDocs : (order.items || []);
 
-    // Allocate stock per item and decrement product-level currentStockQty
+    // console.log(`[confirmOrder] order=${orderId} items=${items.length}`);
+
+    // Warehouse stock allocation (only for supplier-created orders with warehouseId)
     for (const item of items) {
-      await inventoryService.allocateStock(item.productId, item.warehouseId, item.quantity, session);
-      await Product.findByIdAndUpdate(
-        item.productId,
-        [{ $set: { currentStockQty: { $max: [0, { $add: ['$currentStockQty', -item.quantity] }] } } }],
-        { session }
-      );
+      if (item.warehouseId) {
+        await inventoryService.allocateStock(item.productId, item.warehouseId, item.quantity, session);
+      }
     }
 
     // D-BE webhook orders embed items in order.items — OrderItem collection is empty for them.
@@ -273,13 +274,13 @@ const confirmOrder = async (orderId, userId) => {
     const invoiceLineItems = items.length > 0
       ? items.map((i) => ({
           productId:   i.productId,
-          productName: i.productName,
-          productCode: i.productCode,
-          quantity:    i.quantity,
-          unitPrice:   i.unitPrice,
-          taxRate:     i.taxRate,
-          taxAmount:   i.taxAmount,
-          lineTotal:   i.lineTotal,
+          productName: i.productName || i.name || '',
+          productCode: i.productCode || i.sku  || '',
+          quantity:    Number(i.quantity)               || 0,
+          unitPrice:   Number(i.unitPrice || i.basePrice) || 0,
+          taxRate:     Number(i.taxRate)                || 0,
+          taxAmount:   Number(i.taxAmount)              || 0,
+          lineTotal:   Number(i.lineTotal)              || 0,
         }))
       : (order.items || []).map((i) => ({
           productId:   i.productId,
@@ -321,6 +322,21 @@ const confirmOrder = async (orderId, userId) => {
     order.invoiceId = invoice[0]._id;
     order.creditUsed = order.netAmount;
     await order.save({ session });
+
+    // Decrement supplier product catalogue currentStockQty — runs only after order is saved
+    for (const item of items) {
+      const qty = Number(item.quantity) || 0;
+      const pid = item.productId;
+      // console.log(`[confirmOrder] deducting qty=${qty} from productId=${pid}`);
+      if (pid && qty > 0) {
+        const updated = await Product.findByIdAndUpdate(
+          pid,
+          { $inc: { currentStockQty: -qty } },
+          { session, returnDocument: 'after' }
+        );
+        // console.log(`[confirmOrder] product=${pid} newStockQty=${updated?.currentStockQty ?? 'NOT FOUND'}`);
+      }
+    }
 
     // Update dealer creditUsed — only for supplier-created orders.
     // D-BE webhook orders already had creditUsed incremented by the dealer app at order placement.
@@ -696,6 +712,26 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
     const items = order.items?.length
       ? order.items
       : await OrderItem.find({ orderId: order._id }).lean();
+
+    console.log(`[updateOrderStatus] confirmed order=${orderId} items=${items.length}`);
+
+    for (const item of items) {
+      const pid = item.productId;
+      const qty = Number(item.quantity) || 0;
+      if (!pid || qty <= 0) continue;
+      console.log(`[updateOrderStatus] deducting qty=${qty} from productId=${pid}`);
+      try {
+        const updated = await Product.findByIdAndUpdate(
+          pid,
+          { $inc: { currentStockQty: -qty } },
+          { new: true }
+        );
+        console.log(`[updateOrderStatus] product=${pid} newStockQty=${updated?.currentStockQty ?? 'NOT FOUND'}`);
+      } catch (stockErr) {
+        console.error(`[updateOrderStatus] stock deduction failed for product ${pid}:`, stockErr.message);
+      }
+    }
+
     pushStockStatusAfterConfirm(items, order.orderNumber);
   }
 
