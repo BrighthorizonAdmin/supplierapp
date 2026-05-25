@@ -109,6 +109,8 @@ const invoiceSchema = new mongoose.Schema({
   dueDate: { type: Date },
   paymentTerms: { type: String },
 
+  warrantyPeriod: { type: String, default: '' },
+
   notes: { type: String, trim: true },
   termsAndConditions: { type: String },
 
