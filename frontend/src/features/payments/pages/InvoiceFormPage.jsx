@@ -117,6 +117,7 @@ export default function InvoiceFormPage() {
   const [dealer,      setDealer]      = useState(null);
   const [shipAddress, setShipAddress] = useState(null); // selected shipping address
   const [items,       setItems]       = useState([{ ...EMPTY_ITEM }]);
+  const [warrantyPeriod, setWarrantyPeriod] = useState('');
   const [notes,       setNotes]       = useState('');
   const [showNotes,   setShowNotes]   = useState(false);
   const [terms,       setTerms]       = useState('1. Goods once sold will not be taken back or exchanged\n2. All disputes are subject to [ENTER_YOUR_CITY_NAME] jurisdiction only');
@@ -301,6 +302,7 @@ export default function InvoiceFormPage() {
     const inv = selectedInvoice;
     setInvoiceNo(inv.invoiceNumber||''); setInvoiceDate(inv.invoiceDate?.split('T')[0]||today);
     setDueDate(inv.dueDate?.split('T')[0]||''); setNotes(inv.notes||''); setShowNotes(Boolean(inv.notes));
+    setWarrantyPeriod(inv.warrantyPeriod || '');
     setTerms(inv.termsAndConditions||''); setShowTerms(Boolean(inv.termsAndConditions));
     setInvoiceDisc(inv.discountAmt||0); setShowDisc(Boolean(inv.discountAmt));
     setAmtReceived(inv.amountPaid||0); setMarkPaid(inv.amountPaid>0 && inv.balance===0);
@@ -349,6 +351,7 @@ export default function InvoiceFormPage() {
     setItems((prev) => { const n=[...prev]; n[idx]=calcItem({...n[idx],productId:p._id,productName:p.name,unitPrice:p.basePrice||0,taxRate:p.taxRate||0,unit:(p.unit||'PCS').toUpperCase(),hsnCode:p.hsnCode||'',discountValue:0}); return n; });
     setProdSearch((p2)=>({...p2,[idx]:p.name})); setShowProdDrop((p2)=>({...p2,[idx]:false}));
     setErrors((e)=>({...e,items:''}));
+    if (p.warrantyPeriod && !warrantyPeriod) setWarrantyPeriod(p.warrantyPeriod);
   };
 
   const addRow = () => { const idx=items.length; setItems((p)=>[...p,{...EMPTY_ITEM}]); setProdSearch((p)=>({...p,[idx]:''})); };
@@ -454,6 +457,7 @@ export default function InvoiceFormPage() {
       invoiceDate,
       dueDate,
       paymentTerms: `Net ${paymentDays}`,
+      warrantyPeriod: warrantyPeriod || '',
       notes:        showNotes ? notes : '',
       termsAndConditions: showTerms ? terms : '',
       lineItems:    calcedItems.map((item, idx) => {
@@ -498,7 +502,7 @@ export default function InvoiceFormPage() {
     if (!result.error) {
       if (andNew) {
         setDealer(null); setDealerSearch(''); setItems([{...EMPTY_ITEM}]); setProdSearch({});
-        setNotes(''); setInvoiceDisc(0); setAmtReceived(0); setMarkPaid(false);
+        setNotes(''); setWarrantyPeriod(''); setInvoiceDisc(0); setAmtReceived(0); setMarkPaid(false);
         setShowDisc(false); setShowNotes(false); setInvoiceNo(''); setInvoiceDate(today);
         setAddlCharges(0); setShowAddlChg(false); setBankAccount(null); setErrors({});
         setPayMode('Cash'); setRoundOff(false); setShipAddress(null); setSerialInputs({});
@@ -791,6 +795,20 @@ export default function InvoiceFormPage() {
                 <span>₹ {summary.totalTax.toFixed(2)}</span>
                 <span className="text-gray-800 text-sm font-bold">₹ {(summary.taxableAmt+summary.totalTax).toFixed(2)}</span>
               </div>
+            </div>
+          </div>
+
+          {/* Warranty Period */}
+          <div className="bg-white border-b border-gray-200 px-5 py-3">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-semibold text-gray-600 w-36 shrink-0">Warranty Period</label>
+              <input
+                type="text"
+                className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 transition-colors placeholder-gray-300"
+                placeholder="e.g. 1 Year, 6 Months (auto-filled from product)"
+                value={warrantyPeriod}
+                onChange={(e) => setWarrantyPeriod(e.target.value)}
+              />
             </div>
           </div>
 

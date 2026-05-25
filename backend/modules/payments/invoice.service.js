@@ -124,6 +124,16 @@ const getInvoiceById = async (id) => {
     .populate('orderId', 'orderNumber confirmedAt')
     .lean();
   if (!inv) throw new AppError('Invoice not found', 404);
+
+  // For invoices saved before warrantyPeriod field existed, derive it live from the product
+  if (!inv.warrantyPeriod) {
+    const productId = inv.lineItems?.find(li => li.productId)?.productId;
+    if (productId) {
+      const product = await Product.findById(productId).select('warrantyPeriod').lean();
+      if (product?.warrantyPeriod) inv.warrantyPeriod = product.warrantyPeriod;
+    }
+  }
+
   return inv;
 };
 
@@ -170,6 +180,15 @@ const createInvoice = async (body, user) => {
       partyGST = dealer.gstin;
       partyAddress = [dealer.address?.street, dealer.address?.city, dealer.address?.state, dealer.address?.pincode]
         .filter(Boolean).join(', ');
+    }
+  }
+
+  // Auto-derive warrantyPeriod from the first product if not supplied
+  if (!rest.warrantyPeriod) {
+    const firstProductId = lineItems.find(li => li.productId)?.productId;
+    if (firstProductId) {
+      const prod = await Product.findById(firstProductId).select('warrantyPeriod').lean();
+      if (prod?.warrantyPeriod) rest.warrantyPeriod = prod.warrantyPeriod;
     }
   }
 

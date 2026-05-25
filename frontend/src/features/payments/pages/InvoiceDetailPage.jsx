@@ -184,7 +184,6 @@ export default function InvoiceDetailPage() {
           </div>
           <div style={{ flex: 1, padding: '10px 24px', borderRight: '1px solid #ccc' }}>
             <div style={{ fontWeight: 'bold', fontSize: '11px', marginBottom: '4px' }}>SHIP TO</div>
-            <div style={{ fontWeight: 'bold' }}>{inv.shippingAddress?.label || custName}</div>
             {(inv.shippingAddress?.street || billAddress) && (
               <div style={{ fontSize: '11px', color: '#444' }}>{inv.shippingAddress?.street || billAddress}</div>
             )}
@@ -192,7 +191,7 @@ export default function InvoiceDetailPage() {
           <div style={{ flex: 1, padding: '10px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontWeight: 'bold', fontSize: '11px' }}>Warranty Period</span>
-              <span style={{ fontSize: '11px' }}>—</span>
+              <span style={{ fontSize: '11px' }}>{inv.warrantyPeriod || '—'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontWeight: 'bold', fontSize: '11px' }}>Salesman</span>
