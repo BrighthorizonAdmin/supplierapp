@@ -267,7 +267,7 @@ const DealerListPage = () => {
 
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Export failed', err);
+      console.error('Export failed line 270', err);
     }
   };
 
