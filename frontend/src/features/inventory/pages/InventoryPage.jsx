@@ -319,7 +319,6 @@ const InventoryPage = () => {
   const dispatch = useDispatch();
   const { list, warehouses, stats, pagination, loading } = useSelector((s) => s.inventory);
   const { list: products } = useSelector((s) => s.product);
-console.log(list)
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -441,7 +440,7 @@ console.log(list)
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
         <button
           onClick={() => setShowModal(true)}
@@ -449,7 +448,7 @@ console.log(list)
         >
           <Plus size={14} /> Add Stock
         </button>
-      </div>
+      </div> */}
 
       {/* ── Top section: donut + stat cards, equal height ── */}
       {/* FIX 1: items-stretch so the donut card grows to match the stat-cards grid height */}
