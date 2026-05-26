@@ -1,6 +1,6 @@
 const express = require('express');
 const {
-  createOrder, getOrders, getOrderStats, getOrderById, confirmOrder, cancelOrder, updateOrderStatus,
+  createOrder, getOrders, getOrderStats, getOrderById, confirmOrder, cancelOrder, updateOrderStatus, saveOrderSerials,
 } = require('./order.controller');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { authorize } = require('../../middlewares/rbac.middleware');
@@ -16,5 +16,6 @@ router.get('/:id', authorize('orders:read'), getOrderById);
 router.patch('/:id/confirm', authorize('orders:write'), confirmOrder);
 router.patch('/:id/cancel', authorize('orders:write'), cancelOrder);
 router.patch('/:id/status', authorize('orders:write'), updateOrderStatus);
+router.patch('/:id/serials', authorize('orders:write'), saveOrderSerials);
 
 module.exports = router;

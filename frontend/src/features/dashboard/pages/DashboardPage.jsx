@@ -71,7 +71,7 @@ const DashboardPage = () => {
         />
         <KPICard
           title="Inventory Value"
-          value={fmt(kpis?.inventoryValue ?? 1500000)}
+          value={fmt(kpis?.inventoryValue)}
           icon={Package}
           color="red"
           trend={-11}
@@ -123,7 +123,7 @@ const DashboardPage = () => {
         />
         <KPICard
           title="Outstanding"
-          value={fmt(kpis?.overdueAmount ?? 123000)}
+          value={fmt(kpis?.overdueInvoices)}
           icon={TrendingUp}
           color="purple"
           trend={-2}

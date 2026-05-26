@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOrderById, confirmOrder, cancelOrder, clearSelected } from '../orderSlice';
-import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Truck, MapPin, CreditCard, CheckCheck, Hash, Save } from 'lucide-react';
+import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Truck, MapPin, CreditCard, CheckCheck, Hash, Save, ChevronDown, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
@@ -107,84 +107,98 @@ const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
 
 // ── Serial Number Section ─────────────────────────────────────────────────────
 const SerialNumberSection = ({ order, onSerialsComplete }) => {
-  const [invoice, setInvoice]       = useState(null);
-  const [inputs,  setInputs]        = useState({});   // { idx: "SN-001, SN-002" }
-  const [saving,  setSaving]        = useState(false);
-  const [saved,   setSaved]         = useState(false);
-  const [errors,  setErrors]        = useState({});
+  const [selections,    setSelections]    = useState({});  // { idx: ['SN001', 'SN002'] }
+  const [serialOptions, setSerialOptions] = useState({});  // { productId: ['SN001', ...] }
+  const [openDropdown,  setOpenDropdown]  = useState(null);
+  const [saving,        setSaving]        = useState(false);
+  const [saved,         setSaved]         = useState(false);
+  const [errors,        setErrors]        = useState({});
+  const [loadingOpts,   setLoadingOpts]   = useState(false);
+
+  const lineItems = order?.items || [];
 
   const markComplete = useCallback((val) => {
     setSaved(val);
     onSerialsComplete?.(val);
   }, [onSerialsComplete]);
 
-  // Fetch the auto-generated invoice for this order
-  const load = useCallback(async () => {
-    if (!order?.invoiceId) return;
-    try {
-      const { data } = await api.get(`/invoices/${order.invoiceId}`);
-      const inv = data.data;
-      setInvoice(inv);
-      // Pre-fill any serials already saved
-      const pre = {};
-      (inv.lineItems || []).forEach((li, i) => {
-        if (li.serialNumbers?.length) pre[i] = li.serialNumbers.join(', ');
-      });
-      setInputs(pre);
-      // Check if all items already have serials
-      const allDone = (inv.lineItems || []).every(li => li.serialNumbers?.length === li.quantity);
-      markComplete(allDone);
-    } catch {
-      // invoice not yet available — silently ignore
-    }
-  }, [order?.invoiceId, markComplete]);
+  // Pre-load already-saved serial selections
+  useEffect(() => {
+    if (!order?._id || !lineItems.length) return;
+    const loadPre = async () => {
+      try {
+        if (order.invoiceId) {
+          // Invoice exists (delivered orders): load from invoice line items
+          const { data } = await api.get(`/invoices/${order.invoiceId}`);
+          const inv = data.data;
+          const pre = {};
+          (inv.lineItems || []).forEach((li, i) => {
+            if (li.serialNumbers?.length) pre[i] = li.serialNumbers;
+          });
+          setSelections(pre);
+          markComplete((inv.lineItems || []).every(li => (li.serialNumbers || []).length === li.quantity));
+        } else {
+          // No invoice yet: load from dispatched units assigned to this order
+          const { data } = await api.get(`/dispatched-units/for-order?orderId=${order._id}`);
+          const units = data.data || [];
+          const pre = {};
+          lineItems.forEach((item, i) => {
+            const pid = (item.productId?._id || item.productId)?.toString();
+            const itemUnits = units.filter(u => u.productId?.toString() === pid);
+            if (itemUnits.length) pre[i] = itemUnits.map(u => u.serialNumber);
+          });
+          setSelections(pre);
+          markComplete(lineItems.every((item, i) => (pre[i] || []).length === item.quantity));
+        }
+      } catch { /* ignore */ }
+    };
+    loadPre();
+  }, [order?._id, order?.invoiceId]); // eslint-disable-line
 
-  useEffect(() => { load(); }, [load]);
+  // Fetch in-stock serial options for each product
+  useEffect(() => {
+    if (!lineItems.length || order?.status === 'delivered') return;
+    const fetchOptions = async () => {
+      setLoadingOpts(true);
+      const opts = {};
+      const uniqueProducts = [...new Set(
+        lineItems.map(item => (item.productId?._id || item.productId)?.toString()).filter(Boolean)
+      )];
+      await Promise.all(uniqueProducts.map(async (productId) => {
+        try {
+          const { data } = await api.get(`/dispatched-units/in-stock?productId=${productId}`);
+          opts[productId] = (data.data || []).map(u => u.serialNumber);
+        } catch { opts[productId] = []; }
+      }));
+      setSerialOptions(opts);
+      setLoadingOpts(false);
+    };
+    fetchOptions();
+  }, [order?.status]); // eslint-disable-line
 
-  if (!invoice) return null;
+  const showStatuses = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered'];
+  if (!showStatuses.includes(order?.status)) return null;
+  if (!lineItems.length) return null;
 
-  const lineItems = invoice.lineItems || [];
+  const getSerials = (idx) => selections[idx] || [];
 
-  const getSerials = (idx) =>
-    (inputs[idx] || '').split(',').map(s => s.trim()).filter(Boolean);
+  const toggleSerial = (idx, sn, qty) => {
+    const current = getSerials(idx);
+    const next = current.includes(sn)
+      ? current.filter(s => s !== sn)
+      : current.length < qty ? [...current, sn] : current;
+    setSelections(p => ({ ...p, [idx]: next }));
+    setErrors(p => { const n = { ...p }; delete n[idx]; return n; });
+    markComplete(false);
+  };
 
   const validate = () => {
     const e = {};
-    const crossMap = new Map(); // uppercase serial → first field index
-
     lineItems.forEach((item, i) => {
       const serials = getSerials(i);
-      if (serials.length === 0) {
-        e[i] = `Enter ${item.quantity} serial(s) for "${item.productName}"`;
-        return;
-      }
-      if (serials.length !== item.quantity) {
-        e[i] = `"${item.productName}" needs ${item.quantity} serial(s), got ${serials.length}`;
-      }
-
-      // Intra-field duplicates
-      const seen = new Set();
-      const dupes = [];
-      for (const sn of serials) {
-        const upper = sn.toUpperCase();
-        if (seen.has(upper)) dupes.push(sn);
-        else seen.add(upper);
-      }
-      if (dupes.length) e[i] = `Duplicate serial(s): ${dupes.join(', ')}`;
-
-      // Cross-field duplicates
-      for (const sn of serials) {
-        const upper = sn.toUpperCase();
-        if (crossMap.has(upper)) {
-          const otherIdx = crossMap.get(upper);
-          e[i] = (e[i] ? e[i] + '; ' : '') + `"${sn}" also in another item`;
-          if (!e[otherIdx]) e[otherIdx] = `"${sn}" also in another item`;
-        } else {
-          crossMap.set(upper, i);
-        }
-      }
+      if (serials.length !== item.quantity)
+        e[i] = `Select exactly ${item.quantity} serial number${item.quantity > 1 ? 's' : ''} for "${item.productName || item.name}"`;
     });
-
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -193,41 +207,33 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
     if (!validate()) return;
     setSaving(true);
     try {
-      const lineSerials = lineItems.map((_, i) => ({
-        index: i,
-        serialNumbers: getSerials(i),
-      }));
-      await api.patch(`/invoices/${invoice._id}/serials`, { lineSerials });
+      if (order.invoiceId) {
+        // Invoice exists: save via invoice endpoint (existing flow)
+        const { data: invData } = await api.get(`/invoices/${order.invoiceId}`);
+        const inv = invData.data;
+        const lineSerials = (inv.lineItems || []).map((_, i) => ({
+          index: i,
+          serialNumbers: getSerials(i),
+        }));
+        await api.patch(`/invoices/${order.invoiceId}/serials`, { lineSerials });
+      } else {
+        // No invoice yet: save via order serials endpoint
+        const lineSerials = lineItems.map((item, i) => ({
+          productId: (item.productId?._id || item.productId)?.toString(),
+          serialNumbers: getSerials(i),
+        }));
+        await api.patch(`/orders/${order._id}/serials`, { lineSerials });
+      }
       toast.success('Serial numbers saved successfully');
       markComplete(true);
       setErrors({});
+      setOpenDropdown(null);
     } catch (err) {
-      const msg = err?.response?.data?.message || 'Failed to save serial numbers';
-      toast.error(msg);
-      // Highlight inputs whose serials appear in the error message
-      const dupMatch = msg.match(/Duplicate serial number\(s\)[^:]*:\s*(.+)/i);
-      const usedMatch = msg.match(/already used[^:]*:\s*(.+)/i);
-      const errorSerials = new Set(
-        [...(dupMatch?.[1] || '').split(','), ...(usedMatch?.[1] || '').split(',')]
-          .map(s => s.replace(/\s*\(.*?\)/g, '').trim().toUpperCase())
-          .filter(Boolean)
-      );
-      if (errorSerials.size > 0) {
-        const e = {};
-        lineItems.forEach((_, i) => {
-          if (getSerials(i).map(s => s.toUpperCase()).some(s => errorSerials.has(s)))
-            e[i] = 'Contains invalid or already-used serial number(s)';
-        });
-        if (Object.keys(e).length > 0) setErrors(e);
-      }
+      toast.error(err?.response?.data?.message || 'Failed to save serial numbers');
     } finally {
       setSaving(false);
     }
   };
-
-  // Only show for confirmed/processing/shipped orders
-  const showStatuses = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered'];
-  if (!showStatuses.includes(order.status)) return null;
 
   return (
     <div className="card">
@@ -235,65 +241,95 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
         <div className="flex items-center gap-2">
           <Hash size={16} className="text-blue-500" />
           <h2 className="font-semibold text-slate-900">Serial Numbers</h2>
-          {saved && (
-            <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-              All Saved ✓
-            </span>
-          )}
+          {saved && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">All Saved ✓</span>}
         </div>
-        {!saved && (
-          <p className="text-xs text-slate-400">Enter/Scan serial numbers for each item before dispatch</p>
-        )}
+        {!saved && <p className="text-xs text-slate-400">Select serial numbers for each item before dispatch</p>}
       </div>
 
-      <div className="px-6 py-4 space-y-4">
+      {/* Overlay to close dropdown on outside click */}
+      {openDropdown !== null && (
+        <div className="fixed inset-0 z-10" onClick={() => setOpenDropdown(null)} />
+      )}
+
+      <div className="px-6 py-4 space-y-5">
         {lineItems.map((item, i) => {
-          const serials  = getSerials(i);
-          const qty      = item.quantity;
-          const count    = serials.length;
-          const isOk     = count === qty;
-          const alreadySaved = item.serialNumbers?.length === qty;
+          const selected  = getSerials(i);
+          const qty       = item.quantity;
+          const isOk      = selected.length === qty;
+          const productId = (item.productId?._id || item.productId)?.toString();
+          const options   = serialOptions[productId] || [];
 
           return (
             <div key={i} className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-800">
-                  {item.productName}
+                  {item.productName || item.name || '—'}
                   <span className="ml-2 text-xs font-normal text-slate-400">× {qty} units</span>
                 </p>
-                {alreadySaved && !inputs[i] && (
-                  <span className="text-xs text-green-600 font-semibold">Already saved ✓</span>
-                )}
-                {inputs[i] && (
-                  <span className={`text-xs font-semibold ${isOk ? 'text-green-600' : 'text-orange-500'}`}>
-                    {count} of {qty} {isOk ? '✓' : ''}
+                <span className={`text-xs font-semibold ${isOk ? 'text-green-600' : 'text-orange-500'}`}>
+                  {selected.length} / {qty} {isOk ? '✓' : 'selected'}
+                </span>
+              </div>
+
+              <div className="relative z-20">
+                <button
+                  type="button"
+                  onClick={() => setOpenDropdown(openDropdown === i ? null : i)}
+                  disabled={order.status === 'delivered'}
+                  className={`w-full text-left text-sm border rounded-lg px-3 py-2 transition-colors flex items-center justify-between ${
+                    errors[i]       ? 'border-red-400 bg-red-50' :
+                    isOk            ? 'border-green-400 bg-green-50' :
+                                      'border-slate-200 bg-white hover:border-blue-400'
+                  }`}
+                >
+                  <span className={selected.length === 0 ? 'text-slate-400' : 'text-slate-700 truncate pr-2'}>
+                    {selected.length === 0
+                      ? `Select ${qty} serial number${qty > 1 ? 's' : ''}…`
+                      : selected.join(', ')}
                   </span>
+                  <ChevronDown size={14} className="text-slate-400 shrink-0" />
+                </button>
+
+                {openDropdown === i && (
+                  <div className="absolute z-30 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                    {loadingOpts ? (
+                      <p className="px-3 py-3 text-sm text-slate-400">Loading serial numbers…</p>
+                    ) : options.length === 0 ? (
+                      <p className="px-3 py-3 text-sm text-slate-400">No in-stock serial numbers found for this product</p>
+                    ) : options.map((sn) => {
+                      const isSelected = selected.includes(sn);
+                      const isDisabled = !isSelected && selected.length >= qty;
+                      return (
+                        <button
+                          key={sn}
+                          type="button"
+                          onClick={() => toggleSerial(i, sn, qty)}
+                          disabled={isDisabled}
+                          className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2.5 transition-colors border-b border-slate-50 last:border-0 ${
+                            isSelected  ? 'bg-blue-50 text-blue-700' :
+                            isDisabled  ? 'text-slate-300 cursor-not-allowed bg-white' :
+                                          'hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                            isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'
+                          }`}>
+                            {isSelected && <Check size={10} />}
+                          </span>
+                          {sn}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-              <input
-                type="text"
-                className={`w-full text-sm border rounded-lg px-3 py-2 outline-none transition-colors placeholder-slate-300 ${
-                  errors[i]
-                    ? 'border-red-400 focus:border-red-500 bg-red-50'
-                    : isOk && inputs[i]
-                    ? 'border-green-400 bg-green-50 focus:border-green-500'
-                    : 'border-slate-200 focus:border-blue-400'
-                }`}
-                placeholder={`e.g. SN-001, SN-002${qty > 1 ? `, … (${qty} required)` : ''}`}
-                value={inputs[i] || ''}
-                onChange={(e) => {
-                  setInputs(p => ({ ...p, [i]: e.target.value }));
-                  setErrors(p => { const n = { ...p }; delete n[i]; return n; });
-                  markComplete(false);
-                }}
-                disabled={order.status === 'delivered'}
-              />
+
               {errors[i] && <p className="text-xs text-red-500">{errors[i]}</p>}
             </div>
           );
         })}
 
-        {!saved && (
+        {!saved && order.status !== 'delivered' && (
           <button
             onClick={handleSave}
             disabled={saving}
@@ -306,7 +342,7 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
 
         {saved && (
           <div className="mt-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700 font-medium">
-            All serial numbers saved. DispatchedUnit records created for warranty tracking.
+            All serial numbers saved. DispatchedUnit records updated for warranty tracking.
           </div>
         )}
       </div>

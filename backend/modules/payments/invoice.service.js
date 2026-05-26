@@ -77,7 +77,8 @@ const checkSerialUniqueness = async (allSerials, currentInvoiceId = null) => {
   }
 
   // Already used in DB — exclude current invoice so re-saves are allowed
-  const filter = { serialNumber: { $in: allSerials } };
+  // Also exclude in_stock records (pre-registered stock serials not yet dispatched)
+  const filter = { serialNumber: { $in: allSerials }, status: { $ne: 'in_stock' } };
   if (currentInvoiceId) filter.invoiceId = { $ne: currentInvoiceId };
   const existing = await DispatchedUnit.find(filter).select('serialNumber invoiceNumber').lean();
   if (existing.length) {
@@ -436,7 +437,14 @@ const saveSerialNumbers = async (id, lineSerials) => {
     }
   }
   if (dispatchedUnits.length > 0) {
-    await DispatchedUnit.insertMany(dispatchedUnits, { ordered: false });
+    const ops = dispatchedUnits.map((du) => ({
+      updateOne: {
+        filter: { serialNumber: du.serialNumber },
+        update: { $set: { ...du, status: 'dispatched' } },
+        upsert: true,
+      },
+    }));
+    await DispatchedUnit.bulkWrite(ops);
   }
 
   return invoice;

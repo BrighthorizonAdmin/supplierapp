@@ -781,7 +781,7 @@ const DealerOnboardingPage = () => {
           />
         </div>
 
-        <div className="mb-6">
+        {/* <div className="mb-6">
           <label className="text-sm font-semibold text-slate-800 mb-2 block">Assigned Manager</label>
           <SelectField
             value={approveForm.assignedManager}
@@ -789,7 +789,7 @@ const DealerOnboardingPage = () => {
             placeholder="Select manager"
             options={[]}
           />
-        </div>
+        </div> */}
 
         <div className="flex items-center justify-end gap-3">
           <button

@@ -2,6 +2,7 @@ const axios = require('axios');
 const Inventory = require('./model/Inventory.model');
 const Warehouse = require('./model/Warehouse.model');
 const Product = require('../products/model/Product.model');
+const DispatchedUnit = require('../dispatchedUnits/model/DispatchedUnit.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const auditService = require('../audit/audit.service');
@@ -351,8 +352,38 @@ const updateWarehouse = async (id, updates, userId) => {
   return wh;
 };
 
+const editStockWithSerials = async (productId, warehouseId, stockQuantity, serialNumbers, productName, userId) => {
+  if (serialNumbers && serialNumbers.length > 0) {
+    const upperSerials = serialNumbers.map((s) => s.trim().toUpperCase());
+    const existing = await DispatchedUnit.find({ serialNumber: { $in: upperSerials } }).select('serialNumber').lean();
+    if (existing.length > 0) {
+      const dupes = existing.map((d) => d.serialNumber).join(', ');
+      throw new AppError(`Serial number(s) already exist in the system: ${dupes}`, 409);
+    }
+  }
+
+  // stockQuantity = 0 means registering serials for existing opening stock — skip inventory change
+  let inv = null;
+  if (stockQuantity > 0) {
+    inv = await adjustStock(productId, warehouseId, stockQuantity, 'add', userId);
+    await Product.findByIdAndUpdate(productId, { $inc: { currentStockQty: stockQuantity } });
+  }
+
+  if (serialNumbers && serialNumbers.length > 0) {
+    const units = serialNumbers.map((sn) => ({
+      serialNumber: sn.trim().toUpperCase(),
+      productId,
+      productName: productName || '',
+      status: 'in_stock',
+    }));
+    await DispatchedUnit.insertMany(units);
+  }
+
+  return inv;
+};
+
 module.exports = {
   adjustStock, allocateStock, releaseAllocation, getInventory, getInventoryStats,
   getInventoryById, upsertInventory, getOrCreateInventory,
-  createWarehouse, getWarehouses, updateWarehouse,
+  createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials,
 };

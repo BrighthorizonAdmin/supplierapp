@@ -33,7 +33,6 @@ const generateRandomPassword = () => {
 };
 
 const sendDealerApprovalEmail = async ({ to, businessName, password }) => {
-  const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5001';
   const fromName = process.env.SMTP_FROM_NAME || 'BrightHorizon Supplier';
   const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
 
@@ -51,7 +50,6 @@ const sendDealerApprovalEmail = async ({ to, businessName, password }) => {
           <p style="margin:4px 0"><strong>Temporary Password:</strong> <code style="font-size:16px;letter-spacing:1px">${password}</code></p>
         </div>
         <p style="color:#dc2626"><strong>Important:</strong> Please change your password immediately after your first login.</p>
-        <a href="${loginUrl}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-top:8px">Login Now</a>
         <hr style="margin-top:24px;border:none;border-top:1px solid #e5e7eb"/>
         <p style="font-size:12px;color:#6b7280">If you did not apply for a dealership, please ignore this email or contact support.</p>
       </div>

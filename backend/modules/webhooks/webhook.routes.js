@@ -723,6 +723,34 @@ router.post('/dealer-warranty-claim', async (req, res) => {
     });
 
     console.log(`[Webhook] Warranty claim synced: ${warrantyReq.claimNumber} for dealer: ${dealerName}`);
+
+    // Notify all active supplier admins in real-time
+    try {
+      const User = require('../auth/model/User.model');
+      const { emitToAll } = require('../../websocket/socket');
+      const { WARRANTY_NEW_CLAIM } = require('../../websocket/events');
+      const admins = await User.find({ isActive: true }).select('_id').lean();
+      const title = `New Warranty Claim: ${warrantyReq.claimNumber}`;
+      const message = `${dealerName} submitted a warranty claim for invoice ${invoiceNumber || 'N/A'}.`;
+      for (const admin of admins) {
+        await notificationService.create({
+          recipientId: admin._id,
+          title,
+          message,
+          type: 'warranty',
+          relatedEntity: { entityType: 'warranty', entityId: warrantyReq._id },
+        });
+      }
+      emitToAll(WARRANTY_NEW_CLAIM, {
+        claimId: warrantyReq._id,
+        claimNumber: warrantyReq.claimNumber,
+        dealerName,
+        invoiceNumber: invoiceNumber || '',
+      });
+    } catch (notifyErr) {
+      console.error('[Webhook] warranty claim notification failed:', notifyErr.message);
+    }
+
     return res.status(201).json({ success: true, data: warrantyReq });
   } catch (err) {
     console.error('[Webhook] dealer-warranty-claim error:', err.message);

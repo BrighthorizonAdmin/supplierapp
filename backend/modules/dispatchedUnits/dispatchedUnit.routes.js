@@ -40,6 +40,28 @@ router.get('/lookup', authenticate, asyncHandler(async (req, res) => {
   }, 'Dispatched unit found');
 }));
 
+// GET /api/dispatched-units/for-order?orderId=xxx  (fetch serials already assigned to an order)
+router.get('/for-order', authenticate, asyncHandler(async (req, res) => {
+  const { orderId } = req.query;
+  if (!orderId) throw new AppError('orderId is required', 400);
+  const units = await DispatchedUnit.find({ orderId, status: 'dispatched' })
+    .select('serialNumber productId')
+    .sort({ createdAt: 1 })
+    .lean();
+  return success(res, units, 'Order serial numbers fetched');
+}));
+
+// GET /api/dispatched-units/in-stock?productId=xxx  (fetch in-stock serials for a product)
+router.get('/in-stock', authenticate, asyncHandler(async (req, res) => {
+  const { productId } = req.query;
+  if (!productId) throw new AppError('productId is required', 400);
+  const units = await DispatchedUnit.find({ productId, status: 'in_stock' })
+    .select('serialNumber')
+    .sort({ createdAt: 1 })
+    .lean();
+  return success(res, units, 'In-stock serial numbers fetched');
+}));
+
 // GET /api/dispatched-units?invoiceId=xxx  (list all units for an invoice)
 router.get('/', authenticate, asyncHandler(async (req, res) => {
   const filter = {};

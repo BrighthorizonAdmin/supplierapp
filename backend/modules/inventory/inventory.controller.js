@@ -29,6 +29,12 @@ const upsertInventory = asyncHandler(async (req, res) => {
   return success(res, inv, 'Inventory updated');
 });
 
+const editStockWithSerials = asyncHandler(async (req, res) => {
+  const { productId, warehouseId, stockQuantity, serialNumbers, productName } = req.body;
+  const inv = await inventoryService.editStockWithSerials(productId, warehouseId, stockQuantity, serialNumbers, productName, req.user.id);
+  return success(res, inv, 'Stock updated successfully');
+});
+
 // Warehouse controllers
 const createWarehouse = asyncHandler(async (req, res) => {
   const wh = await inventoryService.createWarehouse(req.body, req.user.id);
@@ -47,5 +53,5 @@ const updateWarehouse = asyncHandler(async (req, res) => {
 
 module.exports = {
   getInventory, getInventoryStats, getInventoryById, adjustStock, upsertInventory,
-  createWarehouse, getWarehouses, updateWarehouse,
+  createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials,
 };
