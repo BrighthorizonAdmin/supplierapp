@@ -431,6 +431,40 @@ router.post('/dealer-return', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-exchange
+// Called by D-BE when a dealer submits an exchange request.
+// Notifies all active supplier admins.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-exchange', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { exchangeId, dealerName, itemCount } = req.body;
+
+    const User = require('../auth/model/User.model');
+    const notificationService = require('../notifications/notification.service');
+    const admins = await User.find({ isActive: true }).lean();
+    for (const admin of admins) {
+      await notificationService.create({
+        recipientId: admin._id,
+        title: `New Exchange Request: ${exchangeId}`,
+        message: `${dealerName || 'A dealer'} submitted an exchange request for ${itemCount || 0} item(s).`,
+        type: 'return',
+      });
+    }
+
+    console.log(`[Webhook] dealer-exchange: notified ${admins.length} admin(s) for ${exchangeId}`);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[Webhook] dealer-exchange error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-return-cancel
 // Called by D-BE when a dealer cancels their own return request.
 // Finds the matching S-BE return (by dbeReturnId) and marks it as rejected/cancelled.
@@ -556,10 +590,30 @@ router.post('/dealer-order-cancel', async (req, res) => {
       return res.json({ success: true, message: 'No matching supplier order found, skipping' });
     }
 
-    // Only cancel if still pending — don't override confirmed/shipped/etc.
-    if (order.status !== 'pending') {
+    // Only cancel if the order hasn't shipped yet — can't cancel a shipped/delivered order
+    if (!['pending', 'confirmed'].includes(order.status)) {
       console.warn(`[Webhook] dealer-order-cancel: order ${order.orderNumber} is already ${order.status}, skipping`);
       return res.json({ success: true, message: `Order already ${order.status}, not overridden` });
+    }
+
+    // If order was confirmed, restore supplier stock
+    if (order.status === 'confirmed') {
+      const OrderItem = require('../orders/model/OrderItem.model');
+      const Product = require('../products/model/Product.model');
+      const Invoice = require('../payments/model/Invoice.model');
+      const items = order.items?.length
+        ? order.items
+        : await OrderItem.find({ orderId: order._id }).lean();
+      for (const item of items) {
+        const qty = Number(item.quantity) || 0;
+        const pid = item.productId;
+        if (pid && qty > 0) {
+          await Product.findByIdAndUpdate(pid, { $inc: { currentStockQty: qty } });
+        }
+      }
+      if (order.invoiceId) {
+        await Invoice.findByIdAndUpdate(order.invoiceId, { status: 'cancelled' });
+      }
     }
 
     order.status            = 'cancelled';

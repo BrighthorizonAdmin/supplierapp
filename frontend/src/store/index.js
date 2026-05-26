@@ -7,6 +7,7 @@ import orderReducer from '../features/orders/orderSlice';
 import retailOrderReducer from '../features/retail/retailOrderSlice';
 import paymentReducer from '../features/payments/paymentSlice';
 import returnReducer from '../features/returns/returnSlice';
+import exchangeReducer from '../features/exchanges/exchangeSlice';
 import financeReducer from '../features/finance/financeSlice';
 import dashboardReducer from '../features/dashboard/dashboardSlice';
 import notificationReducer from '../features/notifications/notificationSlice';
@@ -30,6 +31,7 @@ const store = configureStore({
     retailOrder: retailOrderReducer,
     payment: paymentReducer,
     return: returnReducer,
+    exchange: exchangeReducer,
     finance: financeReducer,
     dashboard: dashboardReducer,
     notification: notificationReducer,
