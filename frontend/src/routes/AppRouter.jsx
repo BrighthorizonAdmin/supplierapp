@@ -22,6 +22,7 @@ import RetailOrderListPage from '../features/retail/pages/RetailOrderListPage';
 import PaymentListPage from '../features/payments/pages/PaymentListPage';
 import InvoiceListPage from '../features/payments/pages/InvoiceListPage';
 import ReturnListPage from '../features/returns/pages/ReturnListPage';
+import ExchangeListPage from '../features/exchanges/pages/ExchangeListPage';
 import FinancePage from '../features/finance/pages/FinancePage';
 import AuditPage from '../features/audit/pages/AuditPage';
 import NotificationPage from '../features/notifications/pages/NotificationPage';
@@ -144,6 +145,11 @@ const AppRouter = () => {
           <Route path="returns" element={
             <ProtectedRoute permission="returns:read">
               <ReturnListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="exchanges" element={
+            <ProtectedRoute permission="returns:read">
+              <ExchangeListPage />
             </ProtectedRoute>
           } />
           <Route path="finance" element={
