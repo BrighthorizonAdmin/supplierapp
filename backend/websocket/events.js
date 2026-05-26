@@ -13,4 +13,6 @@ module.exports = {
   NEW_NOTIFICATION: 'notification:new',
   KPI_UPDATE: 'dashboard:kpi_update',
   INVOICE_OVERDUE: 'invoice:overdue',
+  WARRANTY_NEW_CLAIM: 'warranty:new_claim',
+  WARRANTY_STATUS_UPDATED: 'warranty:status_updated',
 };

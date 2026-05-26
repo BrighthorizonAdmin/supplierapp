@@ -31,6 +31,14 @@ export const adjustStock = createAsyncThunk('inventory/adjust', async (body, { r
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
+export const editStockWithSerials = createAsyncThunk('inventory/editStockWithSerials', async (body, { rejectWithValue }) => {
+  try {
+    const { data } = await api.post('/inventory/edit-stock', body);
+    toast.success('Stock updated successfully');
+    return data.data;
+  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+});
+
 export const createWarehouse = createAsyncThunk('inventory/createWarehouse', async (body, { rejectWithValue }) => {
   try {
     const { data } = await api.post('/warehouses', body);

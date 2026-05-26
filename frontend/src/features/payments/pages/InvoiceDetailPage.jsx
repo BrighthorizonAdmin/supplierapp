@@ -314,10 +314,12 @@ export default function InvoiceDetailPage() {
                   <td style={{ paddingBottom: '4px', color: '#444' }}>Received Amount</td>
                   <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{(+inv.amountPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}</td>
                 </tr>
-                <tr style={{ fontWeight: 'bold' }}>
-                  <td>Balance</td>
-                  <td style={{ textAlign: 'right' }}>₹{(+inv.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}</td>
-                </tr>
+                {inv.amountPaid < inv.totalAmount && (
+                  <tr style={{ fontWeight: 'bold' }}>
+                    <td>Balance</td>
+                    <td style={{ textAlign: 'right' }}>₹{(+inv.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

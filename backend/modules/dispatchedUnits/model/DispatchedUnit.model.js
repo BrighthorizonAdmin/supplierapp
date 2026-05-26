@@ -34,7 +34,7 @@ const dispatchedUnitSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['dispatched', 'delivered'],
+      enum: ['dispatched', 'delivered', 'in_stock'],
       default: 'dispatched',
     },
   },

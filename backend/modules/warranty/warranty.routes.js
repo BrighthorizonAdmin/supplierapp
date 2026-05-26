@@ -7,6 +7,8 @@ const { authenticate } = require('../../middlewares/auth.middleware');
 const { success, paginated } = require('../../utils/response');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const { AppError } = require('../../middlewares/error.middleware');
+const { emitToAll } = require('../../websocket/socket');
+const { WARRANTY_STATUS_UPDATED } = require('../../websocket/events');
 
 async function pushStatusToDealer(dbeClaimId, status, supplierNotes) {
   const DEALER_API_URL = process.env.DEALER_API_URL;
@@ -72,6 +74,15 @@ router.patch('/:id/status', authenticate, asyncHandler(async (req, res) => {
   pushStatusToDealer(item.dbeClaimId, status, item.supplierNotes).catch((err) => {
     console.error('[WarrantyRoutes] D-BE status callback failed:', err.message);
   });
+
+  // Emit real-time socket event so supplier dashboard reflects the change instantly
+  try {
+    emitToAll(WARRANTY_STATUS_UPDATED, {
+      claimId: item._id,
+      claimNumber: item.claimNumber,
+      status,
+    });
+  } catch { /* non-blocking */ }
 
   return success(res, item, 'Warranty request status updated');
 }));

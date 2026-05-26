@@ -37,4 +37,9 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   return success(res, order, 'Order status updated');
 });
 
-module.exports = { createOrder, getOrders, getOrderStats, getOrderById, confirmOrder, cancelOrder, updateOrderStatus };
+const saveOrderSerials = asyncHandler(async (req, res) => {
+  const result = await orderService.saveOrderSerials(req.params.id, req.body.lineSerials);
+  return success(res, result, 'Serial numbers saved');
+});
+
+module.exports = { createOrder, getOrders, getOrderStats, getOrderById, confirmOrder, cancelOrder, updateOrderStatus, saveOrderSerials };

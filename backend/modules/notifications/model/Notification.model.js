@@ -21,7 +21,7 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: {
-        values: ['info', 'success', 'warning', 'error', 'order', 'payment', 'return', 'dealer'],
+        values: ['info', 'success', 'warning', 'error', 'order', 'payment', 'return', 'dealer', 'warranty'],
         message: '{VALUE} is not a valid notification type',
       },
       default: 'info',

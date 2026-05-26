@@ -5,10 +5,11 @@ import {
   Search, Filter, Download, AlertTriangle,
   TrendingUp, TrendingDown, Package, BarChart2, ChevronDown, Plus, X,
 } from 'lucide-react';
-import { fetchInventory, fetchInventoryStats, fetchWarehouses, adjustStock } from '../inventorySlice';
+import { fetchInventory, fetchInventoryStats, fetchWarehouses, adjustStock, editStockWithSerials } from '../inventorySlice';
 import { fetchProducts } from '../../products/productSlice';
 import Pagination from '../../../components/ui/Pagination';
 import { format } from 'date-fns';
+import api from '../../../services/api';
 
 const fmtNum = (n) => {
   if (!n && n !== 0) return '—';
@@ -168,11 +169,157 @@ const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
   );
 };
 
+const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
+  const prod = item.productId || {};
+  const openingStock = item.currentStockQty ?? 0;
+  const [stockQuantity, setStockQuantity]   = useState('');
+  const [serialInput,   setSerialInput]     = useState('');
+  const [touched,       setTouched]         = useState(false);
+  const [existingCount, setExistingCount]   = useState(0);
+  const [loadingExist,  setLoadingExist]    = useState(true);
+
+  // Fetch how many in_stock serials are already registered for this product
+  useEffect(() => {
+    if (!prod._id) { setLoadingExist(false); return; }
+    api.get(`/dispatched-units/in-stock?productId=${prod._id}`)
+      .then(({ data }) => setExistingCount((data.data || []).length))
+      .catch(() => setExistingCount(0))
+      .finally(() => setLoadingExist(false));
+  }, [prod._id]);
+
+  const stockQty      = parseInt(stockQuantity, 10) || 0;
+  // opening stock slots not yet assigned a serial number
+  const unregistered  = Math.max(0, openingStock - existingCount);
+  // total serials required for this submission
+  const serialTarget  = unregistered + stockQty;
+  // all opening stock pieces already have serials
+  const allRegistered = unregistered === 0;
+  // nothing to do — all opening serials registered and no new stock quantity entered
+  const nothingToDo   = allRegistered && stockQty === 0;
+
+  const parsed = serialInput
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+
+  const duplicates  = parsed.filter((s, i) => parsed.indexOf(s) !== i);
+  const enteredCount = parsed.length;
+  const isMatch     = serialTarget > 0 && enteredCount === serialTarget;
+  const hasDuplicates = duplicates.length > 0;
+
+  const hintText = () => {
+    if (loadingExist) return 'Loading serial number info…';
+    if (nothingToDo)  return 'All opening stock serial numbers are already registered. Enter a Stock Quantity to add more.';
+    if (!allRegistered && stockQty === 0)
+      return `Enter ${unregistered} serial number${unregistered > 1 ? 's' : ''} for the unregistered opening stock pieces. (${existingCount} of ${openingStock} already registered)`;
+    if (!allRegistered && stockQty > 0)
+      return `Enter ${serialTarget} serial numbers — ${unregistered} for remaining opening stock + ${stockQty} for new batch. Separate with commas.`;
+    return `Enter ${stockQty} serial number${stockQty > 1 ? 's' : ''} for the new stock batch. Separate with commas.`;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setTouched(true);
+    if (nothingToDo || !isMatch || hasDuplicates) return;
+    onSubmit({
+      productId:    prod._id,
+      warehouseId:  item.warehouseId?._id,
+      stockQuantity: stockQty,
+      serialNumbers: parsed,
+      productName:  prod.name,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-slate-900">Edit Stock</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">Product</label>
+            <p className="text-sm font-semibold text-slate-800 bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-200">{prod.name || '—'}</p>
+          </div>
+          <div>
+            <label className="label">Opening Stock</label>
+            <input type="number" className="input bg-slate-50 cursor-not-allowed" value={openingStock} disabled />
+            <p className="text-xs text-slate-400 mt-1">
+              Current available pieces
+              {!loadingExist && existingCount > 0 && (
+                <span className="ml-2 text-green-600 font-medium">· {existingCount} serial{existingCount > 1 ? 's' : ''} already registered</span>
+              )}
+            </p>
+          </div>
+          <div>
+            <label className="label">
+              Add Stock Quantity
+              <span className="text-slate-400 font-normal ml-1">(leave empty to assign serials to opening stock only)</span>
+            </label>
+            <input
+              type="number" min="1" className="input" value={stockQuantity}
+              placeholder="Enter quantity to add"
+              onChange={(e) => setStockQuantity(e.target.value)}
+            />
+            {stockQty > 0 && (
+              <p className="text-xs text-slate-400 mt-1">
+                Available after update: <span className="font-semibold text-slate-700">{openingStock + stockQty}</span>
+              </p>
+            )}
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="label mb-0">Serial Numbers</label>
+              {!nothingToDo && (
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isMatch ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                  {enteredCount} / {serialTarget} entered
+                </span>
+              )}
+            </div>
+
+            {nothingToDo ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-700">
+                All {openingStock} opening stock serial numbers are already registered. Enter a Stock Quantity above to add more stock with new serial numbers.
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text" className="input"
+                  placeholder="e.g. SN001, SN002, SN003"
+                  value={serialInput}
+                  onChange={(e) => setSerialInput(e.target.value)}
+                  disabled={loadingExist}
+                />
+                <p className="text-xs text-slate-400 mt-1">{hintText()}</p>
+                {hasDuplicates && <p className="text-red-500 text-xs mt-1">Duplicate serial numbers: {[...new Set(duplicates)].join(', ')}</p>}
+                {touched && !isMatch && !hasDuplicates && serialTarget > 0 && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {enteredCount < serialTarget
+                      ? `Add ${serialTarget - enteredCount} more serial number${serialTarget - enteredCount > 1 ? 's' : ''}`
+                      : `Remove ${enteredCount - serialTarget} serial number${enteredCount - serialTarget > 1 ? 's' : ''}`}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+          <div className="flex gap-3 justify-end pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving || nothingToDo || loadingExist} className="btn-primary disabled:opacity-40">
+              {saving ? 'Saving...' : 'Update Stock'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const InventoryPage = () => {
   const dispatch = useDispatch();
   const { list, warehouses, stats, pagination, loading } = useSelector((s) => s.inventory);
   const { list: products } = useSelector((s) => s.product);
-
+console.log(list)
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -181,6 +328,8 @@ const InventoryPage = () => {
   const [category, setCategory] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [adjusting, setAdjusting] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
@@ -229,6 +378,23 @@ const InventoryPage = () => {
     }
   };
 
+  const handleEditStock = async (form) => {
+    setEditSaving(true);
+    const res = await dispatch(editStockWithSerials(form));
+    
+    setEditSaving(false);
+    if (!res.error) {
+      setEditItem(null);
+      const params = { page, limit: 20 };
+      if (stockTab) params.status = stockTab;
+      if (warehouseId) params.warehouseId = warehouseId;
+      if (search) params.search = search;
+      if (category) params.category = category;
+      dispatch(fetchInventory(params));
+      dispatch(fetchInventoryStats());
+    }
+  };
+
   const handleExport = () => {
     if (!list.length) return;
     const headers = ['Product', 'SKU', 'Category', 'Warehouse', 'Available', 'Allocated', 'Total', 'Unit Price', 'Status'];
@@ -263,6 +429,14 @@ const InventoryPage = () => {
           onClose={() => setShowModal(false)}
           onSubmit={handleAdjustStock}
           saving={adjusting}
+        />
+      )}
+      {editItem && (
+        <EditStockModal
+          item={editItem}
+          onClose={() => setEditItem(null)}
+          onSubmit={handleEditStock}
+          saving={editSaving}
         />
       )}
 
@@ -483,7 +657,7 @@ const InventoryPage = () => {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  {['PRODUCT / SKU', 'LOCATION', 'AVAILABLE', 'ALLOCATED', 'TOTAL', 'UNIT PRICE', 'STOCK STATUS', 'FORECAST & DEMAND'].map((h) => (
+                  {['PRODUCT / SKU', 'LOCATION', 'AVAILABLE', 'ALLOCATED', 'TOTAL', 'UNIT PRICE', 'STOCK STATUS', 'FORECAST & DEMAND', 'ACTION'].map((h) => (
                     <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -493,7 +667,7 @@ const InventoryPage = () => {
               <tbody className="divide-y divide-slate-100">
                 {list.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-14 text-center text-slate-400">
+                    <td colSpan={9} className="px-4 py-14 text-center text-slate-400">
                       No inventory records found
                     </td>
                   </tr>
@@ -528,7 +702,7 @@ const InventoryPage = () => {
                         <p className="text-xs text-slate-400 mt-0.5">Reserved</p>
                       </td>
                       <td className="px-4 py-3.5 font-semibold text-slate-800">
-                        {(item.quantityOnHand ?? 0).toLocaleString('en-IN')}
+                        {Math.max(0, (item.currentStockQty ?? 0) - (item.quantityAllocated ?? 0)).toLocaleString('en-IN')}
                       </td>
                       <td className="px-4 py-3.5 font-semibold text-slate-800">
                         {fmtCurrency(prod.basePrice)}
@@ -538,6 +712,14 @@ const InventoryPage = () => {
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-500 max-w-[160px] leading-relaxed">
                         {forecastLabel(item)}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <button
+                          onClick={() => setEditItem(item)}
+                          className="px-3 py-1.5 text-xs font-medium text-primary-600 border border-primary-300 rounded-lg hover:bg-primary-50 whitespace-nowrap"
+                        >
+                          Edit Stock
+                        </button>
                       </td>
                     </tr>
                   );
