@@ -1,6 +1,7 @@
 const Exchange = require('./exchange.model');
 const Order = require('../orders/model/Order.model');
 const Dealer = require('../dealer/model/Dealer.model');
+const Invoice = require('../payments/model/Invoice.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const mongoose = require('mongoose');
@@ -134,6 +135,41 @@ const updateExchangeStatus = async (id, status, supplierNotes, userId) => {
       await Order.findByIdAndUpdate(exc.orderId, { status: 'delivered' }, { runValidators: false });
     } else if (newStatus === 'COMPLETED') {
       await Order.findByIdAndUpdate(exc.orderId, { status: 'exchange_completed' }, { runValidators: false });
+
+      // Update S-BE Sales Invoice lineItems with replacement product details
+      try {
+        const sbeOrd = await Order.findOne({ dbeOrderId: String(exc.orderId) }).lean();
+        if (sbeOrd) {
+          const invoice = await Invoice.findOne({ orderId: sbeOrd._id }).lean();
+          if (invoice && invoice.lineItems?.length > 0) {
+            let modified = false;
+            const updatedLineItems = invoice.lineItems.map(li => {
+              const excItem = (exc.items || []).find(i => i.productId?.toString() === li.productId?.toString());
+              if (!excItem || (!excItem.replacementProductId && !excItem.replacementName)) return li;
+              modified = true;
+              return { ...li, productId: excItem.replacementProductId || li.productId, productName: excItem.replacementName || li.productName, productCode: excItem.replacementSku || li.productCode };
+            });
+            if (modified) {
+              await Invoice.findByIdAndUpdate(invoice._id, { $set: { lineItems: updatedLineItems } }, { runValidators: false });
+              console.log(`[updateExchangeStatus] S-BE Invoice lineItems updated for exchange ${id} ✓`);
+            }
+          }
+        }
+      } catch (invErr) {
+        console.error('[updateExchangeStatus] Invoice update failed:', invErr.message);
+      }
+
+      // Store exchangedItems on D-BE order for dealer invoice display
+      try {
+        await Order.findByIdAndUpdate(
+          exc.orderId,
+          { $set: { exchangedItems: (exc.items || []).map(i => ({ productId: i.productId, replacementProductId: i.replacementProductId, replacementName: i.replacementName || i.name, replacementSku: i.replacementSku || i.sku, quantity: i.quantity })) }},
+          { runValidators: false, strict: false }
+        );
+        console.log(`[updateExchangeStatus] D-BE order exchangedItems set ✓`);
+      } catch (eiErr) {
+        console.error('[updateExchangeStatus] exchangedItems update failed:', eiErr.message);
+      }
     }
   }
 
