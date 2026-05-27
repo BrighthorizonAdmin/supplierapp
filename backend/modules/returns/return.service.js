@@ -36,6 +36,7 @@ const DealerInventory = mongoose.models.DealerInventory
 
 // ── Shared-DB direct access: Product (supplier catalogue) ────────────────────
 const Product = require('../products/model/Product.model');
+const DispatchedUnit = require('../dispatchedUnits/model/DispatchedUnit.model');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // notifyDealerReturn
@@ -224,6 +225,42 @@ async function applyRefundSideEffects(ret, refundAmount) {
         { runValidators: false }
       );
       console.log(`[applyRefundSideEffects] Product ${pid} stock +${qty} ✓`);
+    }
+
+    // ── 5. Restore DispatchedUnit serial numbers back to in_stock ───────────
+    // For D-BE returns: ret.orderId is the D-BE order _id — find the linked
+    // S-BE order so we can narrow the serial lookup by orderId.
+    // For S-BE returns: ret.orderId is already the S-BE order _id.
+    let sbeOrderIdForUnits = null;
+    if (isDbeReturn) {
+      const sbeOrder = await Order.findOne({ dbeOrderId: ret.orderId }).select('_id').lean();
+      if (sbeOrder) sbeOrderIdForUnits = sbeOrder._id;
+    } else {
+      sbeOrderIdForUnits = ret.orderId;
+    }
+
+    for (const item of returnItems) {
+      const pid = item.productId;
+      const qty = Number(item.quantity) || 0;
+      if (!pid || !qty) continue;
+
+      const unitQuery = {
+        productId: pid,
+        dealerId,
+        status: { $in: ['dispatched', 'delivered'] },
+      };
+      if (sbeOrderIdForUnits) unitQuery.orderId = sbeOrderIdForUnits;
+
+      const units = await DispatchedUnit.find(unitQuery)
+        .sort({ dispatchedAt: -1 })
+        .limit(qty)
+        .select('_id serialNumber');
+
+      if (units.length) {
+        const ids = units.map(u => u._id);
+        await DispatchedUnit.updateMany({ _id: { $in: ids } }, { $set: { status: 'in_stock' } });
+        console.log(`[applyRefundSideEffects] Restored serial(s) for product ${pid} → in_stock: ${units.map(u => u.serialNumber).join(', ')} ✓`);
+      }
     }
 
   } catch (err) {
