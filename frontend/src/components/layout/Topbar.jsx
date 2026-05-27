@@ -28,6 +28,7 @@ const TYPE_COLORS = {
   inventory: 'bg-orange-100 text-orange-700',
   warning: 'bg-yellow-100 text-yellow-700',
   return: 'bg-red-100 text-red-700',
+  warranty: 'bg-indigo-100 text-indigo-700',
   default: 'bg-slate-100 text-slate-600',
 };
 
@@ -39,6 +40,7 @@ const getNotificationRoute = (n) => {
   if (entityType === 'dealer' || type === 'dealer') return '/onboarding';
   if (entityType === 'order' || type === 'order') return '/orders';
   if (entityType === 'invoice' || type === 'payment') return '/invoices';
+  if(entityType === 'warranty' || type === 'warranty') return '/warranty';
   return null;
 };
  

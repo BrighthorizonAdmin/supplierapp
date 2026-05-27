@@ -49,7 +49,10 @@ const dashboardSlice = createSlice({
   },
   reducers: {
     setChartPeriod: (state, action) => { state.chartPeriod = action.payload; },
-    updateKPIs: (state, action) => { state.kpis = action.payload; }, // from socket
+    updateKPIs: (state, action) => {
+      // Merge socket payload into existing KPIs so partial updates don't wipe fields
+      state.kpis = state.kpis ? { ...state.kpis, ...action.payload } : action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
