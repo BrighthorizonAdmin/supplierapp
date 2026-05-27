@@ -14,6 +14,7 @@ const { emitToAll } = require('../../websocket/socket');
 const { RETURN_PROCESSED } = require('../../websocket/events');
 const mongoose = require('mongoose');
 const axios = require('axios');
+const Invoice = require('../payments/model/Invoice.model');
 
 const RETURN_WINDOW_DAYS = 30;
 
@@ -228,9 +229,6 @@ async function applyRefundSideEffects(ret, refundAmount) {
     }
 
     // ── 5. Restore DispatchedUnit serial numbers back to in_stock ───────────
-    // For D-BE returns: ret.orderId is the D-BE order _id — find the linked
-    // S-BE order so we can narrow the serial lookup by orderId.
-    // For S-BE returns: ret.orderId is already the S-BE order _id.
     let sbeOrderIdForUnits = null;
     if (isDbeReturn) {
       const sbeOrder = await Order.findOne({ dbeOrderId: ret.orderId }).select('_id').lean();
@@ -260,6 +258,84 @@ async function applyRefundSideEffects(ret, refundAmount) {
         const ids = units.map(u => u._id);
         await DispatchedUnit.updateMany({ _id: { $in: ids } }, { $set: { status: 'in_stock' } });
         console.log(`[applyRefundSideEffects] Restored serial(s) for product ${pid} → in_stock: ${units.map(u => u.serialNumber).join(', ')} ✓`);
+      }
+    }
+
+    // ── 6. Update S-BE Sales Invoice lineItems for returned items ───────────
+    try {
+      let sbeOrderId = null;
+      if (!isDbeReturn) {
+        sbeOrderId = ret.orderId;
+      } else {
+        const sbeOrd = await Order.findOne({ dbeOrderId: String(ret.orderId) }).lean();
+        sbeOrderId = sbeOrd?._id || null;
+      }
+      if (sbeOrderId) {
+        const invoice = await Invoice.findOne({ orderId: sbeOrderId }).lean();
+        if (invoice && invoice.lineItems?.length > 0) {
+          let modified = false;
+          const updatedLineItems = invoice.lineItems.map(li => {
+            const pid = li.productId?.toString();
+            const retItem = returnItems.find(r => r.productId?.toString() === pid);
+            if (!retItem) return li;
+            const retQty = Number(retItem.quantity) || 0;
+            const origQty = li.quantity || 0;
+            const newQty = Math.max(0, origQty - retQty);
+            modified = true;
+            if (newQty <= 0) return null;
+            const ratio = newQty / origQty;
+            return { ...li, quantity: newQty, lineTotal: parseFloat(((li.lineTotal || 0) * ratio).toFixed(2)), taxAmount: parseFloat(((li.taxAmount || 0) * ratio).toFixed(2)) };
+          }).filter(Boolean);
+          if (modified) {
+            const newSubtotal = updatedLineItems.reduce((s, li) => s + (li.lineTotal || 0), 0);
+            const newTaxAmt   = updatedLineItems.reduce((s, li) => s + (li.taxAmount || 0), 0);
+            const newTotal    = newSubtotal + newTaxAmt + (invoice.additionalCharges || 0) + (invoice.roundOffAmt || 0);
+            const newBalance  = Math.max(0, newTotal - (invoice.amountPaid || 0));
+            const newStatus   = (updatedLineItems.length === 0 || newTotal <= 0) ? 'cancelled' : invoice.status;
+            await Invoice.findByIdAndUpdate(invoice._id, { $set: { lineItems: updatedLineItems, subtotal: parseFloat(newSubtotal.toFixed(2)), taxAmount: parseFloat(newTaxAmt.toFixed(2)), totalAmount: parseFloat(newTotal.toFixed(2)), balance: parseFloat(newBalance.toFixed(2)), status: newStatus } }, { runValidators: false });
+            console.log(`[applyRefundSideEffects] S-BE Invoice updated for order ${sbeOrderId} ✓`);
+          }
+        }
+      }
+    } catch (invErr) {
+      console.error('[applyRefundSideEffects] Invoice update failed:', invErr.message);
+    }
+
+    // ── 7. Store return info on D-BE order for dealer invoice display ───────
+    if (dbeOrderId && returnItems.length > 0) {
+      try {
+        await Order.findByIdAndUpdate(
+          dbeOrderId,
+          { $set: {
+            returnedItems: returnItems.map(i => ({ productId: i.productId, quantity: Number(i.quantity) || 0, name: i.name || i.productName || '' })),
+            returnRefundAmount: refundAmount,
+          }},
+          { runValidators: false, strict: false }
+        );
+        console.log(`[applyRefundSideEffects] D-BE order returnedItems set ✓`);
+      } catch (riErr) {
+        console.error('[applyRefundSideEffects] returnedItems update failed:', riErr.message);
+      }
+    }
+
+    // ── 8. Reduce D-BE Invoice amount by the refund so Pay Now shows correct balance ──
+    if (dbeOrderId && refundAmount > 0) {
+      try {
+        const dbeInvoice = await Invoice.findOne({ orderId: dbeOrderId, status: { $in: ['UNPAID', 'OVERDUE'] } });
+        if (dbeInvoice) {
+          const newAmount = Math.max(0, parseFloat((dbeInvoice.amount - refundAmount).toFixed(2)));
+          const ratio = dbeInvoice.amount > 0 ? newAmount / dbeInvoice.amount : 0;
+          const newSubtotal = parseFloat(((dbeInvoice.subtotal || dbeInvoice.amount) * ratio).toFixed(2));
+          const newTax = parseFloat(((dbeInvoice.taxAmount || 0) * ratio).toFixed(2));
+          await Invoice.findByIdAndUpdate(
+            dbeInvoice._id,
+            { $set: { amount: newAmount, subtotal: newSubtotal, taxAmount: newTax } },
+            { runValidators: false }
+          );
+          console.log(`[applyRefundSideEffects] D-BE Invoice amount updated: ${dbeInvoice.amount} → ${newAmount} ✓`);
+        }
+      } catch (invErr) {
+        console.error('[applyRefundSideEffects] D-BE Invoice update failed:', invErr.message);
       }
     }
 
@@ -303,9 +379,10 @@ const processReturn = async (returnId, { refundAmount, refundMethod }, userId) =
       }
     }
 
-    // Reduce dealer creditUsed — use findByIdAndUpdate to bypass S-BE Dealer model
-    // validation (businessType, ownerName, phone required) which fails for D-BE dealer records
-    if (ret.dealerId) {
+    // Reduce dealer creditUsed only for S-BE-originated returns.
+    // For D-BE returns, creditUsed is already reduced when the dealer submits
+    // the return request in the dealer app — reducing again here causes double-deduction.
+    if (ret.dealerId && !isDbeReturn) {
       const dealer = await Dealer.findById(ret.dealerId).session(session).lean();
       if (dealer) {
         const newCreditUsed = Math.max(0, (dealer.creditUsed || 0) - refundAmount);
