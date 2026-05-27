@@ -5,6 +5,7 @@ import {
   Search, Filter, Download, AlertTriangle,
   TrendingUp, TrendingDown, Package, BarChart2, ChevronDown, Plus, X,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { fetchInventory, fetchInventoryStats, fetchWarehouses, adjustStock, editStockWithSerials } from '../inventorySlice';
 import { fetchProducts } from '../../products/productSlice';
 import Pagination from '../../../components/ui/Pagination';
@@ -380,18 +381,25 @@ const InventoryPage = () => {
   const handleEditStock = async (form) => {
     setEditSaving(true);
     const res = await dispatch(editStockWithSerials(form));
-    
+
     setEditSaving(false);
-    if (!res.error) {
-      setEditItem(null);
-      const params = { page, limit: 20 };
-      if (stockTab) params.status = stockTab;
-      if (warehouseId) params.warehouseId = warehouseId;
-      if (search) params.search = search;
-      if (category) params.category = category;
-      dispatch(fetchInventory(params));
-      dispatch(fetchInventoryStats());
+    if (res.error) {
+      const payload = res.payload;
+      const errorMessage = typeof payload === 'string'
+        ? payload
+        : payload?.message || (Array.isArray(payload) ? payload.join(', ') : null) || res.error.message || 'Failed to update stock';
+      toast.error(errorMessage);
+      return;
     }
+
+    setEditItem(null);
+    const params = { page, limit: 20 };
+    if (stockTab) params.status = stockTab;
+    if (warehouseId) params.warehouseId = warehouseId;
+    if (search) params.search = search;
+    if (category) params.category = category;
+    dispatch(fetchInventory(params));
+    dispatch(fetchInventoryStats());
   };
 
   const handleExport = () => {
