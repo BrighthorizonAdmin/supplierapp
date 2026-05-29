@@ -382,8 +382,42 @@ const editStockWithSerials = async (productId, warehouseId, stockQuantity, seria
   return inv;
 };
 
+const updateOpeningStock = async (productId, warehouseId, newOpeningQty, reason, userId) => {
+  const Product = require('../products/model/Product.model');
+
+  const product = await Product.findById(productId).lean();
+  if (!product) throw new AppError('Product not found', 404);
+
+  const oldOpening = product.openingStockQty || 0;
+  const oldCurrent = product.currentStockQty || 0;
+  const delta = newOpeningQty - oldOpening;
+
+  // Update openingStockQty and currentStockQty on Product (findByIdAndUpdate bypasses pre-save guard)
+  await Product.findByIdAndUpdate(productId, {
+    openingStockQty: newOpeningQty,
+    currentStockQty: Math.max(0, oldCurrent + delta),
+  });
+
+  // Sync quantityOnHand on Inventory record only when a warehouse is known
+  if (warehouseId) {
+    await Inventory.findOneAndUpdate(
+      { productId, warehouseId },
+      { $inc: { quantityOnHand: delta }, lastRestockedAt: new Date(), lastRestockedBy: userId },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
+  }
+
+  await auditService.log('inventory', productId, 'update', userId, {
+    before: { openingStockQty: oldOpening, currentStockQty: oldCurrent },
+    after:  { openingStockQty: newOpeningQty, currentStockQty: Math.max(0, oldCurrent + delta) },
+    reason,
+  });
+
+  return { productId, oldOpeningQty: oldOpening, newOpeningQty, delta };
+};
+
 module.exports = {
   adjustStock, allocateStock, releaseAllocation, getInventory, getInventoryStats,
   getInventoryById, upsertInventory, getOrCreateInventory,
-  createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials,
+  createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials, updateOpeningStock,
 };

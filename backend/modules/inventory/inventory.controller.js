@@ -1,6 +1,7 @@
 const inventoryService = require('./inventory.service');
 const asyncHandler = require('../../utils/asyncHandler');
 const { success, paginated } = require('../../utils/response');
+const { AppError } = require('../../middlewares/error.middleware');
 
 const getInventory = asyncHandler(async (req, res) => {
   const { data, pagination } = await inventoryService.getInventory(req.query);
@@ -35,6 +36,16 @@ const editStockWithSerials = asyncHandler(async (req, res) => {
   return success(res, inv, 'Stock updated successfully');
 });
 
+const updateOpeningStock = asyncHandler(async (req, res) => {
+  const { productId, warehouseId, openingStockQty, reason } = req.body;
+  if (!productId || openingStockQty == null) {
+    throw new AppError('productId and openingStockQty are required', 400);
+  }
+  if (openingStockQty < 0) throw new AppError('Opening stock quantity cannot be negative', 400);
+  const result = await inventoryService.updateOpeningStock(productId, warehouseId || null, Number(openingStockQty), reason, req.user.id);
+  return success(res, result, 'Opening stock updated successfully');
+});
+
 // Warehouse controllers
 const createWarehouse = asyncHandler(async (req, res) => {
   const wh = await inventoryService.createWarehouse(req.body, req.user.id);
@@ -53,5 +64,5 @@ const updateWarehouse = asyncHandler(async (req, res) => {
 
 module.exports = {
   getInventory, getInventoryStats, getInventoryById, adjustStock, upsertInventory,
-  createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials,
+  createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials, updateOpeningStock,
 };
