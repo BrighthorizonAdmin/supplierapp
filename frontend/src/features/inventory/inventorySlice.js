@@ -47,6 +47,14 @@ export const createWarehouse = createAsyncThunk('inventory/createWarehouse', asy
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
+export const updateOpeningStock = createAsyncThunk('inventory/updateOpeningStock', async (body, { rejectWithValue }) => {
+  try {
+    const { data } = await api.post('/inventory/opening-stock', body);
+    toast.success('Opening stock updated successfully');
+    return data.data;
+  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+});
+
 const inventorySlice = createSlice({
   name: 'inventory',
   initialState: {
