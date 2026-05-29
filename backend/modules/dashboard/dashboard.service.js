@@ -2,6 +2,7 @@ const Dealer = require('../dealer/model/Dealer.model');
 const Order = require('../orders/model/Order.model');
 const Invoice = require('../payments/model/Invoice.model');
 const Inventory = require('../inventory/model/Inventory.model');
+const Product = require('../products/model/Product.model');
 const Return = require('../returns/model/Return.model');
 const AuditLog = require('../audit/model/AuditLog.model');
 const Transaction = require('../finance/model/Transaction.model');
@@ -9,6 +10,50 @@ const ServiceRequest = require('../support/model/ServiceRequest.model');
 const WarrantyRequest = require('../warranty/model/WarrantyRequest.model');
 const { emitToAll } = require('../../websocket/socket');
 const { KPI_UPDATE } = require('../../websocket/events');
+
+// Revenue aggregation helper.
+// Sums net revenue for a given date range:
+//   +amount  for debit-order transactions whose order is NOT cancelled/rejected
+//   -amount  for credit-order transactions (cancellation reversals)
+//   -amount  for debit-return transactions (refund payouts)
+// The $lookup filters out transactions for orders that were cancelled after the
+// debit was created but before the credit reversal was added (historical data fix).
+const buildRevenueAgg = (dateFilter) => Transaction.aggregate([
+  { $match: { 'ref.refType': { $in: ['order', 'return'] }, createdAt: dateFilter } },
+  {
+    $lookup: {
+      from: 'orders',
+      localField: 'ref.refId',
+      foreignField: '_id',
+      as: '_ord',
+    },
+  },
+  { $addFields: { _orderStatus: { $arrayElemAt: ['$_ord.status', 0] } } },
+  {
+    $match: {
+      $or: [
+        // Refund transactions: always count (they deduct from revenue regardless)
+        { 'ref.refType': 'return' },
+        // Order transactions: skip if the order is currently cancelled or rejected
+        { _orderStatus: { $nin: ['cancelled', 'rejected'] } },
+      ],
+    },
+  },
+  {
+    $group: {
+      _id: null,
+      total: {
+        $sum: {
+          $cond: [
+            { $and: [{ $eq: ['$type', 'debit'] }, { $eq: ['$ref.refType', 'order'] }] },
+            '$amount',
+            { $multiply: ['$amount', -1] },
+          ],
+        },
+      },
+    },
+  },
+]);
 
 const getKPIs = async () => {
   const now = new Date();
@@ -46,33 +91,23 @@ const getKPIs = async () => {
     Dealer.countDocuments({ status: 'active' }),
     Dealer.countDocuments({ status: 'pending' }),
     Order.countDocuments({ status: { $in: ['confirmed', 'processing', 'shipped'] } }),
-    Order.countDocuments({ orderNumber: { $not: /^ORD-\d{13}-\d+$/ } }),
+    Order.countDocuments({ orderNumber: { $not: /^ORD-\d{13}-\d+$/ }, status: { $nin: ['cancelled', 'rejected', 'refunded', 'returned'] } }),
     Order.countDocuments({
       status: { $in: ['processing', 'shipped'] },
       updatedAt: { $lt: threeDaysAgo },
     }),
-    Transaction.aggregate([
-      { $match: { type: 'debit', 'ref.refType': 'order', createdAt: { $gte: monthStart } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]),
-    Transaction.aggregate([
-      { $match: { type: 'debit', 'ref.refType': 'order', createdAt: { $gte: prevMonthStart, $lt: monthStart } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]),
-    Transaction.aggregate([
-      { $match: { type: 'debit', 'ref.refType': 'order', createdAt: { $gte: yearStart } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]),
-    Transaction.aggregate([
-      { $match: { type: 'debit', 'ref.refType': 'order', createdAt: { $gte: prevYearStart, $lt: prevYearEnd } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]),
+    buildRevenueAgg({ $gte: monthStart }),
+    buildRevenueAgg({ $gte: prevMonthStart, $lt: monthStart }),
+    buildRevenueAgg({ $gte: yearStart }),
+    buildRevenueAgg({ $gte: prevYearStart, $lt: prevYearEnd }),
     Invoice.aggregate([
       { $match: { status: { $in: ['issued', 'partial'] }, dueDate: { $lt: now } } },
       { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$totalAmount' } } },
     ]),
-    Inventory.countDocuments({
-      $expr: { $lte: [{ $subtract: ['$quantityOnHand', '$quantityAllocated'] }, '$reorderLevel'] },
+    Product.countDocuments({
+      isActive: true,
+      openingStockQty: { $gt: 0 },
+      $expr: { $lt: ['$currentStockQty', { $divide: ['$openingStockQty', 2] }] },
     }),
     Return.countDocuments({ status: { $in: ['requested', 'approved'] } }),
     Inventory.aggregate([
@@ -100,10 +135,12 @@ const getKPIs = async () => {
     Dealer.countDocuments({ createdAt: { $gte: prevMonthStart, $lt: monthStart } }),
     Order.countDocuments({
       orderNumber: { $not: /^ORD-\d{13}-\d+$/ },
+      status: { $nin: ['cancelled', 'rejected', 'refunded', 'returned'] },
       createdAt: { $gte: monthStart },
     }),
     Order.countDocuments({
       orderNumber: { $not: /^ORD-\d{13}-\d+$/ },
+      status: { $nin: ['cancelled', 'rejected', 'refunded', 'returned'] },
       createdAt: { $gte: prevMonthStart, $lt: monthStart },
     }),
   ]);
@@ -185,16 +222,48 @@ const getSalesChart = async (period = 'month') => {
   return Transaction.aggregate([
     {
       $match: {
-        type: 'debit',
-        'ref.refType': 'order',
+        'ref.refType': { $in: ['order', 'return'] },
         createdAt: { $gte: startDate },
+      },
+    },
+    {
+      $lookup: {
+        from: 'orders',
+        localField: 'ref.refId',
+        foreignField: '_id',
+        as: '_ord',
+      },
+    },
+    { $addFields: { _orderStatus: { $arrayElemAt: ['$_ord.status', 0] } } },
+    {
+      $match: {
+        $or: [
+          { 'ref.refType': 'return' },
+          { _orderStatus: { $nin: ['cancelled', 'rejected'] } },
+        ],
       },
     },
     {
       $group: {
         _id: { $dateToString: { format: groupFormat, date: '$createdAt' } },
-        revenue: { $sum: '$amount' },
-        orders: { $sum: 1 },
+        revenue: {
+          $sum: {
+            $cond: [
+              { $and: [{ $eq: ['$type', 'debit'] }, { $eq: ['$ref.refType', 'order'] }] },
+              '$amount',
+              { $multiply: ['$amount', -1] },
+            ],
+          },
+        },
+        orders: {
+          $sum: {
+            $cond: [
+              { $and: [{ $eq: ['$type', 'debit'] }, { $eq: ['$ref.refType', 'order'] }] },
+              1,
+              0,
+            ],
+          },
+        },
       },
     },
     { $sort: { _id: 1 } },
