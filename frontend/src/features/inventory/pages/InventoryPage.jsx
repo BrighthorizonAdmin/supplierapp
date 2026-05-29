@@ -172,14 +172,12 @@ const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
 
 const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
   const prod           = item.productId || {};
-  const origOpeningQty = item.openingStockQty ?? 0;   // baseline stock (e.g. 5)
-  const origCurrentQty = item.currentStockQty  ?? 0;  // available after sales (e.g. 3)
+  const origOpeningQty = item.openingStockQty ?? 0;
 
-  const [openingInput,  setOpeningInput]  = useState(String(origOpeningQty));
-  const [stockQuantity, setStockQuantity] = useState('');
-  const [serialInput,   setSerialInput]   = useState('');
-  const [touched,       setTouched]       = useState(false);
-  const [existingCount, setExistingCount] = useState(0);  // in_stock serials already registered
+  const [openingInput,  setOpeningInput] = useState(String(origOpeningQty));
+  const [serialInput,   setSerialInput]  = useState('');
+  const [touched,       setTouched]      = useState(false);
+  const [existingCount, setExistingCount] = useState(0);
   const [loadingExist,  setLoadingExist]  = useState(true);
 
   useEffect(() => {
@@ -193,21 +191,11 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
   const parsedOpening  = parseInt(openingInput, 10);
   const validOpening   = !isNaN(parsedOpening) && parsedOpening >= 0;
   const newOpeningQty  = validOpening ? parsedOpening : origOpeningQty;
-  const openingDelta   = newOpeningQty - origOpeningQty;           // e.g. 7-5 = +2
-  const openingChanged = validOpening && openingDelta !== 0;
+  const openingChanged = validOpening && newOpeningQty !== origOpeningQty;
 
-  const stockQty       = parseInt(stockQuantity, 10) || 0;
-
-  // Projected current stock after opening change: 3 + 2 = 5
-  const projectedCurrentQty = Math.max(0, origCurrentQty + openingDelta);
-
-  // Current stock after adding new stock must not exceed opening stock
-  const exceedsOpening = stockQty > 0 && (projectedCurrentQty + stockQty) > newOpeningQty;
-  const maxAddable     = Math.max(0, newOpeningQty - projectedCurrentQty);
-
-  // Serials needed = (projected current − already registered in_stock) + new physical stock
-  const serialTarget   = Math.max(0, projectedCurrentQty - existingCount) + stockQty;
-  const nothingToDo    = serialTarget === 0 && !openingChanged && stockQty === 0;
+  // Serials needed = units at new opening level that don't yet have a serial
+  const serialTarget  = Math.max(0, newOpeningQty - existingCount);
+  const nothingToDo   = serialTarget === 0 && !openingChanged;
 
   const parsed        = serialInput.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
   const duplicates    = parsed.filter((s, i) => parsed.indexOf(s) !== i);
@@ -215,26 +203,10 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
   const isMatch       = serialTarget === 0 || enteredCount === serialTarget;
   const hasDuplicates = duplicates.length > 0;
 
-  const neededForOpening = Math.max(0, projectedCurrentQty - existingCount);
-
-  const hintText = () => {
-    if (loadingExist) return 'Loading serial number info…';
-    if (serialTarget === 0) return 'No serial numbers required for this update.';
-    if (neededForOpening > 0 && stockQty > 0)
-      return `Enter ${serialTarget} serial numbers — ${neededForOpening} for stock adjustment + ${stockQty} for new batch. Separate with commas.`;
-    if (neededForOpening > 0)
-      return `Enter ${neededForOpening} serial number${neededForOpening > 1 ? 's' : ''} for the ${openingDelta > 0 ? 'added' : 'unregistered'} stock pieces. (${existingCount} already registered)`;
-    return `Enter ${stockQty} serial number${stockQty > 1 ? 's' : ''} for the new stock batch. Separate with commas.`;
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     setTouched(true);
     if (!validOpening) return;
-    if (exceedsOpening) {
-      toast.error(`Add stock quantity cannot exceed opening stock (${newOpeningQty}). Maximum you can add is ${maxAddable}.`);
-      return;
-    }
     if (nothingToDo) { onClose(); return; }
     if (serialTarget > 0 && (!isMatch || hasDuplicates)) return;
     onSubmit({
@@ -242,7 +214,6 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
       warehouseId:         item.warehouseId?._id || null,
       openingStockQty:     newOpeningQty,
       openingStockChanged: openingChanged,
-      stockQuantity:       stockQty,
       serialNumbers:       parsed,
       productName:         prod.name,
     });
@@ -250,72 +221,45 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-bold text-slate-900">Edit Stock</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
 
-          {/* Product */}
+          {/* Product name */}
           <div>
             <label className="label">Product</label>
-            <p className="text-sm font-semibold text-slate-800 bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-200">{prod.name || '—'}</p>
+            <p className="text-sm font-semibold text-slate-800 bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-200">
+              {prod.name || '—'}
+            </p>
           </div>
 
-          {/* Stock summary row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Current Stock</label>
-              <input type="number" className="input bg-slate-50 cursor-not-allowed" value={origCurrentQty} readOnly />
-              <p className="text-xs text-slate-400 mt-1">Available after sales</p>
-            </div>
-            <div>
-              <label className="label">
-                Opening Stock
+          {/* Opening stock — editable */}
+          <div>
+            <label className="label">Stock Quantity</label>
+            <input
+              type="number" min="0" className="input"
+              value={openingInput}
+              onChange={(e) => { setOpeningInput(e.target.value); setSerialInput(''); }}
+              disabled={loadingExist}
+              placeholder="Enter stock quantity"
+            />
+            {!loadingExist && (
+              <p className="text-xs text-slate-400 mt-1">
+                {existingCount > 0
+                  ? `${existingCount} serial${existingCount > 1 ? 's' : ''} already registered`
+                  : 'No serials registered yet'}
                 {openingChanged && (
-                  <span className={`ml-2 text-xs font-semibold ${openingDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {openingDelta > 0 ? '+' : ''}{openingDelta}
+                  <span className={`ml-2 font-semibold ${newOpeningQty > origOpeningQty ? 'text-green-600' : 'text-red-500'}`}>
+                    · was {origOpeningQty}, now {newOpeningQty}
                   </span>
                 )}
-              </label>
-              <input
-                type="number" min="0" className="input"
-                value={openingInput}
-                onChange={(e) => { setOpeningInput(e.target.value); setSerialInput(''); }}
-                disabled={loadingExist}
-              />
-              {openingChanged && (
-                <p className="text-xs mt-1 font-medium">
-                  <span className={openingDelta > 0 ? 'text-green-600' : 'text-red-500'}>
-                    Current stock will update: {origCurrentQty} → {projectedCurrentQty}
-                  </span>
-                </p>
-              )}
-              {touched && !validOpening && <p className="text-red-500 text-xs mt-1">Enter a valid quantity</p>}
-            </div>
-          </div>
-
-          {/* Add new physical stock */}
-          <div>
-            <label className="label">
-              Add Stock Quantity
-              <span className="text-slate-400 font-normal ml-1">(optional — for new incoming stock)</span>
-            </label>
-            <input
-              type="number" min="1" className="input" value={stockQuantity}
-              placeholder="Enter quantity to add"
-              onChange={(e) => setStockQuantity(e.target.value)}
-            />
-            {stockQty > 0 && !exceedsOpening && (
-              <p className="text-xs text-slate-400 mt-1">
-                Total after update: <span className="font-semibold text-slate-700">{projectedCurrentQty + stockQty}</span>
               </p>
             )}
-            {exceedsOpening && (
-              <p className="text-red-500 text-xs mt-1">
-                Cannot exceed opening stock ({newOpeningQty}). Maximum you can add: <span className="font-semibold">{maxAddable}</span>
-              </p>
+            {touched && !validOpening && (
+              <p className="text-red-500 text-xs mt-1">Enter a valid quantity (0 or more)</p>
             )}
           </div>
 
@@ -332,20 +276,22 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
 
             {serialTarget === 0 ? (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-700">
-                {nothingToDo
-                  ? `All ${origCurrentQty} in-stock units have serial numbers registered. Update the opening stock or add new stock to enter more serials.`
-                  : 'No serial numbers required for this update.'}
+                All {newOpeningQty} serial numbers are already registered.
               </div>
             ) : (
               <>
-                <input
-                  type="text" className="input"
+                <textarea
+                  rows={3}
+                  className="input resize-none"
                   placeholder="e.g. SN001, SN002, SN003"
                   value={serialInput}
                   onChange={(e) => setSerialInput(e.target.value)}
                   disabled={loadingExist}
                 />
-                <p className="text-xs text-slate-400 mt-1">{hintText()}</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Enter {serialTarget} serial number{serialTarget > 1 ? 's' : ''} separated by commas.
+                  {existingCount > 0 && ` (${existingCount} already registered)`}
+                </p>
                 {hasDuplicates && (
                   <p className="text-red-500 text-xs mt-1">Duplicate serial numbers: {[...new Set(duplicates)].join(', ')}</p>
                 )}
@@ -436,27 +382,27 @@ const InventoryPage = () => {
 
   const handleEditStock = async (form) => {
     setEditSaving(true);
-console.log(form)
-    // Step 1 — update opening stock quantity if it changed
+
+    // Step 1 — update opening stock if changed
     if (form.openingStockChanged) {
-      const openingRes = await dispatch(updateOpeningStock({
+      const res = await dispatch(updateOpeningStock({
         productId:       form.productId,
         warehouseId:     form.warehouseId,
         openingStockQty: form.openingStockQty,
       }));
-      if (openingRes.error) {
-        toast.error(openingRes.payload || 'Failed to update opening stock');
+      if (res.error) {
+        toast.error(res.payload || 'Failed to update stock quantity');
         setEditSaving(false);
         return;
       }
     }
 
-    // Step 2 — register serials and/or add new physical stock
-    if (form.stockQuantity > 0 || form.serialNumbers.length > 0) {
+    // Step 2 — register serial numbers if any
+    if (form.serialNumbers.length > 0) {
       const res = await dispatch(editStockWithSerials({
         productId:     form.productId,
         warehouseId:   form.warehouseId,
-        stockQuantity: form.stockQuantity,
+        stockQuantity: 0,
         serialNumbers: form.serialNumbers,
         productName:   form.productName,
       }));
@@ -464,7 +410,7 @@ console.log(form)
         const payload = res.payload;
         toast.error(
           typeof payload === 'string' ? payload
-          : payload?.message || res.error.message || 'Failed to update stock'
+          : payload?.message || res.error.message || 'Failed to register serial numbers'
         );
         setEditSaving(false);
         return;
