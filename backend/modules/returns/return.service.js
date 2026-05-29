@@ -379,9 +379,9 @@ const processReturn = async (returnId, { refundAmount, refundMethod }, userId) =
       }
     }
 
-    // Reduce dealer creditUsed only for S-BE-originated returns.
-    // For D-BE returns, creditUsed is already reduced when the dealer submits
-    // the return request in the dealer app — reducing again here causes double-deduction.
+    // Reduce dealer creditUsed when supplier processes the return.
+    // For D-BE returns, creditUsed is NOT reduced at submission — it is reduced here
+    // (at supplier approval) so outstanding only changes when the refund is confirmed.
     if (ret.dealerId && !isDbeReturn) {
       const dealer = await Dealer.findById(ret.dealerId).session(session).lean();
       if (dealer) {
