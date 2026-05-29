@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchInvoiceById, issueInvoice, cancelInvoice } from '../paymentSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
 import { format } from 'date-fns';
 import { Printer, ArrowLeft, Send, XCircle, Edit2 } from 'lucide-react';
+import api from '../../../services/api';
 
 const fmtDt = (d) => d ? format(new Date(d), 'dd/MM/yyyy') : '—';
 
@@ -37,11 +38,24 @@ export default function InvoiceDetailPage() {
 
   const { selectedInvoice: inv, loading } = useSelector((s) => s.payment);
   const settingsData = useSelector((s) => s.settings?.data || {});
+  const [returnInfo, setReturnInfo] = useState(null);
 
   useEffect(() => {
     dispatch(fetchInvoiceById(id));
     dispatch(fetchSettings());
   }, [dispatch, id]);
+
+  useEffect(() => {
+    if (!inv?.orderId) return;
+    const orderId = typeof inv.orderId === 'object' ? inv.orderId._id || inv.orderId : inv.orderId;
+    api.get(`/returns?orderId=${orderId}`)
+      .then(res => {
+        const list = res.data?.data || [];
+        const processed = list.find(r => ['refunded', 'REFUND_PROCESSED'].includes(r.status));
+        setReturnInfo(processed || null);
+      })
+      .catch(() => {});
+  }, [inv?.orderId]);
 
   const COMPANY = {
     name: settingsData.companyName || 'Your Company Name',
@@ -97,6 +111,10 @@ export default function InvoiceDetailPage() {
   const cgst = +((inv.taxAmount || 0) / 2).toFixed(2);
   const sgst = cgst;
   const taxableAmount = inv.subtotal || 0;
+
+  const totalRefund = +(returnInfo?.totalRefundAmount || returnInfo?.refundAmount || 0);
+  const derivedTaxRate = (inv.subtotal || 0) > 0 ? (inv.taxAmount || 0) / inv.subtotal : 0;
+  const netAfterReturn = Math.max(0, (+inv.totalAmount || 0) - totalRefund);
 
   return (
     <div>
@@ -272,6 +290,50 @@ export default function InvoiceDetailPage() {
           </table>
         </div>
 
+        {/* Return Details — shown only when a processed return exists */}
+        {returnInfo && returnInfo.items?.length > 0 && (
+          <div style={{ margin: '0 24px 8px', border: '1px solid #fca5a5', borderRadius: '4px', backgroundColor: '#fff5f5' }}>
+            <div style={{ background: '#fee2e2', padding: '6px 12px', fontWeight: 'bold', fontSize: '11px', color: '#991B1B', letterSpacing: '0.5px' }}>
+              RETURN / REFUND DETAILS
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #fecaca' }}>
+                  <th style={{ padding: '5px 12px', textAlign: 'left', color: '#991B1B' }}>Item</th>
+                  <th style={{ padding: '5px 12px', textAlign: 'center', color: '#991B1B' }}>Qty Returned</th>
+                  <th style={{ padding: '5px 12px', textAlign: 'right', color: '#991B1B' }}>Unit Price</th>
+                  <th style={{ padding: '5px 12px', textAlign: 'right', color: '#991B1B' }}>Refund Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(returnInfo.items || []).map((ri, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #fecaca' }}>
+                    <td style={{ padding: '5px 12px' }}>
+                      <div style={{ fontWeight: '600' }}>{ri.name || ri.productName || '—'}</div>
+                      {ri.sku && <div style={{ fontSize: '10px', color: '#888' }}>{ri.sku}</div>}
+                    </td>
+                    <td style={{ padding: '5px 12px', textAlign: 'center' }}>{ri.quantity} PCS</td>
+                    <td style={{ padding: '5px 12px', textAlign: 'right' }}>
+                      ₹{(+(ri.unitPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ padding: '5px 12px', textAlign: 'right', color: '#EF4444', fontWeight: '600' }}>
+                      -₹{(+(ri.lineRefundAmount || ((ri.unitPrice || 0) * (ri.quantity || 1) * (1 + derivedTaxRate))).toFixed(2)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #fca5a5', background: '#fee2e2' }}>
+                  <td colSpan={3} style={{ padding: '6px 12px', fontWeight: 'bold', color: '#991B1B' }}>Total Refund</td>
+                  <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 'bold', color: '#EF4444' }}>
+                    -₹{(+(returnInfo.totalRefundAmount || returnInfo.refundAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+
         {/* Bank Details + Tax Summary */}
         <div style={{ display: 'flex', borderTop: '1px solid #ccc', marginTop: '8px' }}>
           <div style={{ flex: 1.2, padding: '12px 24px', borderRight: '1px solid #ccc' }}>
@@ -310,6 +372,22 @@ export default function InvoiceDetailPage() {
                   <td style={{ paddingTop: '6px', paddingBottom: '4px' }}>Total Amount</td>
                   <td style={{ paddingTop: '6px', paddingBottom: '4px', textAlign: 'right' }}>₹{(+inv.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}</td>
                 </tr>
+                {returnInfo && totalRefund > 0 && (
+                  <>
+                    <tr>
+                      <td style={{ paddingBottom: '4px', color: '#EF4444' }}>Return Deduction</td>
+                      <td style={{ paddingBottom: '4px', textAlign: 'right', color: '#EF4444' }}>
+                        - ₹{totalRefund.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                    <tr style={{ borderTop: '2px solid #333', fontWeight: 'bold' }}>
+                      <td style={{ paddingTop: '6px', paddingBottom: '4px' }}>Net Amount</td>
+                      <td style={{ paddingTop: '6px', paddingBottom: '4px', textAlign: 'right' }}>
+                        ₹{netAfterReturn.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
+                      </td>
+                    </tr>
+                  </>
+                )}
                 <tr>
                   <td style={{ paddingBottom: '4px', color: '#444' }}>Received Amount</td>
                   <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{(+inv.amountPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}</td>
@@ -318,6 +396,12 @@ export default function InvoiceDetailPage() {
                   <tr style={{ fontWeight: 'bold' }}>
                     <td>Balance</td>
                     <td style={{ textAlign: 'right' }}>₹{(+inv.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}</td>
+                  </tr>
+                )}
+                {inv.dueDate && (
+                  <tr>
+                    <td style={{ paddingBottom: '4px', color: '#444' }}>Due Date</td>
+                    <td style={{ paddingBottom: '4px', textAlign: 'right' }}>{fmtDt(inv.dueDate)}</td>
                   </tr>
                 )}
               </tbody>
