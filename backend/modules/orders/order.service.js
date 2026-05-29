@@ -533,11 +533,15 @@ const cancelOrder = async (orderId, reason, userId) => {
       throw new AppError(`Cannot cancel an order with status: ${order.status}`, 400);
     }
  
-    const wasConfirmed = order.status === 'confirmed';
+    // Any status past 'pending/draft' means confirmOrder already ran and created
+    // a debit transaction + decremented stock. We must reverse all of that on cancel.
+    const wasConfirmed = ['confirmed', 'processing', 'shipped', 'out_for_delivery'].includes(order.status);
     // D-BE webhook orders never had creditUsed incremented by S-BE (D-BE manages it).
     // Only reverse creditUsed for supplier-created orders.
     const isSupplierCreatedOrder = !order.dbeOrderId;
-    const items = await OrderItem.find({ orderId }).session(session);
+    // D-BE webhook orders embed items in order.items; S-BE orders use OrderItem collection.
+    const orderItemDocs = await OrderItem.find({ orderId }).session(session);
+    const items = orderItemDocs.length > 0 ? orderItemDocs : (order.items || []);
  
     if (wasConfirmed) {
       // Release inventory allocations and restore product-level currentStockQty
