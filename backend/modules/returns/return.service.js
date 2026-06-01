@@ -319,10 +319,15 @@ async function applyRefundSideEffects(ret, refundAmount) {
     }
 
     // ── 8. Reduce D-BE Invoice amount by the refund so Pay Now shows correct balance ──
+    // .lean() returns the raw MongoDB document so 'amount' (a D-BE-only field absent from
+    // the S-BE Invoice schema) is readable. strict:false on the update prevents Mongoose
+    // from stripping 'amount' out of $set before it reaches MongoDB.
     if (dbeOrderId && refundAmount > 0) {
       try {
-        const dbeInvoice = await Invoice.findOne({ orderId: dbeOrderId, status: { $in: ['UNPAID', 'OVERDUE'] } });
-        if (dbeInvoice) {
+        const dbeInvoice = await Invoice.findOne(
+          { orderId: dbeOrderId, status: { $in: ['UNPAID', 'OVERDUE'] } }
+        ).lean();
+        if (dbeInvoice && dbeInvoice.amount > 0) {
           const newAmount = Math.max(0, parseFloat((dbeInvoice.amount - refundAmount).toFixed(2)));
           const ratio = dbeInvoice.amount > 0 ? newAmount / dbeInvoice.amount : 0;
           const newSubtotal = parseFloat(((dbeInvoice.subtotal || dbeInvoice.amount) * ratio).toFixed(2));
@@ -330,7 +335,7 @@ async function applyRefundSideEffects(ret, refundAmount) {
           await Invoice.findByIdAndUpdate(
             dbeInvoice._id,
             { $set: { amount: newAmount, subtotal: newSubtotal, taxAmount: newTax } },
-            { runValidators: false }
+            { runValidators: false, strict: false }
           );
           console.log(`[applyRefundSideEffects] D-BE Invoice amount updated: ${dbeInvoice.amount} → ${newAmount} ✓`);
         }
