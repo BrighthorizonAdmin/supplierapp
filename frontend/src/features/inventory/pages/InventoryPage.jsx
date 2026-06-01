@@ -439,7 +439,7 @@ const InventoryPage = () => {
       return [
         prod.name || '—', prod.productCode || '—', prod.category || '—',
         wh.name || '—',
-        item.currentStockQty ?? 0, item.quantityAllocated ?? 0, item.quantityOnHand ?? 0,
+        Math.max(0, item.currentStockQty ?? 0), item.quantityAllocated ?? 0, Math.max(0, item.quantityOnHand ?? 0),
         prod.basePrice ?? 0, status,
       ];
     });
@@ -537,9 +537,7 @@ const InventoryPage = () => {
           <StatCard
             label="Total Network Stocks"
             value={fmtNum(stats?.totalOnHand)}
-            badge="+5% YOY"
-            badgeCls="bg-green-100 text-green-700"
-            sub={`Value: ${fmtCurrency((stats?.totalOnHand || 0) * 50)}`}
+            sub={`${stats?.inStockCount ?? 0} products in stock`}
             subIcon={TrendingUp}
             icon={BarChart2}
             iconBg="bg-primary-100 text-primary-600"
@@ -571,8 +569,7 @@ const InventoryPage = () => {
           <StatCard
             label="Fast-Moving Items"
             value={fmtNum(stats?.fastMovingCount)}
-            badge="+1.4%"
-            badgeCls="bg-green-100 text-green-700"
+            sub="restocked in last 30 days"
             sub="vs last year"
             subIcon={TrendingUp}
             icon={TrendingUp}
@@ -581,8 +578,7 @@ const InventoryPage = () => {
           <StatCard
             label="Slow-Moving Items"
             value={fmtNum(stats?.slowMovingCount)}
-            badge="-2%"
-            badgeCls="bg-red-100 text-red-700"
+            sub="not restocked in 90+ days"
             sub="vs last year"
             subIcon={TrendingDown}
             icon={TrendingDown}
@@ -724,7 +720,7 @@ const InventoryPage = () => {
                       </td>
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-slate-800">
-                          {(item.currentStockQty ?? 0).toLocaleString('en-IN')}
+                          {Math.max(0, item.currentStockQty ?? 0).toLocaleString('en-IN')}
                         </p>
                         {prod.unit && <p className="text-xs text-slate-400 mt-0.5">{prod.unit}</p>}
                       </td>
