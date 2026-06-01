@@ -951,7 +951,7 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
       try {
         const updated = await Product.findByIdAndUpdate(
           pid,
-          { $inc: { currentStockQty: -qty } },
+          [{ $set: { currentStockQty: { $max: [0, { $subtract: ['$currentStockQty', qty] }] } } }],
           { new: true }
         );
         console.log(`[updateOrderStatus] product=${pid} newStockQty=${updated?.currentStockQty ?? 'NOT FOUND'}`);

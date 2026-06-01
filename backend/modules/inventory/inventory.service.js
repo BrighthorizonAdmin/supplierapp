@@ -248,68 +248,74 @@ const getInventory = async (query = {}) => {
 
 const getInventoryStats = async () => {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const ninetyDaysAgo  = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
-  // Distribution aggregate: same Product-centric left-join logic as the list endpoint
-  // so pie chart matches what the table shows (uses openingStockQty as fallback)
-  const distributionAgg = Product.aggregate([
-    { $match: { isActive: true } },
-    {
-      $lookup: {
-        from: 'inventories',
-        localField: '_id',
-        foreignField: 'productId',
-        as: 'invRecords',
+  //  Out of Stock : currentStockQty <= 0
+  //  Low Stock    : currentStockQty > 0  AND  currentStockQty < openingStockQty / 2
+  //  In Stock     : currentStockQty >= openingStockQty / 2
+  const [distResult, totalCatalogSKUs, fastMovingCount, slowMovingCount] = await Promise.all([
+    Product.aggregate([
+      { $match: { isActive: true } },
+      {
+        $group: {
+          _id: null,
+          inStock: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: ['$currentStockQty', 0] },
+                    { $gte: ['$currentStockQty', { $divide: ['$openingStockQty', 2] }] },
+                  ],
+                },
+                1, 0,
+              ],
+            },
+          },
+          lowStock: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt:  ['$currentStockQty', 0] },
+                    { $gt:  ['$openingStockQty', 0] },
+                    { $lt:  ['$currentStockQty', { $divide: ['$openingStockQty', 2] }] },
+                  ],
+                },
+                1, 0,
+              ],
+            },
+          },
+          outOfStock: {
+            $sum: { $cond: [{ $lte: ['$currentStockQty', 0] }, 1, 0] },
+          },
+          totalCurrentStock: { $sum: '$currentStockQty' },
+        },
       },
-    },
-    { $unwind: { path: '$invRecords', preserveNullAndEmptyArrays: true } },
-    {
-      $addFields: {
-        _qoh:    { $ifNull: ['$invRecords.quantityOnHand',    { $ifNull: ['$openingStockQty', 0] }] },
-        _qalloc: { $ifNull: ['$invRecords.quantityAllocated', 0] },
-        _rl:     { $ifNull: ['$invRecords.reorderLevel',      10] },
-      },
-    },
-    {
-      $addFields: {
-        _qavail: { $subtract: ['$_qoh', '$_qalloc'] },
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        inStock:    { $sum: { $cond: [{ $and: [{ $gt: ['$_qoh', 0] }, { $gt:  ['$_qavail', '$_rl'] }] }, 1, 0] } },
-        lowStock:   { $sum: { $cond: [{ $and: [{ $gt: ['$_qoh', 0] }, { $lte: ['$_qavail', '$_rl'] }] }, 1, 0] } },
-        outOfStock: { $sum: { $cond: [{ $lte: ['$_qoh', 0] }, 1, 0] } },
-      },
-    },
-  ]);
-
-  const [
-    totalAgg, totalCatalogSKUs, distResult,
-    fastMovingCount, slowMovingCount,
-  ] = await Promise.all([
-    Inventory.aggregate([{ $group: { _id: null, totalOnHand: { $sum: '$quantityOnHand' }, totalAllocated: { $sum: '$quantityAllocated' } } }]),
+    ]),
     Product.countDocuments({ isActive: true }),
-    distributionAgg,
     Inventory.countDocuments({ lastRestockedAt: { $gte: thirtyDaysAgo } }),
-    Inventory.countDocuments({ $or: [{ lastRestockedAt: { $lt: ninetyDaysAgo } }, { lastRestockedAt: null }] }),
+    Inventory.countDocuments({
+      $or: [{ lastRestockedAt: { $lt: ninetyDaysAgo } }, { lastRestockedAt: null }],
+    }),
   ]);
 
-  const totalOnHand    = totalAgg[0]?.totalOnHand    || 0;
-  const totalAllocated = totalAgg[0]?.totalAllocated || 0;
-  const dist           = distResult[0] || { inStock: 0, lowStock: 0, outOfStock: 0 };
+  const dist       = distResult[0] || { inStock: 0, lowStock: 0, outOfStock: 0, totalCurrentStock: 0 };
+  const totalOnHand = dist.totalCurrentStock;
 
   return {
     totalOnHand,
-    totalAllocated,
-    totalSKUs:      totalCatalogSKUs,
-    lowStockCount:  dist.lowStock,
+    totalSKUs:       totalCatalogSKUs,
+    inStockCount:    dist.inStock,
+    lowStockCount:   dist.lowStock,
     outOfStockCount: dist.outOfStock,
-    inStockCount:   dist.inStock,
     fastMovingCount,
     slowMovingCount,
-    distribution: { inStock: dist.inStock, lowStock: dist.lowStock, outOfStock: dist.outOfStock },
+    distribution: {
+      inStock:    dist.inStock,
+      lowStock:   dist.lowStock,
+      outOfStock: dist.outOfStock,
+    },
   };
 };
 
