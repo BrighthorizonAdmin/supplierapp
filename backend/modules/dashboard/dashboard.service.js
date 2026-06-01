@@ -78,6 +78,7 @@ const getKPIs = async () => {
     prevYearRevenueRes,
     overdueInvoicesRes,
     lowStockAlerts,
+    outOfStockAlerts,
     pendingReturns,
     inventoryValueRes,
     serviceRequests,
@@ -104,11 +105,30 @@ const getKPIs = async () => {
       { $match: { status: { $in: ['issued', 'partial'] }, dueDate: { $lt: now } } },
       { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$totalAmount' } } },
     ]),
-    Product.countDocuments({
-      isActive: true,
-      openingStockQty: { $gt: 0 },
-      $expr: { $lt: ['$currentStockQty', { $divide: ['$openingStockQty', 2] }] },
-    }),
+    Product.aggregate([
+      { $lookup: { from: 'inventories', localField: '_id', foreignField: 'productId', as: '_inv' } },
+      { $unwind: { path: '$_inv', preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          _qoh: { $ifNull: ['$_inv.quantityOnHand', '$openingStockQty'] },
+          _isLowStock: {
+            $and: [
+              { $gt: ['$currentStockQty', 0] },
+              { $lt: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.2] }] },
+            ],
+          },
+        },
+      },
+      { $match: { _qoh: { $gt: 0 }, _isLowStock: true } },
+      { $count: 'total' },
+    ]).then(r => r[0]?.total || 0),
+    Product.aggregate([
+      { $lookup: { from: 'inventories', localField: '_id', foreignField: 'productId', as: '_inv' } },
+      { $unwind: { path: '$_inv', preserveNullAndEmptyArrays: true } },
+      { $addFields: { _qoh: { $ifNull: ['$_inv.quantityOnHand', '$openingStockQty'] } } },
+      { $match: { _qoh: { $not: { $gt: 0 } } } },
+      { $count: 'total' },
+    ]).then(r => r[0]?.total || 0),
     Return.countDocuments({ status: { $in: ['requested', 'approved'] } }),
     Inventory.aggregate([
       {
@@ -167,6 +187,7 @@ const getKPIs = async () => {
     delayedOrders,
     pendingReturns,
     lowStockAlerts,
+    outOfStockAlerts,
     serviceRequests,
     warrantyPending,
 

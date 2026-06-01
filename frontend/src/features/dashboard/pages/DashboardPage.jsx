@@ -278,23 +278,42 @@ const DashboardPage = () => {
             </div>
             <div className="divide-y divide-slate-50">
 
-              {/* Low stock */}
-              {(kpis?.lowStockAlerts ?? 0) > 0 ? (
-                <div className="flex items-center gap-3 px-5 py-3.5 bg-red-50/60">
+              {/* Out of stock */}
+              {(kpis?.outOfStockAlerts ?? 0) > 0 ? (
+                <div className="flex items-center gap-3 px-5 py-3.5 bg-red-50/80">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-red-700 truncate">Low Stock Warning</p>
-                    <p className="text-xs text-red-400 mt-0.5">{kpis.lowStockAlerts} item{kpis.lowStockAlerts > 1 ? 's' : ''} critically low</p>
+                    <p className="text-sm font-semibold text-red-800 truncate">Out of Stock</p>
+                    <p className="text-xs text-red-500 mt-0.5">{kpis.outOfStockAlerts} product{kpis.outOfStockAlerts > 1 ? 's' : ''} with zero stock</p>
                   </div>
                   <button
                     onClick={() => navigate('/inventory')}
-                    className="text-xs font-bold text-red-600 hover:text-red-700 whitespace-nowrap underline underline-offset-2"
+                    className="text-xs font-bold text-red-700 hover:text-red-800 whitespace-nowrap underline underline-offset-2"
                   >
                     Restock
                   </button>
                 </div>
-              ) : (
+              ) : null}
+
+              {/* Low stock (above zero but below 50% of opening stock) */}
+              {(kpis?.lowStockAlerts ?? 0) > 0 ? (
+                <div className="flex items-center gap-3 px-5 py-3.5 bg-amber-50/70">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-800 truncate">Low Stock Warning</p>
+                    <p className="text-xs text-amber-600 mt-0.5">{kpis.lowStockAlerts} item{kpis.lowStockAlerts > 1 ? 's' : ''} below 50% of opening stock</p>
+                  </div>
+                  <button
+                    onClick={() => navigate('/inventory')}
+                    className="text-xs font-bold text-amber-700 hover:text-amber-800 whitespace-nowrap underline underline-offset-2"
+                  >
+                    Restock
+                  </button>
+                </div>
+              ) : null}
+
+              {/* All-clear when both are zero */}
+              {(kpis?.outOfStockAlerts ?? 0) === 0 && (kpis?.lowStockAlerts ?? 0) === 0 && (
                 <div className="flex items-center gap-3 px-5 py-3.5">
-                  <p className="text-sm text-slate-400">No low stock alerts</p>
+                  <p className="text-sm text-slate-400">No stock alerts</p>
                 </div>
               )}
 
