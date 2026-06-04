@@ -6,6 +6,7 @@ const {
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { authorize } = require('../../middlewares/rbac.middleware');
 const { uploadProductImage } = require('../../config/multer');
+const { validate, required, isPositiveNumber } = require('../../middlewares/validate.middleware');
 
 const router = express.Router();
 
@@ -13,7 +14,7 @@ router.use(authenticate);
 
 router.get('/categories',                   authorize('products:read'),  getCategories);
 router.get('/',                             authorize('products:read'),  getProducts);
-router.post('/',                            authorize('products:write'), createProduct);
+router.post('/',                            authorize('products:write'), validate({ name: [required], category: [required], basePrice: [required, isPositiveNumber] }), createProduct);
 router.get('/:id',                          authorize('products:read'),  getProductById);
 router.put('/:id',                          authorize('products:write'), updateProduct);
 router.patch('/:id/status',                 authorize('products:write'), updateProductStatus);

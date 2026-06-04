@@ -78,7 +78,7 @@ app.use('/dealer-uploads', cors({ origin: '*' }), async (req, res) => {
 // They need: x-webhook-secret (retail invoice, support) and x-api-key (dealership apply).
 // Must be registered BEFORE the general CORS middleware below so it isn't overridden.
 const webhookCors = cors({
-  origin: '*',
+  origin: env.DEALER_API_URL || false,
   methods: ['POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'x-webhook-secret', 'x-api-key'],
 });
@@ -127,9 +127,7 @@ app.use('/api/webhooks', supportWebhookRoutes);
 app.use(mongoSanitize());
 
 // HTTP logging
-if (env.isDev) {
-  app.use(morgan('dev'));
-}
+app.use(morgan(env.isDev ? 'dev' : 'combined'));
 
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));

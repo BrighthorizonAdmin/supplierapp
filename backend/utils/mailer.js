@@ -57,4 +57,29 @@ const sendDealerApprovalEmail = async ({ to, businessName, password }) => {
   });
 };
 
-module.exports = { generateRandomPassword, sendDealerApprovalEmail };
+const sendPasswordResetEmail = async ({ to, name, resetLink }) => {
+  const fromName = process.env.SMTP_FROM_NAME || 'BrightHorizon Supplier';
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+
+  await transporter.sendMail({
+    from: `"${fromName}" <${fromEmail}>`,
+    to,
+    subject: 'Password Reset Request',
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:8px">
+        <h2 style="color:#1d4ed8">Password Reset Request</h2>
+        <p>Hi <strong>${name}</strong>,</p>
+        <p>We received a request to reset your password. Click the button below to proceed. This link expires in <strong>15 minutes</strong>.</p>
+        <div style="text-align:center;margin:24px 0">
+          <a href="${resetLink}" style="background:#1d4ed8;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Reset Password</a>
+        </div>
+        <p>Or copy this link into your browser:</p>
+        <p style="word-break:break-all;color:#4b5563">${resetLink}</p>
+        <hr style="margin-top:24px;border:none;border-top:1px solid #e5e7eb"/>
+        <p style="font-size:12px;color:#6b7280">If you did not request a password reset, please ignore this email.</p>
+      </div>
+    `,
+  });
+};
+
+module.exports = { generateRandomPassword, sendDealerApprovalEmail, sendPasswordResetEmail };

@@ -2,7 +2,8 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('./model/User.model');
 const Role = require('../roles/role.model');
-const { JWT_SECRET, JWT_EXPIRES_IN } = require('../../config/env');
+const { JWT_SECRET, JWT_EXPIRES_IN, FRONTEND_URL } = require('../../config/env');
+const { sendPasswordResetEmail } = require('../../utils/mailer');
 const { AppError } = require('../../middlewares/error.middleware');
 const auditService = require('../audit/audit.service');
 
@@ -249,7 +250,10 @@ const forgotPassword = async (email) => {
   user.resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
   await user.save({ validateBeforeSave: false });
 
-  return { token: plainToken };
+  const resetLink = `${FRONTEND_URL}/reset-password/${plainToken}`;
+  await sendPasswordResetEmail({ to: user.email, name: user.name, resetLink });
+
+  return { message: 'If the email is registered, a reset link has been sent.' };
 };
 
 /**

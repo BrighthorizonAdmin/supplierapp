@@ -63,8 +63,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
   if (!email) throw new AppError('Email is required', 400);
 
-  const { token } = await authService.forgotPassword(email);
-  return success(res, { token }, 'Reset token generated. Proceed to reset your password.');
+  await authService.forgotPassword(email);
+  return success(res, null, 'If the email is registered, a reset link has been sent.');
 });
 
 const resetPasswordByToken = asyncHandler(async (req, res) => {

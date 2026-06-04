@@ -13,6 +13,7 @@ const {
 } = require('./auth.controller');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { authorize } = require('../../middlewares/rbac.middleware');
+const { validate, required, isEmail, minLen } = require('../../middlewares/validate.middleware');
 
 const router = express.Router();
 
@@ -25,9 +26,11 @@ const bootstrapOrAuth = async (req, res, next) => {
   return authenticate(req, res, () => authorize('admin:write')(req, res, next));
 };
 
+const userCreateRules = validate({ email: [required, isEmail], password: [required, minLen(8)], name: [required] });
+
 // Public
-router.post('/register', bootstrapOrAuth, register);
-router.post('/login', login);
+router.post('/register', bootstrapOrAuth, userCreateRules, register);
+router.post('/login', validate({ email: [required], password: [required] }), login);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password/:token', resetPasswordByToken);
 
@@ -37,7 +40,7 @@ router.patch('/me/password', authenticate, changePassword);
 
 // Admin — user management
 router.get('/users',               authenticate, authorize('admin:read'),  getUsers);
-router.post('/users',              authenticate, authorize('admin:write'), createUser);
+router.post('/users',              authenticate, authorize('admin:write'), userCreateRules, createUser);
 router.patch('/users/:id',         authenticate, authorize('admin:write'), updateUser);
 router.patch('/users/:id/password',authenticate, authorize('admin:write'), resetPassword);
 
