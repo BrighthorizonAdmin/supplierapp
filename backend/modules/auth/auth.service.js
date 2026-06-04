@@ -165,9 +165,9 @@ const createUser = async (data, performedBy) => {
     throw new AppError(`One or more roles do not exist`, 400);
   }
 
-  const user = await User.create({ ...data, role: roles,isFirstLogin: true, });
+  const user = await User.create({ ...data, role: roles, isFirstLogin: true, });
   await auditService.log('user', user._id, 'create', performedBy, {
-    after: { name: user.name, email: user.email, role: user.role,isFirstLogin:user.isFirstLogin, },
+    after: { name: user.name, email: user.email, role: user.role, isFirstLogin: user.isFirstLogin, },
   });
 
   return user;
@@ -240,8 +240,12 @@ const resetPassword = async (userId, newPassword, performedBy) => {
  */
 const forgotPassword = async (email) => {
   const user = await User.findOne({ email: email.toLowerCase() });
-  if (!user) throw new AppError('No account found with that email address', 404);
-  if (!user.isActive) throw new AppError('This account has been deactivated. Contact admin.', 403);
+  if (!user) {
+    return {
+      message:
+        'If the email is registered, a reset link has been sent.'
+    };
+  } if (!user.isActive) throw new AppError('This account has been deactivated. Contact admin.', 403);
 
   const plainToken = crypto.randomBytes(32).toString('hex');
   const hashedToken = crypto.createHash('sha256').update(plainToken).digest('hex');

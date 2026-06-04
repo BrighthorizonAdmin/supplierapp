@@ -33,6 +33,15 @@ const initSocket = (httpServer) => {
     socket.join('global');
     logger.info(`Socket connected: user=${id} role=${role}`);
 
+    // Prevent clients from emitting to the global room directly.
+    // Only server-side helpers (emitToAll) are allowed to broadcast globally.
+    socket.use(([event], next) => {
+      if (event === 'global' || event?.startsWith?.('global:')) {
+        return next(new Error('Forbidden: cannot emit to global room'));
+      }
+      next();
+    });
+
     socket.on('disconnect', () => {
       logger.info(`Socket disconnected: user=${id}`);
     });
