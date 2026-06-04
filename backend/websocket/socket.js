@@ -15,7 +15,7 @@ const initSocket = (httpServer) => {
   });
 
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    const token = socket.handshake.auth?.token;
     if (!token) return next(new Error('Authentication required'));
     try {
       const decoded = jwt.verify(token, JWT_SECRET);

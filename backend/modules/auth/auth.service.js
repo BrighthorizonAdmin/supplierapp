@@ -45,13 +45,18 @@ const register = async (data) => {
   const existing = await User.findOne({ email: data.email });
   if (existing) throw new AppError('Email is already registered', 409);
 
-  // Validate that the role exists (skip check on very first user — bootstrap)
-  if (data.role && data.role !== 'super-admin') {
-    const roleDoc = await Role.findOne({ name: data.role.toLowerCase() });
-    if (!roleDoc) throw new AppError(`Role "${data.role}" does not exist`, 400);
+  // Whitelist: only pull the fields a registration is allowed to set.
+  // Prevents body-injection of isActive, isFirstLogin, passwordChangedAt, etc.
+  const { name, email, password } = data;
+  const role = data.role || 'read-only';
+
+  // Validate that the role exists in the DB (super-admin is a built-in, skip DB check)
+  if (role !== 'super-admin') {
+    const roleDoc = await Role.findOne({ name: role.toLowerCase() });
+    if (!roleDoc) throw new AppError(`Role "${role}" does not exist`, 400);
   }
 
-  const user = await User.create(data);
+  const user = await User.create({ name, email, password, role });
   await auditService.log('user', user._id, 'create', user._id, { after: { name: user.name, role: user.role } });
 
   const permissions = await getPermissionsForRole(user.role);
@@ -219,8 +224,27 @@ const changePassword = async (userId, currentPassword, newPassword) => {
  * Admin resets another user's password — no current password required.
  */
 const resetPassword = async (userId, newPassword, performedBy) => {
-  const user = await User.findById(userId).select('+password');
+  // Block self-reset via admin endpoint — use changePassword instead
+  if (String(userId) === String(performedBy)) {
+    throw new AppError('Use the change-password endpoint to update your own password', 400);
+  }
+
+  const [user, performer] = await Promise.all([
+    User.findById(userId).select('+password role'),
+    User.findById(performedBy).select('role').lean(),
+  ]);
   if (!user) throw new AppError('User not found', 404);
+  if (!performer) throw new AppError('Unauthorized', 403);
+
+  // Only super-admin may reset another admin or super-admin account
+  const targetRoles    = Array.isArray(user.role)      ? user.role      : [user.role];
+  const performerRoles = Array.isArray(performer.role) ? performer.role : [performer.role];
+  const targetIsPrivileged     = targetRoles.some((r) => ['super-admin', 'admin'].includes(r));
+  const performerIsSuperAdmin  = performerRoles.includes('super-admin');
+
+  if (targetIsPrivileged && !performerIsSuperAdmin) {
+    throw new AppError('Only super-admin can reset an admin account password', 403);
+  }
 
   user.password = newPassword;
   user.passwordChangedAt = new Date();

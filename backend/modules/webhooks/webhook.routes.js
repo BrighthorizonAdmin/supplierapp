@@ -1,10 +1,18 @@
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const Invoice = require('../payments/model/Invoice.model');
 const Dealer = require('../dealer/model/Dealer.model');
 const notificationService = require('../notifications/notification.service');
 
-const WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET || '';
+const WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET;
+
+const verifyWebhookSecret = (incoming) => {
+  if (!WEBHOOK_SECRET || !incoming) return false;
+  const a = crypto.createHash('sha256').update(incoming).digest();
+  const b = crypto.createHash('sha256').update(WEBHOOK_SECRET).digest();
+  return crypto.timingSafeEqual(a, b);
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-retail-invoice
@@ -14,7 +22,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
   try {
     // 1. Verify shared secret
     const incomingSecret = req.headers['x-webhook-secret'];
-    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+    if (!verifyWebhookSecret(incomingSecret)) {
       console.warn('[Webhook] Unauthorized attempt from:', req.ip);
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
@@ -194,7 +202,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
 router.post('/dealer-order', async (req, res) => {
   try {
     const incomingSecret = req.headers['x-webhook-secret'];
-    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+    if (!verifyWebhookSecret(incomingSecret)) {
       console.warn('[Webhook] Unauthorized order webhook attempt from:', req.ip);
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
@@ -335,7 +343,7 @@ router.post('/dealer-order', async (req, res) => {
 router.post('/dealer-return', async (req, res) => {
   try {
     const incomingSecret = req.headers['x-webhook-secret'];
-    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+    if (!verifyWebhookSecret(incomingSecret)) {
       console.warn('[Webhook] Unauthorized dealer-return attempt from:', req.ip);
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
@@ -370,8 +378,9 @@ router.post('/dealer-return', async (req, res) => {
     let supplierDealer = null;
     if (dealerPhone) supplierDealer = await Dealer.findOne({ phone: dealerPhone }).lean();
     if (!supplierDealer && dealerName) {
+      const escaped = dealerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       supplierDealer = await Dealer.findOne({
-        businessName: { $regex: dealerName.trim(), $options: 'i' },
+        businessName: { $regex: `^${escaped}$`, $options: 'i' },
       }).lean();
     }
 
@@ -438,7 +447,7 @@ router.post('/dealer-return', async (req, res) => {
 router.post('/dealer-exchange', async (req, res) => {
   try {
     const incomingSecret = req.headers['x-webhook-secret'];
-    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+    if (!verifyWebhookSecret(incomingSecret)) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
@@ -472,7 +481,7 @@ router.post('/dealer-exchange', async (req, res) => {
 router.post('/dealer-return-cancel', async (req, res) => {
   try {
     const incomingSecret = req.headers['x-webhook-secret'];
-    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+    if (!verifyWebhookSecret(incomingSecret)) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
@@ -523,7 +532,7 @@ router.post('/dealer-return-cancel', async (req, res) => {
 router.post('/low-stock-after-order', async (req, res) => {
   try {
     const incomingSecret = req.headers['x-webhook-secret'];
-    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+    if (!verifyWebhookSecret(incomingSecret)) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
@@ -572,7 +581,7 @@ router.post('/low-stock-after-order', async (req, res) => {
 router.post('/dealer-order-cancel', async (req, res) => {
   try {
     const incomingSecret = req.headers['x-webhook-secret'];
-    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+    if (!verifyWebhookSecret(incomingSecret)) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
@@ -645,7 +654,7 @@ router.post('/dealer-order-cancel', async (req, res) => {
 router.post('/dealer-warranty-claim', async (req, res) => {
   try {
     const incomingSecret = req.headers['x-webhook-secret'];
-    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+    if (!verifyWebhookSecret(incomingSecret)) {
       console.warn('[Webhook] Unauthorized dealer-warranty-claim attempt from:', req.ip);
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }

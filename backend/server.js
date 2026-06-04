@@ -43,7 +43,19 @@ const app = express();
 
 // Security headers
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable CSP to allow frontend assets to load
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
 }));
 
 // Static uploads are public assets (product images) — allow any origin to fetch them.
@@ -59,8 +71,15 @@ app.use('/uploads', cors({ origin: '*' }), (req, res, next) => {
 // In production (built frontend served by S-BE), this route does the same rewrite.
 app.use('/dealer-uploads', cors({ origin: '*' }), async (req, res) => {
   const axios = require('axios');
+  const requestedPath = req.path;
+
+  // Reject path traversal and non-safe characters to prevent SSRF / directory escape
+  if (requestedPath.includes('..') || !/^\/[a-zA-Z0-9._\-/]+$/.test(requestedPath)) {
+    return res.status(400).json({ success: false, message: 'Invalid path' });
+  }
+
   const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5000';
-  const targetUrl = `${DEALER_API_URL}/uploads${req.path}`;
+  const targetUrl = `${DEALER_API_URL}/uploads${requestedPath}`;
   try {
     const response = await axios.get(targetUrl, { responseType: 'stream', timeout: 10000 });
     res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
@@ -95,10 +114,10 @@ app.use(
   })
 );
 
-// Auth rate limit (100 req / 15 min)
+// Auth rate limit — 10 req / 15 min per IP (strict: covers brute-force and enumeration)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 10,
   message: { success: false, message: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -115,16 +134,17 @@ const apiLimiter = rateLimit({
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
 
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing — 100 kb is ample for any JSON API call.
+// File uploads go through multer and are not affected by this limit.
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
-// ✅ Register webhooks BEFORE mongoSanitize so payload isn't mutated
+// NoSQL injection sanitization (must be before all routes including webhooks)
+app.use(mongoSanitize());
+
+// Webhook routes
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/webhooks', supportWebhookRoutes);
-
-// NoSQL injection sanitization
-app.use(mongoSanitize());
 
 // HTTP logging
 app.use(morgan(env.isDev ? 'dev' : 'combined'));
@@ -134,7 +154,7 @@ app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), env: env.NODE_ENV });
+  res.json({ status: 'ok', timestamp: new Date().toISOString()});
 });
 
 // API Routes

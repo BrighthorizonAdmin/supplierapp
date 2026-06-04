@@ -19,10 +19,14 @@ const router = express.Router();
 
 // Bootstrap: allow first-ever user to register without auth.
 // After that, only super-admin (or admin:write) can register new users.
+// The first user is always forced to super-admin — the body role is ignored.
 const User = require('./model/User.model');
 const bootstrapOrAuth = async (req, res, next) => {
   const count = await User.countDocuments();
-  if (count === 0) return next();
+  if (count === 0) {
+    req.body.role = 'super-admin';
+    return next();
+  }
   return authenticate(req, res, () => authorize('admin:write')(req, res, next));
 };
 

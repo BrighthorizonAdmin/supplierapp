@@ -1,17 +1,27 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
+// sessionStorage survives page refresh but is cleared when the tab closes.
+// Seeding _authToken from it means the axios interceptor has the token
+// immediately on page load without an extra /me round-trip.
+let _authToken = sessionStorage.getItem('token');
+
+export const setAuthToken = (token) => {
+  _authToken = token;
+  if (token) sessionStorage.setItem('token', token);
+  else sessionStorage.removeItem('token');
+};
+
 const api = axios.create({
   baseURL: 'https://supplier.dealerkart.biz/api',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor: attach JWT
+// Request interceptor: attach JWT from memory (never localStorage)
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    if (_authToken) config.headers.Authorization = `Bearer ${_authToken}`;
     return config;
   },
   (error) => Promise.reject(error)
@@ -32,8 +42,9 @@ api.interceptors.response.use(
     const isLoginRequest = error.config?.url?.includes('/auth/login');
 
     if (status === 401 && !isLoginRequest) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      setAuthToken(null);
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('permissions');
       window.location.href = '/login';
       toast.error('Session expired. Please log in again.');
     } else if (status === 403) {

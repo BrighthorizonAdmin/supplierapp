@@ -1,15 +1,15 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import api from '../../services/api';
+import api, { setAuthToken } from '../../services/api';
 import toast from 'react-hot-toast';
 
-const storedUser = localStorage.getItem('user');
-const storedToken = localStorage.getItem('token');
+const storedToken = sessionStorage.getItem('token');
+const storedUser  = sessionStorage.getItem('user');
 
 export const login = createAsyncThunk('auth/login', async (credentials, { rejectWithValue }) => {
   try {
     const { data } = await api.post('/auth/login', credentials);
-    localStorage.setItem('token', data.data.token);
-    localStorage.setItem('user', JSON.stringify(data.data.user));
+    setAuthToken(data.data.token);
+    sessionStorage.setItem('user', JSON.stringify(data.data.user));
     return data.data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.message || 'Login failed');
@@ -25,7 +25,7 @@ export const getMe = createAsyncThunk('auth/getRoles', async (_, { rejectWithVal
   }
 });
 
-const storedPermissions = localStorage.getItem('permissions');
+const storedPermissions = sessionStorage.getItem('permissions');
 
 const authSlice = createSlice({
   name: 'auth',
@@ -40,12 +40,12 @@ const authSlice = createSlice({
   },
   reducers: {
     logout: (state) => {
+      setAuthToken(null);
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
-      localStorage.removeItem('token');
-  localStorage.removeItem('user');
-  localStorage.removeItem('permissions');
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('permissions');
     },
     clearError: (state) => { state.error = null; },
   },
@@ -62,8 +62,8 @@ const authSlice = createSlice({
   state.isAuthenticated = true;
   state.permissions = permissions;
   state.isFirstLogin = isFirstLogin;
-  localStorage.setItem('user', JSON.stringify(user));
-  localStorage.setItem('permissions', JSON.stringify(permissions));
+  sessionStorage.setItem('user', JSON.stringify(user));
+  sessionStorage.setItem('permissions', JSON.stringify(permissions));
 
   toast.success('Welcome back!');
 
