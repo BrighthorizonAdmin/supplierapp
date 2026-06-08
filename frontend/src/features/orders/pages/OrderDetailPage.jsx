@@ -41,11 +41,11 @@ const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
         <div className="absolute top-5 left-0 h-0.5 bg-green-500 z-0 transition-all duration-500" style={{ width: `${pct}%` }} />
 
         {PROGRESS_STEPS.map((step) => {
-          const stepRank  = STATUS_RANK[step.status];
-          const done      = currentRank >= stepRank;
-          const isNext    = stepRank === currentRank + 1;
-          const blocked   = isNext && serialsBlocking(step);
-          const { Icon }  = step;
+          const stepRank = STATUS_RANK[step.status];
+          const done = currentRank >= stepRank;
+          const isNext = stepRank === currentRank + 1;
+          const blocked = isNext && serialsBlocking(step);
+          const { Icon } = step;
 
           return (
             <div key={step.status} className="flex flex-col items-center z-10 flex-1">
@@ -70,9 +70,8 @@ const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
               >
                 <Icon size={17} strokeWidth={2.2} />
               </button>
-              <span className={`mt-2 text-xs font-medium text-center leading-tight max-w-[72px] ${
-                done ? 'text-green-600' : blocked ? 'text-amber-500' : isNext ? 'text-green-500' : 'text-slate-400'
-              }`}>
+              <span className={`mt-2 text-xs font-medium text-center leading-tight max-w-[72px] ${done ? 'text-green-600' : blocked ? 'text-amber-500' : isNext ? 'text-green-500' : 'text-slate-400'
+                }`}>
                 {step.label}
               </span>
               {blocked && (
@@ -107,7 +106,7 @@ const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
 
 // ── Serial Number Section ─────────────────────────────────────────────────────
 const SerialNumberSection = ({ order, onSerialsComplete }) => {
-  const [selections,    setSelections]    = useState({});  // { idx: ['SN001', 'SN002'] }
+  const [selections, setSelections] = useState({});  // { idx: ['SN001', 'SN002'] }
   const [serialOptions, setSerialOptions] = useState({});  // { productId: ['SN001', ...] }
   const [openDropdown,  setOpenDropdown]  = useState(null);
   const [saving,        setSaving]        = useState(false);
@@ -253,78 +252,140 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
 
       <div className="px-6 py-4 space-y-5">
         {lineItems.map((item, i) => {
-          const selected  = getSerials(i);
-          const qty       = item.quantity;
-          const isOk      = selected.length === qty;
+          const selected = getSerials(i);
+          const qty = item.quantity;
+          const isOk = selected.length === qty;
           const productId = (item.productId?._id || item.productId)?.toString();
-          const options   = serialOptions[productId] || [];
+          const options = serialOptions[productId] || [];
 
           return (
-            <div key={i} className="space-y-1.5">
+            <div
+              key={i}
+              className={`space-y-1.5 relative ${openDropdown === i ? "z-50" : "z-0"
+                }`}
+            >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-800">
-                  {item.productName || item.name || '—'}
-                  <span className="ml-2 text-xs font-normal text-slate-400">× {qty} units</span>
+                  {item.productName || item.name || "—"}
+                  <span className="ml-2 text-xs font-normal text-slate-400">
+                    × {qty} units
+                  </span>
                 </p>
-                <span className={`text-xs font-semibold ${isOk ? 'text-green-600' : 'text-orange-500'}`}>
-                  {selected.length} / {qty} {isOk ? '✓' : 'selected'}
+
+                <span
+                  className={`text-xs font-semibold ${isOk ? "text-green-600" : "text-orange-500"
+                    }`}
+                >
+                  {selected.length} / {qty} {isOk ? "✓" : "selected"}
                 </span>
               </div>
 
-              <div className="relative z-20">
+              <div
+                className={`relative ${openDropdown === i ? "z-[9999]" : "z-10"
+                  }`}
+              >
                 <button
                   type="button"
-                  onClick={() => setOpenDropdown(openDropdown === i ? null : i)}
-                  disabled={order.status === 'delivered'}
-                  className={`w-full text-left text-sm border rounded-lg px-3 py-2 transition-colors flex items-center justify-between ${
-                    errors[i]       ? 'border-red-400 bg-red-50' :
-                    isOk            ? 'border-green-400 bg-green-50' :
-                                      'border-slate-200 bg-white hover:border-blue-400'
-                  }`}
+                  onClick={() =>
+                    setOpenDropdown(openDropdown === i ? null : i)
+                  }
+                  disabled={order.status === "delivered"}
+                  className={`w-full text-left text-sm border rounded-lg px-3 py-2 transition-colors flex items-center justify-between ${errors[i]
+                      ? "border-red-400 bg-red-50"
+                      : isOk
+                        ? "border-green-400 bg-green-50"
+                        : "border-slate-200 bg-white hover:border-blue-400"
+                    }`}
                 >
-                  <span className={selected.length === 0 ? 'text-slate-400' : 'text-slate-700 truncate pr-2'}>
+                  <span
+                    className={
+                      selected.length === 0
+                        ? "text-slate-400"
+                        : "text-slate-700 truncate pr-2"
+                    }
+                  >
                     {selected.length === 0
-                      ? `Select ${qty} serial number${qty > 1 ? 's' : ''}…`
-                      : selected.join(', ')}
+                      ? `Select ${qty} serial number${qty > 1 ? "s" : ""
+                      }…`
+                      : selected.join(", ")}
                   </span>
-                  <ChevronDown size={14} className="text-slate-400 shrink-0" />
+
+                  <ChevronDown
+                    size={14}
+                    className="text-slate-400 shrink-0"
+                  />
                 </button>
 
                 {openDropdown === i && (
-                  <div className="absolute z-30 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                  <div
+                    className="
+              absolute
+              top-full
+              left-0
+              mt-1
+              w-full
+              z-[9999]
+              bg-white
+              border
+              border-slate-200
+              rounded-xl
+              shadow-xl
+              max-h-52
+              overflow-y-auto
+            "
+                  >
                     {loadingOpts ? (
-                      <p className="px-3 py-3 text-sm text-slate-400">Loading serial numbers…</p>
+                      <p className="px-3 py-3 text-sm text-slate-400">
+                        Loading serial numbers…
+                      </p>
                     ) : options.length === 0 ? (
-                      <p className="px-3 py-3 text-sm text-slate-400">No in-stock serial numbers found for this product</p>
-                    ) : options.map((sn) => {
-                      const isSelected = selected.includes(sn);
-                      const isDisabled = !isSelected && selected.length >= qty;
-                      return (
-                        <button
-                          key={sn}
-                          type="button"
-                          onClick={() => toggleSerial(i, sn, qty)}
-                          disabled={isDisabled}
-                          className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2.5 transition-colors border-b border-slate-50 last:border-0 ${
-                            isSelected  ? 'bg-blue-50 text-blue-700' :
-                            isDisabled  ? 'text-slate-300 cursor-not-allowed bg-white' :
-                                          'hover:bg-slate-50 text-slate-700'
-                          }`}
-                        >
-                          <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                            isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'
-                          }`}>
-                            {isSelected && <Check size={10} />}
-                          </span>
-                          {sn}
-                        </button>
-                      );
-                    })}
+                      <p className="px-3 py-3 text-sm text-slate-400">
+                        No in-stock serial numbers found for this product
+                      </p>
+                    ) : (
+                      options.map((sn) => {
+                        const isSelected = selected.includes(sn);
+                        const isDisabled =
+                          !isSelected && selected.length >= qty;
+
+                        return (
+                          <button
+                            key={sn}
+                            type="button"
+                            onClick={() =>
+                              toggleSerial(i, sn, qty)
+                            }
+                            disabled={isDisabled}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2.5 transition-colors border-b border-slate-50 last:border-0 ${isSelected
+                                ? "bg-blue-50 text-blue-700"
+                                : isDisabled
+                                  ? "text-slate-300 cursor-not-allowed bg-white"
+                                  : "hover:bg-slate-50 text-slate-700"
+                              }`}
+                          >
+                            <span
+                              className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isSelected
+                                  ? "bg-blue-600 border-blue-600 text-white"
+                                  : "border-slate-300"
+                                }`}
+                            >
+                              {isSelected && <Check size={10} />}
+                            </span>
+
+                            {sn}
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 )}
               </div>
 
-              {errors[i] && <p className="text-xs text-red-500">{errors[i]}</p>}
+              {errors[i] && (
+                <p className="text-xs text-red-500">
+                  {errors[i]}
+                </p>
+              )}
             </div>
           );
         })}
@@ -355,8 +416,8 @@ const OrderDetailPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { selected: order, loading } = useSelector((s) => s.order);
-  const [attempted,       setAttempted]       = useState(false);
-  const [statusLoading,   setStatusLoading]   = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(false);
   const [serialsComplete, setSerialsComplete] = useState(false);
 
   const handlePrint = () => {
