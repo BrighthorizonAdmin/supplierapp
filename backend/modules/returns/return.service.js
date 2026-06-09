@@ -262,44 +262,48 @@ async function applyRefundSideEffects(ret, refundAmount) {
     }
 
     // ── 6. Update S-BE Sales Invoice lineItems for returned items ───────────
-    try {
-      let sbeOrderId = null;
-      if (!isDbeReturn) {
-        sbeOrderId = ret.orderId;
-      } else {
-        const sbeOrd = await Order.findOne({ dbeOrderId: String(ret.orderId) }).lean();
-        sbeOrderId = sbeOrd?._id || null;
-      }
-      if (sbeOrderId) {
-        const invoice = await Invoice.findOne({ orderId: sbeOrderId }).lean();
-        if (invoice && invoice.lineItems?.length > 0) {
-          let modified = false;
-          const updatedLineItems = invoice.lineItems.map(li => {
-            const pid = li.productId?.toString();
-            const retItem = returnItems.find(r => r.productId?.toString() === pid);
-            if (!retItem) return li;
-            const retQty = Number(retItem.quantity) || 0;
-            const origQty = li.quantity || 0;
-            const newQty = Math.max(0, origQty - retQty);
-            modified = true;
-            if (newQty <= 0) return null;
-            const ratio = newQty / origQty;
-            return { ...li, quantity: newQty, lineTotal: parseFloat(((li.lineTotal || 0) * ratio).toFixed(2)), taxAmount: parseFloat(((li.taxAmount || 0) * ratio).toFixed(2)) };
-          }).filter(Boolean);
-          if (modified) {
-            const newSubtotal = updatedLineItems.reduce((s, li) => s + (li.lineTotal || 0), 0);
-            const newTaxAmt   = updatedLineItems.reduce((s, li) => s + (li.taxAmount || 0), 0);
-            const newTotal    = newSubtotal + newTaxAmt + (invoice.additionalCharges || 0) + (invoice.roundOffAmt || 0);
-            const newBalance  = Math.max(0, newTotal - (invoice.amountPaid || 0));
-            const newStatus   = (updatedLineItems.length === 0 || newTotal <= 0) ? 'cancelled' : invoice.status;
-            await Invoice.findByIdAndUpdate(invoice._id, { $set: { lineItems: updatedLineItems, subtotal: parseFloat(newSubtotal.toFixed(2)), taxAmount: parseFloat(newTaxAmt.toFixed(2)), totalAmount: parseFloat(newTotal.toFixed(2)), balance: parseFloat(newBalance.toFixed(2)), status: newStatus } }, { runValidators: false });
-            console.log(`[applyRefundSideEffects] S-BE Invoice updated for order ${sbeOrderId} ✓`);
-          }
-        }
-      }
-    } catch (invErr) {
-      console.error('[applyRefundSideEffects] Invoice update failed:', invErr.message);
-    }
+    // Commented out: invoice line items are kept at original ordered quantities.
+    // InvoiceDetailPage fetches return records separately and shows a Return Deduction
+    // section, so modifying line items here caused the invoice to show reduced qty
+    // instead of original order details (like the dealer invoice does).
+    // try {
+    //   let sbeOrderId = null;
+    //   if (!isDbeReturn) {
+    //     sbeOrderId = ret.orderId;
+    //   } else {
+    //     const sbeOrd = await Order.findOne({ dbeOrderId: String(ret.orderId) }).lean();
+    //     sbeOrderId = sbeOrd?._id || null;
+    //   }
+    //   if (sbeOrderId) {
+    //     const invoice = await Invoice.findOne({ orderId: sbeOrderId }).lean();
+    //     if (invoice && invoice.lineItems?.length > 0) {
+    //       let modified = false;
+    //       const updatedLineItems = invoice.lineItems.map(li => {
+    //         const pid = li.productId?.toString();
+    //         const retItem = returnItems.find(r => r.productId?.toString() === pid);
+    //         if (!retItem) return li;
+    //         const retQty = Number(retItem.quantity) || 0;
+    //         const origQty = li.quantity || 0;
+    //         const newQty = Math.max(0, origQty - retQty);
+    //         modified = true;
+    //         if (newQty <= 0) return null;
+    //         const ratio = newQty / origQty;
+    //         return { ...li, quantity: newQty, lineTotal: parseFloat(((li.lineTotal || 0) * ratio).toFixed(2)), taxAmount: parseFloat(((li.taxAmount || 0) * ratio).toFixed(2)) };
+    //       }).filter(Boolean);
+    //       if (modified) {
+    //         const newSubtotal = updatedLineItems.reduce((s, li) => s + (li.lineTotal || 0), 0);
+    //         const newTaxAmt   = updatedLineItems.reduce((s, li) => s + (li.taxAmount || 0), 0);
+    //         const newTotal    = newSubtotal + newTaxAmt + (invoice.additionalCharges || 0) + (invoice.roundOffAmt || 0);
+    //         const newBalance  = Math.max(0, newTotal - (invoice.amountPaid || 0));
+    //         const newStatus   = (updatedLineItems.length === 0 || newTotal <= 0) ? 'cancelled' : invoice.status;
+    //         await Invoice.findByIdAndUpdate(invoice._id, { $set: { lineItems: updatedLineItems, subtotal: parseFloat(newSubtotal.toFixed(2)), taxAmount: parseFloat(newTaxAmt.toFixed(2)), totalAmount: parseFloat(newTotal.toFixed(2)), balance: parseFloat(newBalance.toFixed(2)), status: newStatus } }, { runValidators: false });
+    //         console.log(`[applyRefundSideEffects] S-BE Invoice updated for order ${sbeOrderId} ✓`);
+    //       }
+    //     }
+    //   }
+    // } catch (invErr) {
+    //   console.error('[applyRefundSideEffects] Invoice update failed:', invErr.message);
+    // }
 
     // ── 7. Store return info on D-BE order for dealer invoice display ───────
     if (dbeOrderId && returnItems.length > 0) {
