@@ -381,6 +381,24 @@ const InventoryPage = () => {
   const [adjusting, setAdjusting] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [rowSerialState, setRowSerialState] = useState({});
+  const [hoveredSerial, setHoveredSerial] = useState(null);
+
+  const handleSerialHover = async (item) => {
+    const id = item._id;
+    setHoveredSerial(id);
+    const cur = rowSerialState[id];
+    if (cur?.loaded) return;
+    setRowSerialState(prev => ({ ...prev, [id]: { loaded: false, loading: true, serials: [] } }));
+    try {
+      const prodId = item.productId?._id;
+      const { data } = await api.get(`/dispatched-units/in-stock?productId=${prodId}`);
+      const serials = (data.data || []).map(u => u.serialNumber).filter(Boolean);
+      setRowSerialState(prev => ({ ...prev, [id]: { loaded: true, loading: false, serials } }));
+    } catch {
+      setRowSerialState(prev => ({ ...prev, [id]: { loaded: true, loading: false, serials: [] } }));
+    }
+  };
  
   useEffect(() => {
     const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
@@ -735,7 +753,7 @@ const InventoryPage = () => {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  {['PRODUCT / SKU', 'LOCATION', 'AVAILABLE', 'ALLOCATED', 'TOTAL', 'UNIT PRICE', 'STOCK STATUS', 'FORECAST & DEMAND', 'ACTION'].map((h) => (
+                  {['PRODUCT / SKU', 'LOCATION', 'AVAILABLE', 'ALLOCATED', 'TOTAL', 'UNIT PRICE', 'STOCK STATUS', 'ACTION'].map((h) => (
                     <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -745,7 +763,7 @@ const InventoryPage = () => {
               <tbody className="divide-y divide-slate-100">
                 {list.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-14 text-center text-slate-400">
+                    <td colSpan={8} className="px-4 py-14 text-center text-slate-400">
                       No inventory records found
                     </td>
                   </tr>
@@ -753,7 +771,9 @@ const InventoryPage = () => {
                   const prod = item.productId || {};
                   const wh = item.warehouseId || {};
                   const loc = [wh.address?.city, wh.address?.state].filter(Boolean).join(' • ');
- 
+                  const serial = rowSerialState[item._id];
+                  const isHovered = hoveredSerial === item._id;
+
                   return (
                     <tr key={item._id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3.5">
@@ -768,10 +788,37 @@ const InventoryPage = () => {
                         <p className="text-xs text-slate-400 mt-0.5">{loc || wh.code || ''}</p>
                       </td>
                       <td className="px-4 py-3.5">
-                        <p className="font-semibold text-slate-800">
-                          {Math.max(0, item.currentStockQty ?? 0).toLocaleString('en-IN')}
-                        </p>
-                        {prod.unit && <p className="text-xs text-slate-400 mt-0.5">{prod.unit}</p>}
+                        <div
+                          className="relative inline-block"
+                          onMouseEnter={() => handleSerialHover(item)}
+                          onMouseLeave={() => setHoveredSerial(null)}
+                        >
+                          <p className="font-semibold text-slate-800 cursor-default">
+                            {Math.max(0, item.currentStockQty ?? 0).toLocaleString('en-IN')}
+                          </p>
+                          {prod.unit && <p className="text-xs text-slate-400 mt-0.5">{prod.unit}</p>}
+                          {isHovered && (
+                            <div className="absolute left-0 top-8 z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-3 w-72">
+                              <p className="text-xs font-semibold text-slate-600 mb-2">Serial Numbers</p>
+                              {serial?.loading ? (
+                                <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary-600" />
+                                  Loading...
+                                </div>
+                              ) : serial?.serials?.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                                  {serial.serials.map((sn, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs font-mono text-slate-700">
+                                      {sn}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-400 italic py-1">No serials registered</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-slate-800">
@@ -788,9 +835,9 @@ const InventoryPage = () => {
                       <td className="px-4 py-3.5">
                         <StockChip item={item} />
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-500 max-w-[160px] leading-relaxed">
+                      {/* <td className="px-4 py-3.5 text-xs text-slate-500 max-w-[160px] leading-relaxed">
                         {forecastLabel(item)}
-                      </td>
+                      </td> */}
                       <td className="px-4 py-3.5">
                         <button
                           onClick={() => setEditItem(item)}
