@@ -115,6 +115,9 @@ export default function InvoiceDetailPage() {
   const totalRefund = +(returnInfo?.totalRefundAmount || returnInfo?.refundAmount || 0);
   const derivedTaxRate = (inv.subtotal || 0) > 0 ? (inv.taxAmount || 0) / inv.subtotal : 0;
   const netAfterReturn = Math.max(0, (+inv.totalAmount || 0) - totalRefund);
+  // When a return exists, "paid" means amountPaid covers the net amount (after return deduction)
+  const effectiveTotal = totalRefund > 0 ? netAfterReturn : (+inv.totalAmount || 0);
+  const isPaid = (+inv.amountPaid || 0) > 0 && (+inv.amountPaid || 0) >= effectiveTotal;
 
   return (
     <div>
@@ -183,6 +186,11 @@ export default function InvoiceDetailPage() {
           <div style={{ flex: 1, padding: '8px 24px', borderRight: '1px solid #ccc' }}>
             <span style={{ color: '#666', fontSize: '11px' }}>Invoice No.: </span>
             <span style={{ fontWeight: 'bold' }}>{inv.invoiceNumber}</span>
+            {inv.orderId?.orderNumber && (
+              <span style={{ marginLeft: '16px', color: '#666', fontSize: '11px' }}>
+                Order No.: <span style={{ fontWeight: 'bold', color: '#333' }}>{inv.orderId.orderNumber}</span>
+              </span>
+            )}
           </div>
           <div style={{ flex: 1, padding: '8px 24px' }}>
             <span style={{ color: '#666', fontSize: '11px' }}>Invoice Date: </span>
@@ -392,18 +400,23 @@ export default function InvoiceDetailPage() {
                   <td style={{ paddingBottom: '4px', color: '#444' }}>Received Amount</td>
                   <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{(+inv.amountPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}</td>
                 </tr>
-                {inv.amountPaid < inv.totalAmount && (
+                {!isPaid && (+inv.amountPaid || 0) < (+inv.totalAmount || 0) && (
                   <tr style={{ fontWeight: 'bold' }}>
                     <td>Balance</td>
                     <td style={{ textAlign: 'right' }}>₹{(+inv.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}</td>
                   </tr>
                 )}
-                {inv.dueDate && (
+                {isPaid ? (
+                  <tr>
+                    <td style={{ paddingBottom: '4px', color: '#16a34a' }}>Payment Status</td>
+                    <td style={{ paddingBottom: '4px', textAlign: 'right', color: '#16a34a', fontWeight: 'bold' }}>✓ Paid</td>
+                  </tr>
+                ) : inv.dueDate ? (
                   <tr>
                     <td style={{ paddingBottom: '4px', color: '#444' }}>Due Date</td>
                     <td style={{ paddingBottom: '4px', textAlign: 'right' }}>{fmtDt(inv.dueDate)}</td>
                   </tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>

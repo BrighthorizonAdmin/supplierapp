@@ -3,9 +3,9 @@ const router = express.Router();
 const Invoice = require('../payments/model/Invoice.model');
 const Dealer = require('../dealer/model/Dealer.model');
 const notificationService = require('../notifications/notification.service');
-
+ 
 const WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET || '';
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-retail-invoice
 // Called by D-BE whenever a dealer logs a retail sale
@@ -18,7 +18,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       console.warn('[Webhook] Unauthorized attempt from:', req.ip);
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-
+ 
     const {
       dbeInvoiceId,
       invoiceNumber,
@@ -38,7 +38,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       receivedAmount,
       paymentMode,
     } = req.body;
-
+ 
     // 2. Prevent duplicate — idempotent based on dbeInvoiceId OR invoiceNumber
     const existing = await Invoice.findOne({
       $or: [
@@ -50,7 +50,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       console.warn(`[Webhook] Already synced, returning existing: D-${invoiceNumber}`);
       return res.json({ success: true, message: 'Already synced', data: existing });
     }
-
+ 
     // 3. Resolve dealer — email first (unique key), then phone, then businessName
     let dealer = null;
     if (dealerEmail) {
@@ -67,7 +67,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
         businessName: { $regex: `^${escaped}$`, $options: 'i' },
       }).lean();
     }
-
+ 
     // 4. Map items to Sup-BE lineItems schema
     // Use exact same calculation as D-BE: lineTotal = unitPrice * qty + (unitPrice * qty * taxRate/100)
     const lineItems = (items || []).map((item) => {
@@ -93,13 +93,13 @@ router.post('/dealer-retail-invoice', async (req, res) => {
         serialNumbers: (item.serialNumbers || []).map(s => String(s).trim().toUpperCase()).filter(Boolean),
       };
     });
-
+ 
     // 5. Derive correct payment status and balance — same logic as D-BE
     const total    = Number(totalAmount) || 0;
     const received = receivedAmount !== undefined ? Number(receivedAmount) : total;
     const balance  = Math.max(0, +(total - received).toFixed(2));
     const invoiceStatus = received >= total ? 'paid' : (received > 0 ? 'partial' : 'issued');
-
+ 
     // 6. Create invoice — catch E11000 in case of race condition / D-BE retry after timeout
     let invoice;
     try {
@@ -107,7 +107,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       const custAddrStr = customerAddress && typeof customerAddress === 'object'
         ? [customerAddress.street, customerAddress.city, customerAddress.state, customerAddress.pincode].filter(Boolean).join(', ')
         : (typeof customerAddress === 'string' ? customerAddress : '');
-
+ 
       // Build shippingAddress subdocument from shipToAddress if provided
       const shipAddrDoc = shipToAddress && typeof shipToAddress === 'object' && (shipToAddress.street || shipToAddress.city)
         ? {
@@ -118,7 +118,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
             pincode: shipToAddress.pincode || shipToAddress.postalCode || '',
           }
         : undefined;
-
+ 
       invoice = await Invoice.create({
         invoiceType:  'retail',
         dbeInvoiceId,
@@ -155,9 +155,9 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       }
       throw createErr;
     }
-
+ 
     console.log(`[Webhook] Retail invoice synced: ${invoice.invoiceNumber} for dealer: ${dealerName}`);
-
+ 
     // Notify all active supplier admins about the new retail sale invoice
     try {
       const User = require('../auth/model/User.model');
@@ -175,15 +175,15 @@ router.post('/dealer-retail-invoice', async (req, res) => {
     } catch (notifErr) {
       console.error('[Webhook] retail-invoice notification failed:', notifErr.message);
     }
-
+ 
     return res.status(201).json({ success: true, data: invoice });
-
+ 
   } catch (err) {
     console.error('[Webhook] dealer-retail-invoice error:', err.message);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-order
 // Called by D-BE whenever a dealer places a new order.
@@ -198,16 +198,16 @@ router.post('/dealer-order', async (req, res) => {
       console.warn('[Webhook] Unauthorized order webhook attempt from:', req.ip);
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-
+ 
     const {
       dbeOrderId, orderNumber, dealerId: dealerRef,
       dealerEmail, dealerName, dealerPhone,
       items, subtotal, taxAmount, netAmount, paymentMethod, paymentStatus,
     } = req.body;
-
+ 
     const Order = require('../orders/model/Order.model');
     const { generateCode } = require('../../utils/autoCode');
-
+ 
     // ── 1. Resolve the supplier-side Dealer record ──
     // Resolution priority: email (unique shared key) > phone > businessName regex.
     // Email is the reliable link because the supplier approves dealers by email,
@@ -228,7 +228,7 @@ router.post('/dealer-order', async (req, res) => {
         businessName: { $regex: `^${escaped}$`, $options: 'i' },
       }).lean();
     }
-
+ 
     // ── 1b. Skip if dealer could not be resolved ──
     if (!supplierDealer) {
       console.warn(`[Webhook] dealer-order: could not resolve dealer (phone=${dealerPhone}, name=${dealerName}) — order not created in supplier DB`);
@@ -244,7 +244,7 @@ router.post('/dealer-order', async (req, res) => {
         moq: Number(item.moq || 1),
         lineTotal: Number(item.lineTotal || 0),
       }));
-
+ 
       // ── 3. Atomic upsert — findOneAndUpdate with upsert:true on dbeOrderId ──
       // findOneAndUpdate does NOT fire Mongoose pre('save') hooks, so we must
       // generate orderNumber explicitly here rather than relying on the pre-save hook.
@@ -256,7 +256,7 @@ router.post('/dealer-order', async (req, res) => {
       // Instead: use $setOnInsert-only for the upsert, then do a separate $set
       // update if the document already existed (identified by updatedAt > createdAt).
       const supplierOrderNumber = await generateCode(Order, 'ORD', 'orderNumber', 'yyyyMMdd');
-
+ 
       const result = await Order.findOneAndUpdate(
         { dbeOrderId },
         {
@@ -277,10 +277,10 @@ router.post('/dealer-order', async (req, res) => {
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
-
+ 
       const wasInserted = result.createdAt && result.updatedAt &&
         Math.abs(result.createdAt.getTime() - result.updatedAt.getTime()) < 1000;
-
+ 
       if (wasInserted) {
         console.log(`[Webhook] Created supplier order linked to dbeOrderId=${dbeOrderId}`);
       } else {
@@ -299,7 +299,7 @@ router.post('/dealer-order', async (req, res) => {
         console.log(`[Webhook] dealer-order already linked (upsert no-op): dbeOrderId=${dbeOrderId}`);
       }
     }
-
+ 
     // ── 5. Notify all active admins ──
     try {
       const User = require('../auth/model/User.model');
@@ -319,14 +319,14 @@ router.post('/dealer-order', async (req, res) => {
     } catch (notifErr) {
       console.error('[Webhook] dealer-order notification failed:', notifErr.message);
     }
-
+ 
     return res.status(200).json({ success: true, message: 'Order notification processed' });
   } catch (err) {
     console.error('[Webhook] dealer-order error:', err.message);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-return
 // Called by D-BE when a dealer submits a return request.
@@ -339,24 +339,24 @@ router.post('/dealer-return', async (req, res) => {
       console.warn('[Webhook] Unauthorized dealer-return attempt from:', req.ip);
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-
+ 
     const {
       returnId, dbeReturnId, dbeOrderId, dealerOrderNumber,
       dealerName, dealerPhone,
       items, totalRefundAmount, refundMethod, comments, createdAt,
     } = req.body;
-
+ 
     const Return = require('../returns/model/Return.model');
     const Order = require('../orders/model/Order.model');
     const Dealer = require('../dealer/model/Dealer.model');
-
+ 
     // ── Idempotency: skip if already synced ──
     const existing = await Return.findOne({ dbeReturnId });
     if (existing) {
       console.warn(`[Webhook] dealer-return already synced: ${returnId}`);
       return res.json({ success: true, message: 'Already synced', data: existing });
     }
-
+ 
     // ── Resolve supplier-side Order ──
     let supplierOrder = null;
     if (dbeOrderId) {
@@ -365,7 +365,7 @@ router.post('/dealer-return', async (req, res) => {
     if (!supplierOrder && dealerOrderNumber) {
       supplierOrder = await Order.findOne({ dealerOrderNumber });
     }
-
+ 
     // ── Resolve supplier-side Dealer ──
     let supplierDealer = null;
     if (dealerPhone) supplierDealer = await Dealer.findOne({ phone: dealerPhone }).lean();
@@ -374,12 +374,12 @@ router.post('/dealer-return', async (req, res) => {
         businessName: { $regex: dealerName.trim(), $options: 'i' },
       }).lean();
     }
-
+ 
     if (!supplierOrder) {
       console.warn(`[Webhook] dealer-return: could not resolve supplier order (dbeOrderId=${dbeOrderId}) — return skipped`);
       return res.status(200).json({ success: false, message: 'Supplier order not found, return not created' });
     }
-
+ 
     // ── Map D-BE return items → S-BE return items ──
     const returnItems = (items || []).map(i => ({
       productId: i.productId || undefined,
@@ -389,7 +389,7 @@ router.post('/dealer-return', async (req, res) => {
       returnReason: i.reason || '',
       condition: 'sellable', // default; supplier can update when inspected
     }));
-
+ 
     // ── Create Return record in S-BE ──
     const ret = await Return.create({
       dbeReturnId,            // link back to D-BE record
@@ -403,7 +403,7 @@ router.post('/dealer-return', async (req, res) => {
       notes: comments || '',
       status: 'requested',
     });
-
+ 
     // ── Notify all active admins ──
     try {
       const User = require('../auth/model/User.model');
@@ -421,7 +421,7 @@ router.post('/dealer-return', async (req, res) => {
     } catch (notifErr) {
       console.error('[Webhook] dealer-return notification failed:', notifErr.message);
     }
-
+ 
     console.log(`[Webhook] dealer-return synced: ${returnId} → RMA ${ret.rmaNumber}`);
     return res.status(201).json({ success: true, data: ret });
   } catch (err) {
@@ -429,7 +429,7 @@ router.post('/dealer-return', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-exchange
 // Called by D-BE when a dealer submits an exchange request.
@@ -441,9 +441,9 @@ router.post('/dealer-exchange', async (req, res) => {
     if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-
+ 
     const { exchangeId, dealerName, itemCount } = req.body;
-
+ 
     const User = require('../auth/model/User.model');
     const notificationService = require('../notifications/notification.service');
     const admins = await User.find({ isActive: true }).lean();
@@ -455,7 +455,7 @@ router.post('/dealer-exchange', async (req, res) => {
         type: 'return',
       });
     }
-
+ 
     console.log(`[Webhook] dealer-exchange: notified ${admins.length} admin(s) for ${exchangeId}`);
     return res.json({ success: true });
   } catch (err) {
@@ -463,7 +463,7 @@ router.post('/dealer-exchange', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-return-cancel
 // Called by D-BE when a dealer cancels their own return request.
@@ -475,12 +475,12 @@ router.post('/dealer-return-cancel', async (req, res) => {
     if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-
+ 
     const { returnId } = req.body; // D-BE returnId string, e.g. "RET-..."
     if (!returnId) {
       return res.status(400).json({ success: false, message: 'returnId required' });
     }
-
+ 
     const Return = require('../returns/model/Return.model');
     const Order  = require('../orders/model/Order.model');
     const updated = await Return.findOneAndUpdate(
@@ -497,17 +497,17 @@ router.post('/dealer-return-cancel', async (req, res) => {
       },
       { runValidators: false, new: true }
     );
-
+ 
     if (!updated) {
       console.warn(`[Webhook] dealer-return-cancel: no S-BE return found for dbeReturnId=${returnId}`);
       return res.json({ success: false, message: 'Matching return not found on supplier side' });
     }
-
+ 
     // Revert the S-BE order status back to 'delivered'
     if (updated.orderId) {
       await Order.findByIdAndUpdate(updated.orderId, { status: 'delivered' });
     }
-
+ 
     console.log(`[Webhook] dealer-return-cancel: cancelled S-BE return ${updated.rmaNumber} for D-BE return ${returnId}`);
     return res.json({ success: true, data: updated });
   } catch (err) {
@@ -515,7 +515,7 @@ router.post('/dealer-return-cancel', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
-
+ 
 // POST /api/webhooks/low-stock-after-order
 // Called by D-BE after an order is confirmed and some ordered products are
 // found to be low-stock or out-of-stock. Notifies all supplier admins.
@@ -526,12 +526,12 @@ router.post('/low-stock-after-order', async (req, res) => {
     if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-
+ 
     const { orderNumber, lowStockItems } = req.body;
     if (!Array.isArray(lowStockItems) || lowStockItems.length === 0) {
       return res.json({ success: true, message: 'No low-stock items' });
     }
-
+ 
     try {
       const User = require('../auth/model/User.model');
       const admins = await User.find({ isActive: true }).lean();
@@ -541,7 +541,7 @@ router.post('/low-stock-after-order', async (req, res) => {
       const parts = [];
       if (outCount) parts.push(`${outCount} out-of-stock`);
       if (lowCount) parts.push(`${lowCount} low-stock`);
-
+ 
       for (const admin of admins) {
         await notificationService.create({
           recipientId: admin._id,
@@ -555,14 +555,14 @@ router.post('/low-stock-after-order', async (req, res) => {
     } catch (notifErr) {
       console.error('[Webhook] low-stock-after-order notification failed:', notifErr.message);
     }
-
+ 
     return res.json({ success: true });
   } catch (err) {
     console.error('[Webhook] low-stock-after-order error:', err.message);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-order-cancel
 // Called by D-BE when a dealer cancels their own pending order.
@@ -575,47 +575,34 @@ router.post('/dealer-order-cancel', async (req, res) => {
     if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-
+ 
     const { dbeOrderId, orderNumber, reason } = req.body;
     if (!dbeOrderId && !orderNumber) {
       return res.status(400).json({ success: false, message: 'dbeOrderId or orderNumber required' });
     }
-
+ 
     const Order = require('../orders/model/Order.model');
     const query = dbeOrderId ? { dbeOrderId } : { dealerOrderNumber: orderNumber };
     const order = await Order.findOne(query);
-
+ 
     if (!order) {
       console.warn(`[Webhook] dealer-order-cancel: no S-BE order found for dbeOrderId=${dbeOrderId}`);
       return res.json({ success: true, message: 'No matching supplier order found, skipping' });
     }
-
+ 
     // Only cancel if the order hasn't shipped yet — can't cancel a shipped/delivered order
     if (!['pending', 'confirmed'].includes(order.status)) {
       console.warn(`[Webhook] dealer-order-cancel: order ${order.orderNumber} is already ${order.status}, skipping`);
       return res.json({ success: true, message: `Order already ${order.status}, not overridden` });
     }
-
-    // If order was confirmed, restore supplier stock
-    if (order.status === 'confirmed') {
-      const OrderItem = require('../orders/model/OrderItem.model');
-      const Product = require('../products/model/Product.model');
+ 
+    // If order was confirmed, cancel the invoice.
+    // Stock is already restored by the dealer BE cancel route (both share the same DB).
+    if (order.status === 'confirmed' && order.invoiceId) {
       const Invoice = require('../payments/model/Invoice.model');
-      const items = order.items?.length
-        ? order.items
-        : await OrderItem.find({ orderId: order._id }).lean();
-      for (const item of items) {
-        const qty = Number(item.quantity) || 0;
-        const pid = item.productId;
-        if (pid && qty > 0) {
-          await Product.findByIdAndUpdate(pid, { $inc: { currentStockQty: qty } });
-        }
-      }
-      if (order.invoiceId) {
-        await Invoice.findByIdAndUpdate(order.invoiceId, { status: 'cancelled' });
-      }
+      await Invoice.findByIdAndUpdate(order.invoiceId, { status: 'cancelled' });
     }
-
+ 
     order.status            = 'cancelled';
     order.cancellationReason = reason || 'Cancelled by dealer';
     order.cancelledAt       = new Date();
@@ -637,7 +624,7 @@ router.post('/dealer-order-cancel', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-warranty-claim
 // Called by D-BE when a dealer submits a warranty claim for a retail invoice.
@@ -649,27 +636,27 @@ router.post('/dealer-warranty-claim', async (req, res) => {
       console.warn('[Webhook] Unauthorized dealer-warranty-claim attempt from:', req.ip);
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-
+ 
     const {
       dbeClaimId, invoiceNumber, dbeInvoiceId, invoiceDate, warrantyPeriod,
       dealerName, dealerPhone, dealerEmail,
       customerName, customerPhone,
       items, issueDescription,
     } = req.body;
-
+ 
     if (!dbeClaimId) {
       return res.status(400).json({ success: false, message: 'dbeClaimId required' });
     }
-
+ 
     const WarrantyRequest = require('../warranty/model/WarrantyRequest.model');
-
+ 
     // Idempotency — skip if already synced
     const existing = await WarrantyRequest.findOne({ dbeClaimId });
     if (existing) {
       console.warn(`[Webhook] dealer-warranty-claim already synced: ${dbeClaimId}`);
       return res.json({ success: true, message: 'Already synced', data: existing });
     }
-
+ 
     // Resolve dealer
     let dealer = null;
     if (dealerEmail) {
@@ -686,7 +673,7 @@ router.post('/dealer-warranty-claim', async (req, res) => {
         businessName: { $regex: `^${escaped}$`, $options: 'i' },
       }).lean();
     }
-
+ 
     // If warrantyPeriod not provided by D-BE, look it up from S-BE product by SKU
     let resolvedWarrantyPeriod = warrantyPeriod || '';
     if (!resolvedWarrantyPeriod && Array.isArray(items) && items.length > 0) {
@@ -701,7 +688,7 @@ router.post('/dealer-warranty-claim', async (req, res) => {
       }
       resolvedWarrantyPeriod = product?.warrantyPeriod || '';
     }
-
+ 
     const warrantyReq = await WarrantyRequest.create({
       dbeClaimId,
       dealerId:       dealer?._id || undefined,
@@ -721,9 +708,9 @@ router.post('/dealer-warranty-claim', async (req, res) => {
       })),
       issueDescription: issueDescription || '',
     });
-
+ 
     console.log(`[Webhook] Warranty claim synced: ${warrantyReq.claimNumber} for dealer: ${dealerName}`);
-
+ 
     // Notify all active supplier admins in real-time
     try {
       const User = require('../auth/model/User.model');
@@ -750,12 +737,12 @@ router.post('/dealer-warranty-claim', async (req, res) => {
     } catch (notifyErr) {
       console.error('[Webhook] warranty claim notification failed:', notifyErr.message);
     }
-
+ 
     return res.status(201).json({ success: true, data: warrantyReq });
   } catch (err) {
     console.error('[Webhook] dealer-warranty-claim error:', err.message);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
-
+ 
 module.exports = router;
