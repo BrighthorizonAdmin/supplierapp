@@ -519,7 +519,8 @@ const ProductFormPage = () => {
           <div className="flex flex-col gap-4">
             <F label="SKU Code" name="sku" />
             <F label="MOQ"      name="moq" type="number" />
-            <div>
+            {/* Opening Stock fields hidden — openingStockQty defaults to 0 on creation */}
+            {/* <div>
               <label className="label">
                 Opening Stock
                 {isEdit && <span className="ml-2 text-xs text-gray-400">(read-only)</span>}
@@ -528,7 +529,7 @@ const ProductFormPage = () => {
                 <input type="date" className="input" {...register('stockDate')} />
                 <input type="number" placeholder="Quantity" className="input" {...register('stockQty', { valueAsNumber: true })} />
               </div>
-            </div>
+            </div> */}
 
             {isEdit && (() => {
               const cur  = selected?.currentStockQty  ?? 0;

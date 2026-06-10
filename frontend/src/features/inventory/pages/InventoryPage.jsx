@@ -1,9 +1,9 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Search, Filter, Download, AlertTriangle,
-  TrendingUp, TrendingDown, Package, BarChart2, ChevronDown, Plus, X,
+  TrendingUp, TrendingDown, Package, BarChart2, ChevronDown, Plus, X, Tag,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchInventory, fetchInventoryStats, fetchWarehouses, adjustStock, editStockWithSerials, updateOpeningStock } from '../inventorySlice';
@@ -11,7 +11,7 @@ import { fetchProducts } from '../../products/productSlice';
 import Pagination from '../../../components/ui/Pagination';
 import { format } from 'date-fns';
 import api from '../../../services/api';
-
+ 
 const fmtNum = (n) => {
   if (!n && n !== 0) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -19,9 +19,9 @@ const fmtNum = (n) => {
   return n.toLocaleString('en-IN');
 };
 const fmtCurrency = (n) => (n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—');
-
+ 
 const DONUT_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
-
+ 
 const stockStatus = (item) => {
   const cur = item.currentStockQty ?? 0;
   const open = item.openingStockQty ?? 0;
@@ -29,28 +29,28 @@ const stockStatus = (item) => {
   if (open > 0 && cur < open * 0.2) return 'low stock';
   return 'in stock';
 };
-
+ 
 const StockChip = ({ item }) => {
   const s = stockStatus(item);
   if (s === 'out-of-stock') return <span className="badge-red">Out of Stock</span>;
   if (s === 'low stock') return <span className="badge-yellow">Low Stock</span>;
   return <span className="badge-green">In-Stock</span>;
 };
-
+ 
 const forecastLabel = (item) => {
   const s = stockStatus(item);
   if (s === 'out of stock') return 'Replenishment Required';
   if (s === 'low stock') return 'Projected to Spike – order soon';
   return 'Stable Demand – next 30 days';
 };
-
+ 
 const STOCK_TABS = [
   { id: '', label: 'All Items' },
   { id: 'low-stock', label: 'Low Stock' },
   { id: 'high-stock', label: 'High Stock' },
   { id: 'out-of-stock', label: 'Out of Stock' },
 ];
-
+ 
 const StatCard = ({ label, value, sub, subIcon: SubIcon, icon: Icon, iconBg, badge, badgeCls }) => (
   <div className="card p-4 flex items-start justify-between gap-3">
     <div className="flex-1 min-w-0">
@@ -70,7 +70,7 @@ const StatCard = ({ label, value, sub, subIcon: SubIcon, icon: Icon, iconBg, bad
     </div>
   </div>
 );
-
+ 
 const DonutTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -80,26 +80,26 @@ const DonutTooltip = ({ active, payload }) => {
     </div>
   );
 };
-
+ 
 const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
   const { list: products } = useSelector((s) => s.product);
   const [productSearch, setProductSearch] = useState('');
   const [form, setForm] = useState({ productId: '', warehouseId: '', quantity: '', type: 'add' });
   const [touched, setTouched] = useState(false);
-
+ 
   const filtered = products.filter((p) =>
     !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.sku || '').toLowerCase().includes(productSearch.toLowerCase())
   );
-
+ 
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
+ 
   const handleSubmit = (e) => {
     e.preventDefault();
     setTouched(true);
     if (!form.productId || !form.warehouseId || !form.quantity) return;
     onSubmit(form);
   };
-
+ 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -169,17 +169,90 @@ const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
     </div>
   );
 };
-
+ 
+const TagInput = ({ tags, onChange }) => {
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef(null);
+ 
+  const addTag = (raw) => {
+    const v = raw.trim().toUpperCase();
+    if (!v) return;
+    if (tags.includes(v)) { toast.error(`"${v}" already added`); return; }
+    onChange([...tags, v]);
+    setInputValue('');
+  };
+ 
+  const removeTag = (i) => onChange(tags.filter((_, idx) => idx !== i));
+ 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(inputValue); }
+    else if (e.key === 'Backspace' && !inputValue && tags.length > 0) removeTag(tags.length - 1);
+  };
+ 
+  const handleChange = (e) => {
+    const v = e.target.value;
+    if (v.endsWith(',')) addTag(v.slice(0, -1));
+    else setInputValue(v);
+  };
+ 
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const parts = e.clipboardData.getData('text').split(/[,\n\r\t]+/).map((s) => s.trim()).filter(Boolean);
+    const next = [...tags];
+    parts.forEach((p) => { const u = p.toUpperCase(); if (u && !next.includes(u)) next.push(u); });
+    onChange(next);
+    setInputValue('');
+  };
+ 
+  return (
+    <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100" onClick={() => inputRef.current?.focus()}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          placeholder="Press enter or add a comma after each serial"
+          className="flex-1 text-sm text-slate-700 placeholder-slate-400 outline-none bg-transparent"
+        />
+        <Tag size={15} className="text-slate-400 flex-shrink-0" />
+      </div>
+ 
+      {tags.length > 0 && (
+        <div className="p-3 flex flex-wrap gap-2 max-h-36 overflow-y-auto">
+          {tags.map((tag, i) => (
+            <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 border border-slate-300 rounded-lg text-xs text-slate-700 bg-white">
+              {tag}
+              <button type="button" onClick={() => removeTag(i)} className="text-slate-400 hover:text-red-500 leading-none ml-0.5">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+ 
+      <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100 bg-slate-50">
+        <span className="text-xs text-slate-500">{tags.length} serial{tags.length !== 1 ? 's' : ''} added</span>
+        {tags.length > 0 && (
+          <button type="button" onClick={() => onChange([])}
+            className="text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-lg">
+            clear all
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+ 
 const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
   const prod           = item.productId || {};
   const origOpeningQty = item.openingStockQty ?? 0;
-
-  const [openingInput,  setOpeningInput] = useState(String(origOpeningQty));
-  const [serialInput,   setSerialInput]  = useState('');
-  const [touched,       setTouched]      = useState(false);
+  const origCurrentQty = item.currentStockQty  ?? 0;
+ 
+  const [tags,         setTags]        = useState([]);
+  const [loadingExist, setLoadingExist] = useState(true);
   const [existingCount, setExistingCount] = useState(0);
-  const [loadingExist,  setLoadingExist]  = useState(true);
-
+ 
   useEffect(() => {
     if (!prod._id) { setLoadingExist(false); return; }
     api.get(`/dispatched-units/in-stock?productId=${prod._id}`)
@@ -187,38 +260,25 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
       .catch(() => setExistingCount(0))
       .finally(() => setLoadingExist(false));
   }, [prod._id]);
-
-  const parsedOpening  = parseInt(openingInput, 10);
-  const validOpening   = !isNaN(parsedOpening) && parsedOpening >= 0;
-  const newOpeningQty  = validOpening ? parsedOpening : origOpeningQty;
-  const openingChanged = validOpening && newOpeningQty !== origOpeningQty;
-
-  // Serials needed = units at new opening level that don't yet have a serial
-  const serialTarget  = Math.max(0, newOpeningQty - existingCount);
-  const nothingToDo   = serialTarget === 0 && !openingChanged;
-
-  const parsed        = serialInput.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
-  const duplicates    = parsed.filter((s, i) => parsed.indexOf(s) !== i);
-  const enteredCount  = parsed.length;
-  const isMatch       = serialTarget === 0 || enteredCount === serialTarget;
-  const hasDuplicates = duplicates.length > 0;
-
+ 
+  // total serials after save = existing already in DB + new ones entered now
+  const newOpeningQty = existingCount + tags.length;
+  const delta         = newOpeningQty - origOpeningQty;
+  const newCurrentQty = Math.max(0, origCurrentQty + delta);
+ 
   const handleSubmit = (e) => {
     e.preventDefault();
-    setTouched(true);
-    if (!validOpening) return;
-    if (nothingToDo) { onClose(); return; }
-    if (serialTarget > 0 && (!isMatch || hasDuplicates)) return;
+    if (tags.length === 0) { onClose(); return; }
     onSubmit({
       productId:           prod._id,
       warehouseId:         item.warehouseId?._id || null,
       openingStockQty:     newOpeningQty,
-      openingStockChanged: openingChanged,
-      serialNumbers:       parsed,
+      openingStockChanged: newOpeningQty !== origOpeningQty,
+      serialNumbers:       tags,
       productName:         prod.name,
     });
   };
-
+ 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -227,85 +287,74 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-
-          {/* Product name */}
+ 
+          {/* Product */}
           <div>
             <label className="label">Product</label>
             <p className="text-sm font-semibold text-slate-800 bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-200">
               {prod.name || '—'}
             </p>
           </div>
-
-          {/* Opening stock — editable */}
-          <div>
-            <label className="label">Stock Quantity</label>
-            <input
-              type="number" min="0" className="input"
-              value={openingInput}
-              onChange={(e) => { setOpeningInput(e.target.value); setSerialInput(''); }}
-              disabled={loadingExist}
-              placeholder="Enter stock quantity"
-            />
-            {!loadingExist && (
-              <p className="text-xs text-slate-400 mt-1">
-                {existingCount > 0
-                  ? `${existingCount} serial${existingCount > 1 ? 's' : ''} already registered`
-                  : 'No serials registered yet'}
-                {openingChanged && (
-                  <span className={`ml-2 font-semibold ${newOpeningQty > origOpeningQty ? 'text-green-600' : 'text-red-500'}`}>
-                    · was {origOpeningQty}, now {newOpeningQty}
-                  </span>
-                )}
-              </p>
-            )}
-            {touched && !validOpening && (
-              <p className="text-red-500 text-xs mt-1">Enter a valid quantity (0 or more)</p>
-            )}
+ 
+          {/* Stock quantity preview */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'Opening Stock', orig: origOpeningQty, next: newOpeningQty },
+              { label: 'Current Stock', orig: origCurrentQty, next: newCurrentQty },
+            ].map(({ label, orig, next }) => {
+              const changed = tags.length > 0 && next !== orig;
+              const up = next > orig;
+              return (
+                <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-lg font-bold text-slate-800">{orig}</span>
+                    {changed && (
+                      <span className={`text-sm font-semibold ${up ? 'text-green-600' : 'text-red-500'}`}>
+                        → {next}
+                      </span>
+                    )}
+                    {tags.length > 0 && next === orig && (
+                      <span className="text-xs text-slate-400">no change</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-          {/* Serial Numbers */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="label mb-0">Serial Numbers</label>
-              {serialTarget > 0 && (
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isMatch ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                  {enteredCount} / {serialTarget} entered
+          {!loadingExist && (
+            <p className="text-xs text-slate-400 -mt-2">
+              {existingCount > 0
+                ? `${existingCount} serial${existingCount !== 1 ? 's' : ''} already registered`
+                : 'No serials registered yet'}
+              {tags.length > 0 && delta !== 0 && (
+                <span className={`ml-2 font-semibold ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  · {delta > 0 ? `+${delta}` : delta} from current
                 </span>
               )}
-            </div>
-
-            {serialTarget === 0 ? (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-700">
-                All {newOpeningQty} serial numbers are already registered.
+            </p>
+          )}
+ 
+          {/* Serial Numbers */}
+          <div>
+            <label className="label mb-1">Serial Numbers</label>
+            {loadingExist ? (
+              <div className="h-24 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600" />
               </div>
             ) : (
-              <>
-                <textarea
-                  rows={3}
-                  className="input resize-none"
-                  placeholder="e.g. SN001, SN002, SN003"
-                  value={serialInput}
-                  onChange={(e) => setSerialInput(e.target.value)}
-                  disabled={loadingExist}
-                />
-                <p className="text-xs text-slate-400 mt-1">
-                  Enter {serialTarget} serial number{serialTarget > 1 ? 's' : ''} separated by commas.
-                  {existingCount > 0 && ` (${existingCount} already registered)`}
-                </p>
-                {hasDuplicates && (
-                  <p className="text-red-500 text-xs mt-1">Duplicate serial numbers: {[...new Set(duplicates)].join(', ')}</p>
-                )}
-                {touched && !isMatch && !hasDuplicates && serialTarget > 0 && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {enteredCount < serialTarget
-                      ? `Add ${serialTarget - enteredCount} more serial number${serialTarget - enteredCount > 1 ? 's' : ''}`
-                      : `Remove ${enteredCount - serialTarget} serial number${enteredCount - serialTarget > 1 ? 's' : ''}`}
-                  </p>
-                )}
-              </>
+              <TagInput tags={tags} onChange={setTags} />
+            )}
+            {tags.length > 0 && (
+              <p className={`text-xs mt-1 font-medium ${delta === 0 ? 'text-slate-500' : delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {tags.length} serial{tags.length !== 1 ? 's' : ''} entered
+                {delta !== 0
+                  ? ` · qty ${delta > 0 ? `+${delta}` : delta} (opening ${origOpeningQty} → ${newOpeningQty}, current ${origCurrentQty} → ${newCurrentQty})`
+                  : ' · qty unchanged (serials match current stock)'}
+              </p>
             )}
           </div>
-
+ 
           <div className="flex gap-3 justify-end pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
             <button type="submit" disabled={saving || loadingExist} className="btn-primary disabled:opacity-40">
@@ -317,7 +366,7 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
     </div>
   );
 };
-
+ 
 const InventoryPage = () => {
   const dispatch = useDispatch();
   const { list, warehouses, stats, pagination, loading } = useSelector((s) => s.inventory);
@@ -332,18 +381,36 @@ const InventoryPage = () => {
   const [adjusting, setAdjusting] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [rowSerialState, setRowSerialState] = useState({});
+  const [hoveredSerial, setHoveredSerial] = useState(null);
 
+  const handleSerialHover = async (item) => {
+    const id = item._id;
+    setHoveredSerial(id);
+    const cur = rowSerialState[id];
+    if (cur?.loaded) return;
+    setRowSerialState(prev => ({ ...prev, [id]: { loaded: false, loading: true, serials: [] } }));
+    try {
+      const prodId = item.productId?._id;
+      const { data } = await api.get(`/dispatched-units/in-stock?productId=${prodId}`);
+      const serials = (data.data || []).map(u => u.serialNumber).filter(Boolean);
+      setRowSerialState(prev => ({ ...prev, [id]: { loaded: true, loading: false, serials } }));
+    } catch {
+      setRowSerialState(prev => ({ ...prev, [id]: { loaded: true, loading: false, serials: [] } }));
+    }
+  };
+ 
   useEffect(() => {
     const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
     return () => clearTimeout(id);
   }, [searchInput]);
-
+ 
   useEffect(() => {
     dispatch(fetchInventoryStats());
     dispatch(fetchWarehouses());
     dispatch(fetchProducts({ limit: 200 }));
   }, [dispatch]);
-
+ 
   useEffect(() => {
     const params = { page, limit: 20 };
     if (stockTab) params.status = stockTab;
@@ -352,12 +419,12 @@ const InventoryPage = () => {
     if (category) params.category = category;
     dispatch(fetchInventory(params));
   }, [dispatch, page, stockTab, warehouseId, search, category]);
-
+ 
   const categories = useMemo(
     () => [...new Set(products?.map((p) => p?.category)?.filter(Boolean))]?.sort(),
     [products]
   );
-
+ 
   const donutData = stats ? [
     { name: 'In Stock', value: stats.distribution?.inStock || 0 },
     { name: 'Low Stock', value: stats.distribution?.lowStock || 0 },
@@ -367,9 +434,9 @@ const InventoryPage = () => {
   const forecastPct = stats?.totalSKUs
     ? Math.round((stats.fastMovingCount / stats.totalSKUs) * 100)
     : 0;
-
+ 
   const switchTab = (id) => { setStockTab(id); setPage(1); };
-
+ 
   const handleAdjustStock = async (form) => {
     setAdjusting(true);
     const res = await dispatch(adjustStock({ productId: form.productId, warehouseId: form.warehouseId, quantity: Number(form.quantity), type: form.type }));
@@ -379,10 +446,10 @@ const InventoryPage = () => {
       dispatch(fetchInventoryStats());
     }
   };
-
+ 
   const handleEditStock = async (form) => {
     setEditSaving(true);
-
+ 
     // Step 1 — update opening stock if changed
     if (form.openingStockChanged) {
       const res = await dispatch(updateOpeningStock({
@@ -396,7 +463,7 @@ const InventoryPage = () => {
         return;
       }
     }
-
+ 
     // Step 2 — register serial numbers if any
     if (form.serialNumbers.length > 0) {
       const res = await dispatch(editStockWithSerials({
@@ -416,7 +483,7 @@ const InventoryPage = () => {
         return;
       }
     }
-
+ 
     setEditSaving(false);
     setEditItem(null);
     const params = { page, limit: 20 };
@@ -427,7 +494,7 @@ const InventoryPage = () => {
     dispatch(fetchInventory(params));
     dispatch(fetchInventoryStats());
   };
-
+ 
   const handleExport = () => {
     if (!list.length) return;
     const headers = ['Product', 'SKU', 'Category', 'Warehouse', 'Available', 'Allocated', 'Total', 'Unit Price', 'Status'];
@@ -453,7 +520,7 @@ const InventoryPage = () => {
     a.click();
     URL.revokeObjectURL(url);
   };
-
+ 
   return (
     <div className="space-y-5">
       {showModal && (
@@ -472,7 +539,7 @@ const InventoryPage = () => {
           saving={editSaving}
         />
       )}
-
+ 
       {/* Header */}
       {/* <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
@@ -483,17 +550,17 @@ const InventoryPage = () => {
           <Plus size={14} /> Add Stock
         </button>
       </div> */}
-
+ 
       {/* ── Top section: donut + stat cards, equal height ── */}
       {/* FIX 1: items-stretch so the donut card grows to match the stat-cards grid height */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-stretch">
-
+ 
         {/* Donut chart card — h-full makes it fill the row height */}
         <div className="card p-5 lg:col-span-2 flex flex-col items-center h-full">
           <p className="text-xs font-bold text-slate-600 tracking-widest uppercase mb-3">
             Inventory Distribution
           </p>
-
+ 
           {totalItems === 0 ? (
             <div className="flex items-center justify-center flex-1 text-slate-400 text-sm">No data</div>
           ) : (
@@ -516,7 +583,7 @@ const InventoryPage = () => {
               </ResponsiveContainer>
             </div>
           )}
-
+ 
           {/* Legend pushed to bottom */}
           <div className="flex items-center gap-5 mt-auto pt-3">
             {[
@@ -531,7 +598,7 @@ const InventoryPage = () => {
             ))}
           </div>
         </div>
-
+ 
         {/* 6 stat cards */}
         <div className="lg:col-span-3 grid grid-cols-2 gap-3 content-start">
           <StatCard
@@ -586,12 +653,12 @@ const InventoryPage = () => {
           />
         </div>
       </div>
-
+ 
       {/* ── Table card ── */}
       <div className="card overflow-hidden">
-
+ 
         <div className="flex items-center px-4 py-3 gap-4 w-full border-b border-slate-100">
-
+ 
           {/* Search */}
           <div className="relative flex-shrink-0">
             <Search
@@ -606,7 +673,7 @@ const InventoryPage = () => {
               className="input pl-8 py-2 text-sm w-64"
             />
           </div>
-
+ 
           {/* Tabs */}
           <div className="flex items-center border-b border-slate-100 overflow-x-auto">
             {STOCK_TABS.map((tab) => (
@@ -622,10 +689,10 @@ const InventoryPage = () => {
               </button>
             ))}
           </div>
-
+ 
           {/* Push right side */}
           <div className="ml-auto flex items-center gap-3">
-
+ 
             {/* Category */}
             <div className="relative">
               <select
@@ -637,18 +704,18 @@ const InventoryPage = () => {
                 <option value="" disabled hidden>
                   Select Category
                 </option>
-
+ 
                 {categories.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
-
+ 
               {/* Dropdown icon */}
               <ChevronDown
                 size={12}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
               />
-
+ 
               {/* Clear icon */}
               {category && (
                 <button
@@ -659,7 +726,7 @@ const InventoryPage = () => {
                 </button>
               )}
             </div>
-
+ 
             {/* Export */}
             <button
               onClick={handleExport}
@@ -667,15 +734,15 @@ const InventoryPage = () => {
             >
               <Download size={13} /> Export
             </button>
-
+ 
           </div>
         </div>
-
+ 
         {/* Table header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
           <p className="text-sm font-semibold text-slate-800">Stock Details</p>
         </div>
-
+ 
         {/* Table */}
         {loading ? (
           <div className="flex items-center justify-center h-48">
@@ -686,7 +753,7 @@ const InventoryPage = () => {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  {['PRODUCT / SKU', 'LOCATION', 'AVAILABLE', 'ALLOCATED', 'TOTAL', 'UNIT PRICE', 'STOCK STATUS', 'FORECAST & DEMAND', 'ACTION'].map((h) => (
+                  {['PRODUCT / SKU', 'LOCATION', 'AVAILABLE', 'ALLOCATED', 'TOTAL', 'UNIT PRICE', 'STOCK STATUS', 'ACTION'].map((h) => (
                     <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -696,7 +763,7 @@ const InventoryPage = () => {
               <tbody className="divide-y divide-slate-100">
                 {list.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-14 text-center text-slate-400">
+                    <td colSpan={8} className="px-4 py-14 text-center text-slate-400">
                       No inventory records found
                     </td>
                   </tr>
@@ -704,6 +771,8 @@ const InventoryPage = () => {
                   const prod = item.productId || {};
                   const wh = item.warehouseId || {};
                   const loc = [wh.address?.city, wh.address?.state].filter(Boolean).join(' • ');
+                  const serial = rowSerialState[item._id];
+                  const isHovered = hoveredSerial === item._id;
 
                   return (
                     <tr key={item._id} className="hover:bg-slate-50 transition-colors">
@@ -719,10 +788,37 @@ const InventoryPage = () => {
                         <p className="text-xs text-slate-400 mt-0.5">{loc || wh.code || ''}</p>
                       </td>
                       <td className="px-4 py-3.5">
-                        <p className="font-semibold text-slate-800">
-                          {Math.max(0, item.currentStockQty ?? 0).toLocaleString('en-IN')}
-                        </p>
-                        {prod.unit && <p className="text-xs text-slate-400 mt-0.5">{prod.unit}</p>}
+                        <div
+                          className="relative inline-block"
+                          onMouseEnter={() => handleSerialHover(item)}
+                          onMouseLeave={() => setHoveredSerial(null)}
+                        >
+                          <p className="font-semibold text-slate-800 cursor-default">
+                            {Math.max(0, item.currentStockQty ?? 0).toLocaleString('en-IN')}
+                          </p>
+                          {prod.unit && <p className="text-xs text-slate-400 mt-0.5">{prod.unit}</p>}
+                          {isHovered && (
+                            <div className="absolute left-0 top-8 z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-3 w-72">
+                              <p className="text-xs font-semibold text-slate-600 mb-2">Serial Numbers</p>
+                              {serial?.loading ? (
+                                <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary-600" />
+                                  Loading...
+                                </div>
+                              ) : serial?.serials?.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                                  {serial.serials.map((sn, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs font-mono text-slate-700">
+                                      {sn}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-400 italic py-1">No serials registered</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-slate-800">
@@ -739,9 +835,9 @@ const InventoryPage = () => {
                       <td className="px-4 py-3.5">
                         <StockChip item={item} />
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-500 max-w-[160px] leading-relaxed">
+                      {/* <td className="px-4 py-3.5 text-xs text-slate-500 max-w-[160px] leading-relaxed">
                         {forecastLabel(item)}
-                      </td>
+                      </td> */}
                       <td className="px-4 py-3.5">
                         <button
                           onClick={() => setEditItem(item)}
@@ -757,11 +853,11 @@ const InventoryPage = () => {
             </table>
           </div>
         )}
-
+ 
         <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
     </div>
   );
 };
-
+ 
 export default InventoryPage;
