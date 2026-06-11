@@ -25,7 +25,7 @@ const DONUT_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
 const stockStatus = (item) => {
   const cur = item.currentStockQty ?? 0;
   const open = item.openingStockQty ?? 0;
-  if (cur <= 0) return 'out-of-stock';
+  if (cur === 0) return 'out-of-stock';
   if (open > 0 && cur <= open * 0.25) return 'low stock';
   return 'in stock';
 };
@@ -186,7 +186,6 @@ const TagInput = ({ tags, onChange }) => {
  
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(inputValue); }
-    else if (e.key === 'Backspace' && !inputValue && tags.length > 0) removeTag(tags.length - 1);
   };
  
   const handleChange = (e) => {

@@ -98,7 +98,7 @@ const ImageCarousel = ({ srcs, name }) => {
 //   Low Stock → > 0 but ≤ 25% of openingStockQty (or ≤ 10 when no opening qty set)
 //   In Stock  → everything else
 const getStockStatus = (cur = 0, open = 0) => {
-  if (cur <= 0) return 'no-stock';
+  if (cur === 0) return 'no-stock';
   if (open > 0 && cur <= open * 0.25) return 'low-stock';
   if (open === 0 && cur <= 10) return 'low-stock';
   return 'in-stock';
