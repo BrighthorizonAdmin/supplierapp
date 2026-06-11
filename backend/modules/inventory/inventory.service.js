@@ -176,7 +176,7 @@ const getInventory = async (query = {}) => {
         isLowStock: {
           $and: [
             { $gt: ['$currentStockQty', 0] },
-            { $lt: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.2] }] },
+            { $lte: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.25] }] },
           ],
         },
       },
@@ -251,8 +251,8 @@ const getInventoryStats = async () => {
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
   //  Out of Stock : currentStockQty <= 0
-  //  Low Stock    : currentStockQty > 0  AND  currentStockQty < openingStockQty / 2
-  //  In Stock     : currentStockQty >= openingStockQty / 2
+  //  Low Stock    : currentStockQty > 0  AND  currentStockQty <= openingStockQty * 0.25
+  //  In Stock     : currentStockQty > openingStockQty * 0.25
   const [distResult, totalCatalogSKUs, fastMovingCount, slowMovingCount] = await Promise.all([
     Product.aggregate([
       { $match: { isActive: true } },
@@ -265,7 +265,7 @@ const getInventoryStats = async () => {
                 {
                   $and: [
                     { $gt: ['$currentStockQty', 0] },
-                    { $gte: ['$currentStockQty', { $divide: ['$openingStockQty', 2] }] },
+                    { $gt: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.25] }] },
                   ],
                 },
                 1, 0,
@@ -279,7 +279,7 @@ const getInventoryStats = async () => {
                   $and: [
                     { $gt:  ['$currentStockQty', 0] },
                     { $gt:  ['$openingStockQty', 0] },
-                    { $lt:  ['$currentStockQty', { $divide: ['$openingStockQty', 2] }] },
+                    { $lte: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.25] }] },
                   ],
                 },
                 1, 0,
@@ -368,14 +368,11 @@ const editStockWithSerials = async (productId, warehouseId, stockQuantity, seria
     }
   }
 
+  // stockQuantity = 0 means registering serials for existing opening stock — skip inventory change
   let inv = null;
   if (stockQuantity > 0) {
-    if (warehouseId) {
-      inv = await adjustStock(productId, warehouseId, stockQuantity, 'add', userId);
-    }
-    await Product.findByIdAndUpdate(productId, {
-      $inc: { currentStockQty: stockQuantity, openingStockQty: stockQuantity },
-    });
+    inv = await adjustStock(productId, warehouseId, stockQuantity, 'add', userId);
+    await Product.findByIdAndUpdate(productId, { $inc: { currentStockQty: stockQuantity } });
   }
 
   if (serialNumbers && serialNumbers.length > 0) {
