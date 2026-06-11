@@ -382,7 +382,7 @@ const InventoryPage = () => {
   const [editSaving, setEditSaving] = useState(false);
   const [rowSerialState, setRowSerialState] = useState({});
   const [hoveredSerial, setHoveredSerial] = useState(null);
- 
+
   const handleSerialHover = async (item) => {
     const id = item._id;
     setHoveredSerial(id);
@@ -772,7 +772,7 @@ const InventoryPage = () => {
                   const loc = [wh.address?.city, wh.address?.state].filter(Boolean).join(' • ');
                   const serial = rowSerialState[item._id];
                   const isHovered = hoveredSerial === item._id;
- 
+
                   return (
                     <tr key={item._id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3.5">
@@ -860,4 +860,3 @@ const InventoryPage = () => {
 };
  
 export default InventoryPage;
- 
