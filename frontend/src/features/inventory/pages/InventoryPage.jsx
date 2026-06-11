@@ -603,7 +603,7 @@ const InventoryPage = () => {
             label="Fast-Moving Items"
             value={fmtNum(stats?.fastMovingCount)}
             sub="restocked in last 30 days"
-            sub="vs last year"
+            // sub="vs last year"
             subIcon={TrendingUp}
             icon={TrendingUp}
             iconBg="bg-green-100 text-green-600"
@@ -612,7 +612,7 @@ const InventoryPage = () => {
             label="Slow-Moving Items"
             value={fmtNum(stats?.slowMovingCount)}
             sub="not restocked in 90+ days"
-            sub="vs last year"
+            // sub="vs last year"
             subIcon={TrendingDown}
             icon={TrendingDown}
             iconBg="bg-slate-100 text-slate-500"
