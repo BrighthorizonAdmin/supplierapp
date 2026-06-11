@@ -26,7 +26,7 @@ const stockStatus = (item) => {
   const cur = item.currentStockQty ?? 0;
   const open = item.openingStockQty ?? 0;
   if (cur <= 0) return 'out-of-stock';
-  if (open > 0 && cur < open * 0.2) return 'low stock';
+  if (open > 0 && cur <= open * 0.25) return 'low stock';
   return 'in stock';
 };
  
@@ -262,9 +262,9 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
   }, [prod._id]);
  
   // total serials after save = existing already in DB + new ones entered now
-  const newOpeningQty = existingCount + tags.length;
-  const delta         = newOpeningQty - origOpeningQty;
-  const newCurrentQty = Math.max(0, origCurrentQty + delta);
+  const newOpeningQty = origOpeningQty + tags.length;
+  const delta         = tags.length;
+  const newCurrentQty = origCurrentQty + tags.length;
  
   const handleSubmit = (e) => {
     e.preventDefault();
