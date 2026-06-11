@@ -368,11 +368,14 @@ const editStockWithSerials = async (productId, warehouseId, stockQuantity, seria
     }
   }
 
-  // stockQuantity = 0 means registering serials for existing opening stock — skip inventory change
   let inv = null;
   if (stockQuantity > 0) {
-    inv = await adjustStock(productId, warehouseId, stockQuantity, 'add', userId);
-    await Product.findByIdAndUpdate(productId, { $inc: { currentStockQty: stockQuantity } });
+    if (warehouseId) {
+      inv = await adjustStock(productId, warehouseId, stockQuantity, 'add', userId);
+    }
+    await Product.findByIdAndUpdate(productId, {
+      $inc: { currentStockQty: stockQuantity, openingStockQty: stockQuantity },
+    });
   }
 
   if (serialNumbers && serialNumbers.length > 0) {

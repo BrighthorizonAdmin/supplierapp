@@ -246,12 +246,13 @@ const TagInput = ({ tags, onChange }) => {
  
 const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
   const prod           = item.productId || {};
-  const origOpeningQty = item.openingStockQty ?? 0;
-  const origCurrentQty = item.currentStockQty  ?? 0;
+  const origCurrentQty = item.currentStockQty ?? 0;
  
-  const [tags,         setTags]        = useState([]);
-  const [loadingExist, setLoadingExist] = useState(true);
+  const [tags,          setTags]         = useState([]);
+  const [loadingExist,  setLoadingExist]  = useState(true);
   const [existingCount, setExistingCount] = useState(0);
+ 
+  const newCurrentQty = origCurrentQty + tags.length;
  
   useEffect(() => {
     if (!prod._id) { setLoadingExist(false); return; }
@@ -261,21 +262,15 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
       .finally(() => setLoadingExist(false));
   }, [prod._id]);
  
-  // total serials after save = existing already in DB + new ones entered now
-  const newOpeningQty = existingCount + tags.length;
-  const delta         = newOpeningQty - origOpeningQty;
-  const newCurrentQty = Math.max(0, origCurrentQty + delta);
- 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (tags.length === 0) { onClose(); return; }
     onSubmit({
-      productId:           prod._id,
-      warehouseId:         item.warehouseId?._id || null,
-      openingStockQty:     newOpeningQty,
-      openingStockChanged: newOpeningQty !== origOpeningQty,
-      serialNumbers:       tags,
-      productName:         prod.name,
+      productId:     prod._id,
+      warehouseId:   item.warehouseId?._id || null,
+      stockQuantity: tags.length,
+      serialNumbers: tags,
+      productName:   prod.name,
     });
   };
  
@@ -316,9 +311,9 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
               {existingCount > 0
                 ? `${existingCount} serial${existingCount !== 1 ? 's' : ''} already registered`
                 : 'No serials registered yet'}
-              {tags.length > 0 && delta !== 0 && (
-                <span className={`ml-2 font-semibold ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  · {delta > 0 ? `+${delta}` : delta} from current
+              {tags.length > 0 && (
+                <span className="ml-2 font-semibold text-green-600">
+                  · +{tags.length} being added
                 </span>
               )}
             </p>
@@ -335,11 +330,8 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
               <TagInput tags={tags} onChange={setTags} />
             )}
             {tags.length > 0 && (
-              <p className={`text-xs mt-1 font-medium ${delta === 0 ? 'text-slate-500' : delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {tags.length} serial{tags.length !== 1 ? 's' : ''} entered
-                {delta !== 0
-                  ? ` · current stock ${origCurrentQty} → ${newCurrentQty} (${delta > 0 ? `+${delta}` : delta})`
-                  : ' · qty unchanged (serials match current stock)'}
+              <p className="text-xs mt-1 font-medium text-green-600">
+                {tags.length} serial{tags.length !== 1 ? 's' : ''} entered · current stock {origCurrentQty} → {newCurrentQty} (+{tags.length})
               </p>
             )}
           </div>
@@ -372,7 +364,7 @@ const InventoryPage = () => {
   const [editSaving, setEditSaving] = useState(false);
   const [rowSerialState, setRowSerialState] = useState({});
   const [hoveredSerial, setHoveredSerial] = useState(null);
-
+ 
   const handleSerialHover = async (item) => {
     const id = item._id;
     setHoveredSerial(id);
@@ -439,26 +431,11 @@ const InventoryPage = () => {
   const handleEditStock = async (form) => {
     setEditSaving(true);
  
-    // Step 1 — update opening stock if changed
-    if (form.openingStockChanged) {
-      const res = await dispatch(updateOpeningStock({
-        productId:       form.productId,
-        warehouseId:     form.warehouseId,
-        openingStockQty: form.openingStockQty,
-      }));
-      if (res.error) {
-        toast.error(res.payload || 'Failed to update stock quantity');
-        setEditSaving(false);
-        return;
-      }
-    }
- 
-    // Step 2 — register serial numbers if any
     if (form.serialNumbers.length > 0) {
       const res = await dispatch(editStockWithSerials({
         productId:     form.productId,
         warehouseId:   form.warehouseId,
-        stockQuantity: 0,
+        stockQuantity: form.stockQuantity,
         serialNumbers: form.serialNumbers,
         productName:   form.productName,
       }));
@@ -626,7 +603,7 @@ const InventoryPage = () => {
             label="Fast-Moving Items"
             value={fmtNum(stats?.fastMovingCount)}
             sub="restocked in last 30 days"
-            // sub="vs last year"
+            sub="vs last year"
             subIcon={TrendingUp}
             icon={TrendingUp}
             iconBg="bg-green-100 text-green-600"
@@ -635,7 +612,7 @@ const InventoryPage = () => {
             label="Slow-Moving Items"
             value={fmtNum(stats?.slowMovingCount)}
             sub="not restocked in 90+ days"
-            // sub="vs last year"
+            sub="vs last year"
             subIcon={TrendingDown}
             icon={TrendingDown}
             iconBg="bg-slate-100 text-slate-500"
@@ -762,7 +739,7 @@ const InventoryPage = () => {
                   const loc = [wh.address?.city, wh.address?.state].filter(Boolean).join(' • ');
                   const serial = rowSerialState[item._id];
                   const isHovered = hoveredSerial === item._id;
-
+ 
                   return (
                     <tr key={item._id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3.5">
@@ -850,3 +827,4 @@ const InventoryPage = () => {
 };
  
 export default InventoryPage;
+ 
