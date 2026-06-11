@@ -24,9 +24,9 @@ const DONUT_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
  
 const stockStatus = (item) => {
   const cur = item.currentStockQty ?? 0;
-  const open = item.openingStockQty ?? 0;
+  const reorder = item.reorderLevel ?? 10;
   if (cur <= 0) return 'out-of-stock';
-  if (open > 0 && cur < open * 0.2) return 'low stock';
+  if (cur <= reorder) return 'low stock';
   return 'in stock';
 };
  
@@ -246,13 +246,14 @@ const TagInput = ({ tags, onChange }) => {
  
 const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
   const prod           = item.productId || {};
-  const origOpeningQty = item.openingStockQty ?? 0;
-  const origCurrentQty = item.currentStockQty  ?? 0;
- 
-  const [tags,         setTags]        = useState([]);
-  const [loadingExist, setLoadingExist] = useState(true);
+  const origCurrentQty = item.currentStockQty ?? 0;
+
+  const [tags,          setTags]         = useState([]);
+  const [loadingExist,  setLoadingExist]  = useState(true);
   const [existingCount, setExistingCount] = useState(0);
- 
+
+  const newCurrentQty = origCurrentQty + tags.length;
+
   useEffect(() => {
     if (!prod._id) { setLoadingExist(false); return; }
     api.get(`/dispatched-units/in-stock?productId=${prod._id}`)
@@ -260,22 +261,16 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
       .catch(() => setExistingCount(0))
       .finally(() => setLoadingExist(false));
   }, [prod._id]);
- 
-  // total serials after save = existing already in DB + new ones entered now
-  const newOpeningQty = existingCount + tags.length;
-  const delta         = newOpeningQty - origOpeningQty;
-  const newCurrentQty = Math.max(0, origCurrentQty + delta);
- 
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (tags.length === 0) { onClose(); return; }
     onSubmit({
-      productId:           prod._id,
-      warehouseId:         item.warehouseId?._id || null,
-      openingStockQty:     newOpeningQty,
-      openingStockChanged: newOpeningQty !== origOpeningQty,
-      serialNumbers:       tags,
-      productName:         prod.name,
+      productId:     prod._id,
+      warehouseId:   item.warehouseId?._id || null,
+      stockQuantity: tags.length,
+      serialNumbers: tags,
+      productName:   prod.name,
     });
   };
  
@@ -296,40 +291,29 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
             </p>
           </div>
  
-          {/* Stock quantity preview */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'Opening Stock', orig: origOpeningQty, next: newOpeningQty },
-              { label: 'Current Stock', orig: origCurrentQty, next: newCurrentQty },
-            ].map(({ label, orig, next }) => {
-              const changed = tags.length > 0 && next !== orig;
-              const up = next > orig;
-              return (
-                <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <p className="text-xs text-slate-400 mb-0.5">{label}</p>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-lg font-bold text-slate-800">{orig}</span>
-                    {changed && (
-                      <span className={`text-sm font-semibold ${up ? 'text-green-600' : 'text-red-500'}`}>
-                        → {next}
-                      </span>
-                    )}
-                    {tags.length > 0 && next === orig && (
-                      <span className="text-xs text-slate-400">no change</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          {/* Current stock preview */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-xs text-slate-400 mb-0.5">Current Stock</p>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-bold text-slate-800">{origCurrentQty}</span>
+              {tags.length > 0 && newCurrentQty !== origCurrentQty && (
+                <span className={`text-sm font-semibold ${newCurrentQty > origCurrentQty ? 'text-green-600' : 'text-red-500'}`}>
+                  → {newCurrentQty}
+                </span>
+              )}
+              {tags.length > 0 && newCurrentQty === origCurrentQty && (
+                <span className="text-xs text-slate-400">no change</span>
+              )}
+            </div>
           </div>
           {!loadingExist && (
             <p className="text-xs text-slate-400 -mt-2">
               {existingCount > 0
                 ? `${existingCount} serial${existingCount !== 1 ? 's' : ''} already registered`
                 : 'No serials registered yet'}
-              {tags.length > 0 && delta !== 0 && (
-                <span className={`ml-2 font-semibold ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  · {delta > 0 ? `+${delta}` : delta} from current
+              {tags.length > 0 && (
+                <span className="ml-2 font-semibold text-green-600">
+                  · +{tags.length} being added
                 </span>
               )}
             </p>
@@ -346,11 +330,8 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
               <TagInput tags={tags} onChange={setTags} />
             )}
             {tags.length > 0 && (
-              <p className={`text-xs mt-1 font-medium ${delta === 0 ? 'text-slate-500' : delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {tags.length} serial{tags.length !== 1 ? 's' : ''} entered
-                {delta !== 0
-                  ? ` · qty ${delta > 0 ? `+${delta}` : delta} (opening ${origOpeningQty} → ${newOpeningQty}, current ${origCurrentQty} → ${newCurrentQty})`
-                  : ' · qty unchanged (serials match current stock)'}
+              <p className="text-xs mt-1 font-medium text-green-600">
+                {tags.length} serial{tags.length !== 1 ? 's' : ''} entered · current stock {origCurrentQty} → {newCurrentQty} (+{tags.length})
               </p>
             )}
           </div>
@@ -449,27 +430,12 @@ const InventoryPage = () => {
  
   const handleEditStock = async (form) => {
     setEditSaving(true);
- 
-    // Step 1 — update opening stock if changed
-    if (form.openingStockChanged) {
-      const res = await dispatch(updateOpeningStock({
-        productId:       form.productId,
-        warehouseId:     form.warehouseId,
-        openingStockQty: form.openingStockQty,
-      }));
-      if (res.error) {
-        toast.error(res.payload || 'Failed to update stock quantity');
-        setEditSaving(false);
-        return;
-      }
-    }
- 
-    // Step 2 — register serial numbers if any
+
     if (form.serialNumbers.length > 0) {
       const res = await dispatch(editStockWithSerials({
         productId:     form.productId,
         warehouseId:   form.warehouseId,
-        stockQuantity: 0,
+        stockQuantity: form.stockQuantity,
         serialNumbers: form.serialNumbers,
         productName:   form.productName,
       }));
