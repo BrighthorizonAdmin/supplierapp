@@ -24,9 +24,9 @@ const DONUT_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
  
 const stockStatus = (item) => {
   const cur = item.currentStockQty ?? 0;
-  const reorder = item.reorderLevel ?? 10;
-  if (cur <= 0) return 'out-of-stock';
-  if (cur <= reorder) return 'low stock';
+  const open = item.openingStockQty ?? 0;
+  if (cur === 0) return 'out-of-stock';
+  if (open > 0 && cur <= open * 0.25) return 'low stock';
   return 'in stock';
 };
  
@@ -186,7 +186,6 @@ const TagInput = ({ tags, onChange }) => {
  
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(inputValue); }
-    else if (e.key === 'Backspace' && !inputValue && tags.length > 0) removeTag(tags.length - 1);
   };
  
   const handleChange = (e) => {
@@ -262,9 +261,9 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
   }, [prod._id]);
  
   // total serials after save = existing already in DB + new ones entered now
-  const newOpeningQty = existingCount + tags.length;
-  const delta         = newOpeningQty - origOpeningQty;
-  const newCurrentQty = Math.max(0, origCurrentQty + delta);
+  const newOpeningQty = origOpeningQty + tags.length;
+  const delta         = tags.length;
+  const newCurrentQty = origCurrentQty + tags.length;
  
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -296,20 +295,31 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
             </p>
           </div>
  
-          {/* Current stock preview */}
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-            <p className="text-xs text-slate-400 mb-0.5">Current Stock</p>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-bold text-slate-800">{origCurrentQty}</span>
-              {tags.length > 0 && newCurrentQty !== origCurrentQty && (
-                <span className={`text-sm font-semibold ${newCurrentQty > origCurrentQty ? 'text-green-600' : 'text-red-500'}`}>
-                  → {newCurrentQty}
-                </span>
-              )}
-              {tags.length > 0 && newCurrentQty === origCurrentQty && (
-                <span className="text-xs text-slate-400">no change</span>
-              )}
-            </div>
+          {/* Stock quantity preview */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'Opening Stock', orig: origOpeningQty, next: newOpeningQty },
+              { label: 'Current Stock', orig: origCurrentQty, next: newCurrentQty },
+            ].map(({ label, orig, next }) => {
+              const changed = tags.length > 0 && next !== orig;
+              const up = next > orig;
+              return (
+                <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-lg font-bold text-slate-800">{orig}</span>
+                    {changed && (
+                      <span className={`text-sm font-semibold ${up ? 'text-green-600' : 'text-red-500'}`}>
+                        → {next}
+                      </span>
+                    )}
+                    {tags.length > 0 && next === orig && (
+                      <span className="text-xs text-slate-400">no change</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           {!loadingExist && (
             <p className="text-xs text-slate-400 -mt-2">
@@ -338,7 +348,7 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
               <p className={`text-xs mt-1 font-medium ${delta === 0 ? 'text-slate-500' : delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
                 {tags.length} serial{tags.length !== 1 ? 's' : ''} entered
                 {delta !== 0
-                  ? ` · current stock ${origCurrentQty} → ${newCurrentQty} (${delta > 0 ? `+${delta}` : delta})`
+                  ? ` · qty ${delta > 0 ? `+${delta}` : delta} (opening ${origOpeningQty} → ${newOpeningQty}, current ${origCurrentQty} → ${newCurrentQty})`
                   : ' · qty unchanged (serials match current stock)'}
               </p>
             )}
