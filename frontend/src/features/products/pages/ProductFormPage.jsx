@@ -518,6 +518,7 @@ const ProductFormPage = () => {
           {/* ── Right ── */}
           <div className="flex flex-col gap-4">
             <F label="SKU Code" name="sku" />
+            <F label="HSN Code" name="hsn" />
             <F label="MOQ"      name="moq" type="number" />
             {/* Opening Stock fields hidden — openingStockQty defaults to 0 on creation */}
             {/* <div>
