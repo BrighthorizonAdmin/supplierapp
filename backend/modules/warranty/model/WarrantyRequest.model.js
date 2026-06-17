@@ -16,9 +16,10 @@ const warrantyRequestSchema = new mongoose.Schema({
   dealerId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Dealer' },
   invoiceId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice' },
   dbeInvoiceId:  { type: String },
-  invoiceNumber: { type: String },
-  invoiceDate:   { type: Date },
-  warrantyPeriod: { type: String, default: '' },
+  invoiceNumber:      { type: String },
+  invoiceDate:        { type: Date },
+  warrantyPeriod:     { type: String, default: '' },
+  warrantyExpiryDate: { type: Date },
 
   customerName:  { type: String },
   customerPhone: { type: String, default: '' },
