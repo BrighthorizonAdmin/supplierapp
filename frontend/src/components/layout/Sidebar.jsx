@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { to: '/finance', icon: TrendingUp, label: 'Finances', perm: 'finance:read' },
   { to: '/payments', icon: CreditCard, label: 'Payments & Credits', perm: 'payments:read' },
   { to: '/invoices', icon: FileText, label: 'Sales Invoices', perm: 'invoices:read' },
+  { to: '/quotes',   icon: FileText, label: 'Quotes',         perm: 'invoices:read' },
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
   { to: '/exchanges', icon: RotateCcw, label: 'Exchanges', perm: 'returns:read' },
   { to: '/warranty', icon: WarrantyIcon, label: 'Warranty', perm: 'orders:read' },

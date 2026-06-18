@@ -314,6 +314,10 @@ const DealerDetailPage = () => {
                     .filter(Boolean).join(', ') || '—'}
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-slate-400">Onboarded By</p>
+                <p className="text-slate-700 font-medium">{dealer.onboardedBy || '—'}</p>
+              </div>
             </div>
           </div>
  

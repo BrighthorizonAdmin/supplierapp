@@ -19,6 +19,7 @@ import roleReducer from '../features/usermanagement/roleSlice';
 import userReducer from '../features/usermanagement/userSlice';
 import supportReducer from '../features/support/supportSlice';
 import warrantyReducer from '../features/warranty/warrantySlice';
+import quoteReducer from '../features/quotes/quoteSlice';
 
 
 const store = configureStore({
@@ -43,6 +44,7 @@ const store = configureStore({
     users: userReducer,
     support: supportReducer,
     warranty: warrantyReducer,
+    quotes: quoteReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

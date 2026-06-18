@@ -205,7 +205,6 @@ const getDealers = async (query = {}) => {
 
   const [data, total] = await Promise.all([
     Dealer.find(match)
-      .populate('onboardedBy', 'name email')
       .populate('approvedBy', 'name email')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -219,14 +218,13 @@ const getDealers = async (query = {}) => {
 
 const getDealerById = async (id) => {
   const dealer = await Dealer.findById(id)
-    .populate('onboardedBy', 'name email role')
     .populate('approvedBy', 'name email role')
     .lean({ virtuals: true });
   if (!dealer) throw new AppError('Dealer not found', 404);
   return withResolvedDocs(dealer);
 };
 
-const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms, assignedManager }, userId) => {
+const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms, onboardedBy }, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
   if (!['pending', 'updates-required'].includes(dealer.status)) throw new AppError(`Cannot approve dealer with status: ${dealer.status}`, 400);
@@ -241,6 +239,7 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms,
   dealer.creditLimit  = creditLimit || 0;
   dealer.pricingTier  = pricingTier || 'standard';
   dealer.paymentTerms = paymentTerms || '';
+  dealer.onboardedBy  = onboardedBy || '';
   dealer.approvedBy = userId;
   dealer.approvedAt = new Date();
   dealer.password = randomPassword; // pre-save hook will hash this
@@ -270,6 +269,7 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms,
   await syncToDealerApp(dealer.applicationId, 'APPROVE', {
     creditLimit:  creditLimit || 0,
     paymentTerms: paymentTerms || '',
+    onboardedBy:  onboardedBy || '',
   });
 
   // Return plain object; tempPassword is exposed once here (not stored in response elsewhere)

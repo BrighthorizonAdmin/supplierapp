@@ -40,6 +40,9 @@ import SupportListPage from '../features/support/pages/SupportListPage';
 import WarrantyListPage from '../features/warranty/pages/WarrantyListPage';
 import WarrantyDetailPage from '../features/warranty/pages/WarrantyDetailPage';
 import WarrantyLookupPage from '../features/warranty/pages/WarrantyLookupPage';
+import QuoteListPage from '../features/quotes/pages/QuoteListPage';
+import QuoteFormPage from '../features/quotes/pages/QuoteFormPage';
+import QuoteDetailPage from '../features/quotes/pages/QuoteDetailPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -221,6 +224,26 @@ const AppRouter = () => {
           <Route path="warranty/:id" element={
             <ProtectedRoute permission="orders:read">
               <WarrantyDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="quotes" element={
+            <ProtectedRoute permission="invoices:read">
+              <QuoteListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="quotes/new" element={
+            <ProtectedRoute permission="invoices:write">
+              <QuoteFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="quotes/:id" element={
+            <ProtectedRoute permission="invoices:read">
+              <QuoteDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="quotes/:id/edit" element={
+            <ProtectedRoute permission="invoices:write">
+              <QuoteFormPage />
             </ProtectedRoute>
           } />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />

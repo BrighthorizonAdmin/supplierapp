@@ -146,7 +146,7 @@ const DealerOnboardingPage = () => {
     creditLimit: '',
     paymentTerms: '',
     pricingTier: '',
-    assignedManager: '',
+    onboardedBy: '',
   });
 
   useEffect(() => {
@@ -177,12 +177,12 @@ const DealerOnboardingPage = () => {
       creditLimit: Number(approveForm.creditLimit),
       pricingTier: approveForm.pricingTier || 'standard',
       paymentTerms: approveForm.paymentTerms,
-      assignedManager: approveForm.assignedManager,
+      onboardedBy: approveForm.onboardedBy,
     })).then((res) => {
       if (!res.error) {
         setSelected(null);
         setShowApproveModal(false);
-        setApproveForm({ creditLimit: '', paymentTerms: '', pricingTier: '', assignedManager: '' });
+        setApproveForm({ creditLimit: '', paymentTerms: '', pricingTier: '', onboardedBy: '' });
       }
     });
   };
@@ -781,15 +781,16 @@ const DealerOnboardingPage = () => {
           />
         </div>
 
-        {/* <div className="mb-6">
-          <label className="text-sm font-semibold text-slate-800 mb-2 block">Assigned Manager</label>
-          <SelectField
-            value={approveForm.assignedManager}
-            onChange={(v) => setApproveForm((f) => ({ ...f, assignedManager: v }))}
-            placeholder="Select manager"
-            options={[]}
+        <div className="mb-6">
+          <label className="text-sm font-semibold text-slate-800 mb-2 block">Onboarded By</label>
+          <input
+            type="text"
+            value={approveForm.onboardedBy}
+            onChange={(e) => setApproveForm((f) => ({ ...f, onboardedBy: e.target.value }))}
+            placeholder="Enter name of person who onboarded this dealer"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-        </div> */}
+        </div>
 
         <div className="flex items-center justify-end gap-3">
           <button
