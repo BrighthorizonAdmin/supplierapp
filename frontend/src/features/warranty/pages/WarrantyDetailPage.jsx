@@ -103,6 +103,12 @@ export default function WarrantyDetailPage() {
                 <span className="text-slate-700">{req.invoiceDate ? format(new Date(req.invoiceDate), 'dd MMM yyyy') : '—'}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-slate-500">Warranty Expiry</span>
+                <span className={`font-medium ${req.warrantyExpiryDate ? (new Date(req.warrantyExpiryDate) >= new Date() ? 'text-green-700' : 'text-red-600') : 'text-slate-700'}`}>
+                  {req.warrantyExpiryDate ? format(new Date(req.warrantyExpiryDate), 'dd MMM yyyy') : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-slate-500">Warranty Period</span>
                 <span className="font-semibold text-blue-700">{req.warrantyPeriod || '—'}</span>
               </div>

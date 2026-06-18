@@ -688,14 +688,35 @@ router.post('/dealer-warranty-claim', async (req, res) => {
       }
       resolvedWarrantyPeriod = product?.warrantyPeriod || '';
     }
- 
+
+    // Compute warranty expiry date from invoiceDate + warrantyPeriod
+    const computeWarrantyExpiry = (invDate, period) => {
+      if (!invDate || !period) return undefined;
+      const d = new Date(invDate);
+      if (isNaN(d.getTime())) return undefined;
+      const match = String(period).match(/(\d+)\s*(month|year|day)/i);
+      if (match) {
+        const num = parseInt(match[1]);
+        const unit = match[2].toLowerCase();
+        if (unit.startsWith('month')) d.setMonth(d.getMonth() + num);
+        else if (unit.startsWith('year')) d.setFullYear(d.getFullYear() + num);
+        else if (unit.startsWith('day')) d.setDate(d.getDate() + num);
+        return d;
+      }
+      const months = parseInt(period);
+      if (!isNaN(months) && months > 0) { d.setMonth(d.getMonth() + months); return d; }
+      return undefined;
+    };
+    const warrantyExpiryDate = computeWarrantyExpiry(invoiceDate, resolvedWarrantyPeriod);
+
     const warrantyReq = await WarrantyRequest.create({
       dbeClaimId,
       dealerId:       dealer?._id || undefined,
       dbeInvoiceId,
       invoiceNumber,
-      invoiceDate:    invoiceDate ? new Date(invoiceDate) : undefined,
-      warrantyPeriod: resolvedWarrantyPeriod,
+      invoiceDate:        invoiceDate ? new Date(invoiceDate) : undefined,
+      warrantyPeriod:     resolvedWarrantyPeriod,
+      warrantyExpiryDate: warrantyExpiryDate || undefined,
       customerName,
       customerPhone:  customerPhone || '',
       items:          (items || []).map((i) => ({
@@ -745,4 +766,39 @@ router.post('/dealer-warranty-claim', async (req, res) => {
   }
 });
  
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-stock-alert
+// Called by D-BE when a dealer reports a product is out of stock.
+// Notifies all active supplier admins.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-stock-alert', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { productId, productName, sku, dealerName } = req.body;
+
+    const User = require('../auth/model/User.model');
+    const notificationService = require('../notifications/notification.service');
+    const admins = await User.find({ isActive: true }).lean();
+    for (const admin of admins) {
+      await notificationService.create({
+        recipientId: admin._id,
+        title: `Restock Request: ${productName || sku || 'Unknown Product'}`,
+        message: `${dealerName || 'A dealer'} is requesting a restock for "${productName || sku}" which is currently out of stock.`,
+        type: 'warning',
+        ...(productId && { relatedEntity: { entityType: 'Product', entityId: productId } }),
+      });
+    }
+
+    console.log(`[Webhook] dealer-stock-alert: notified ${admins.length} admin(s) for product ${productId}`);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[Webhook] dealer-stock-alert error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
 module.exports = router;
