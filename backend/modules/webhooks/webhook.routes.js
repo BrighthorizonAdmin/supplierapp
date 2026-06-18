@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const Invoice = require('../payments/model/Invoice.model');
+const Quote  = require('../quotes/model/Quote.model');
 const Dealer = require('../dealer/model/Dealer.model');
 const notificationService = require('../notifications/notification.service');
- 
+
 const WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET || '';
  
 // ─────────────────────────────────────────────────────────────────────────────
@@ -781,7 +782,6 @@ router.post('/dealer-stock-alert', async (req, res) => {
     const { productId, productName, sku, dealerName } = req.body;
 
     const User = require('../auth/model/User.model');
-    const notificationService = require('../notifications/notification.service');
     const admins = await User.find({ isActive: true }).lean();
     for (const admin of admins) {
       await notificationService.create({
@@ -797,6 +797,89 @@ router.post('/dealer-stock-alert', async (req, res) => {
     return res.json({ success: true });
   } catch (err) {
     console.error('[Webhook] dealer-stock-alert error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-quote
+// Called by D-BE when a dealer creates or updates a quote.
+// Upserts into the supplier's Quote model (source: 'dealer').
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-quote', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const {
+      dbeQuoteId, quoteNumber, quoteDate, expiryDate, status,
+      dealerEmail, dealerName, dealerPhone,
+      customerName, customerPhone, customerCity,
+      items, subtotal, taxAmount, totalAmount, notes,
+    } = req.body;
+
+    if (!dbeQuoteId) return res.status(400).json({ success: false, message: 'dbeQuoteId required' });
+
+    // Resolve supplier-side dealer by email → phone
+    let dealer = null;
+    if (dealerEmail) dealer = await Dealer.findOne({ email: dealerEmail.toLowerCase().trim() }).lean();
+    if (!dealer && dealerPhone) {
+      const phone10 = String(dealerPhone).replace(/\D/g, '').slice(-10);
+      if (phone10) dealer = await Dealer.findOne({ phone: phone10 }).lean();
+    }
+
+    // Map D-BE items to S-BE lineItems
+    const lineItems = (items || []).map(item => {
+      const qty   = Number(item.quantity);
+      const price = Number(item.unitPrice);
+      const taxR  = Number(item.taxRate) || 0;
+      const base  = price * qty;
+      const tax   = base * (taxR / 100);
+      return {
+        productId:   item.productId || undefined,
+        productName: item.name,
+        hsnCode:     item.hsnCode || '',
+        quantity:    qty,
+        unitPrice:   price,
+        taxRate:     taxR,
+        taxAmount:   +tax.toFixed(2),
+        lineTotal:   +(base + tax).toFixed(2),
+      };
+    });
+
+    const quoteFields = {
+      source:      'dealer',
+      dbeQuoteId,
+      dealerId:    dealer?._id || undefined,
+      partyName:   customerName,
+      partyPhone:  customerPhone || '',
+      partyAddress: customerCity || '',
+      lineItems,
+      subtotal:    Number(subtotal),
+      taxAmount:   Number(taxAmount),
+      totalAmount: Number(totalAmount),
+      status:      status || 'draft',
+      quoteDate:   quoteDate ? new Date(quoteDate) : new Date(),
+      expiryDate:  expiryDate ? new Date(expiryDate) : undefined,
+      notes:       notes || `Dealer quote to: ${customerName}`,
+    };
+
+    // Check if already synced — upsert manually to preserve quoteNumber
+    const existing = await Quote.findOne({ dbeQuoteId });
+    let quote;
+    if (existing) {
+      Object.assign(existing, quoteFields);
+      quote = await existing.save();
+    } else {
+      quote = await Quote.create({ ...quoteFields, quoteNumber: `D-${quoteNumber}` });
+    }
+
+    console.log(`[Webhook] dealer-quote synced: ${quote.quoteNumber} for ${dealerName}`);
+    return res.status(200).json({ success: true, data: quote });
+  } catch (err) {
+    console.error('[Webhook] dealer-quote error:', err.message);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });

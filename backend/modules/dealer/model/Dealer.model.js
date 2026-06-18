@@ -133,8 +133,8 @@ const dealerSchema = new mongoose.Schema(
       type: bankDetailsSchema,
     },
     onboardedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
+      trim: true,
     },
     approvedBy: {
       type: mongoose.Schema.Types.ObjectId,
