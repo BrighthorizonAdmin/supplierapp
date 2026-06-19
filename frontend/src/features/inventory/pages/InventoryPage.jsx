@@ -182,14 +182,11 @@ const TagInput = ({ tags, onChange }) => {
   });
  
   const addTag = (raw) => {
-    const value = raw.trim().toUpperCase();
-    if (!value) return;
-    if (tags.some((tag) => (typeof tag === 'string' ? tag : tag.value) === value)) {
-      toast.error(`"${value}" already added`);
-      return;
-    }
-    onChange([...tags, normalizeTag(raw)]);
+    const v = raw.trim().toUpperCase();
+    if (!v) return;
     setInputValue('');
+    if (tags.includes(v)) { toast.error(`"${v}" already added`); return; }
+    onChange([...tags, v]);
   };
  
   const removeTag = (i) => onChange(tags.filter((_, idx) => idx !== i));
@@ -288,10 +285,10 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
   const delta         = tags.length;
   const newCurrentQty = origCurrentQty + tags.length;
  
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (tags.length === 0) { onClose(); return; }
-    onSubmit({
+    const result = await onSubmit({
       productId:           prod._id,
       warehouseId:         item.warehouseId?._id || null,
       openingStockQty:     newOpeningQty,
@@ -302,6 +299,7 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
         : { serialNumber: tag.value, dispatchedAt: tag.dateISO || new Date().toISOString() })),
       productName:         prod.name,
     });
+    if (result === false) setTags([]);
   };
  
   return (
@@ -476,8 +474,10 @@ const InventoryPage = () => {
   const handleEditStock = async (form) => {
     setEditSaving(true);
  
-    // Step 1 — update opening stock if changed
-    if (form.openingStockChanged) {
+    // Step 1 — update opening stock only when no serial numbers are being added.
+    // When serials are present, Step 2 (editStockWithSerials) handles the qty via $inc.
+    // Running both would double-count on success and prematurely increment on serial failure.
+    if (form.openingStockChanged && form.serialNumbers.length === 0) {
       const res = await dispatch(updateOpeningStock({
         productId:       form.productId,
         warehouseId:     form.warehouseId,
@@ -506,7 +506,7 @@ const InventoryPage = () => {
           : payload?.message || res.error.message || 'Failed to register serial numbers'
         );
         setEditSaving(false);
-        return;
+        return false;
       }
     }
  
