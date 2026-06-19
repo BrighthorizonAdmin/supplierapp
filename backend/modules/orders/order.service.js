@@ -359,32 +359,32 @@ const createOrder = async ({ dealerId, items, notes, orderType }, userId) => {
  
 const confirmOrder = async (orderId, userId) => {
   const order = await withTransaction(async (session) => {
-
+ 
     const order = await Order.findById(orderId)
       .populate('dealerId')
       .session(session);
-
+ 
     if (!order) {
       throw new AppError('Order not found', 404);
     }
-
+ 
     if (!['draft', 'pending'].includes(order.status)) {
       throw new AppError(`Order is already ${order.status}`, 400);
     }
-
+ 
     const dealer = order.dealerId;
-
+ 
     if (!dealer) {
       throw new AppError('Dealer not found', 404);
     }
-
+ 
     if (dealer.status !== 'active') {
       throw new AppError('Dealer account is not active', 400);
     }
-
+ 
     // Supplier-created orders only
     const isSupplierCreatedOrder = !order.dbeOrderId;
-
+ 
     // Credit limit validation
     if (
       isSupplierCreatedOrder &&
@@ -395,15 +395,15 @@ const confirmOrder = async (orderId, userId) => {
         400
       );
     }
-
+ 
     // Fetch order items
     const orderItemDocs = await OrderItem.find({ orderId }).session(session);
-
+ 
     const items =
       orderItemDocs.length > 0
         ? orderItemDocs
         : (order.items || []);
-
+ 
     // ==========================================
     // STOCK ALLOCATION
     // ==========================================
@@ -411,11 +411,11 @@ const confirmOrder = async (orderId, userId) => {
     // allocateStock() already reduces currentStockQty
     // so DO NOT reduce stock again manually
     // ==========================================
-
+ 
     for (const item of items) {
-
+ 
       if (item.warehouseId) {
-
+ 
         await inventoryService.allocateStock(
           item.productId,
           item.warehouseId,
@@ -424,37 +424,37 @@ const confirmOrder = async (orderId, userId) => {
         );
       }
     }
-
+ 
     // Update order
     order.status = 'confirmed';
     order.confirmedBy = userId;
     order.confirmedAt = new Date();
     order.creditUsed = order.netAmount;
-
+ 
     await order.save({ session });
-
+ 
     // ==========================================
     // REMOVED DUPLICATE STOCK DEDUCTION
     // ==========================================
     // THIS BLOCK WAS CAUSING DOUBLE DECREMENT
     //
-    // for (const item of items) {
-    //   const qty = Number(item.quantity) || 0;
-    //   const pid = item.productId;
-    //
-    //   if (pid && qty > 0) {
-    //     await Product.findByIdAndUpdate(
-    //       pid,
-    //       { $inc: { currentStockQty: -qty } },
-    //       { session, returnDocument: 'after' }
-    //     );
-    //   }
-    // }
+    for (const item of items) {
+      const qty = Number(item.quantity) || 0;
+      const pid = item.productId;
+   
+      if (pid && qty > 0) {
+        await Product.findByIdAndUpdate(
+          pid,
+          { $inc: { currentStockQty: -qty } },
+          { session, returnDocument: 'after' }
+        );
+      }
+    }
     // ==========================================
-
+ 
     // Update dealer credit usage
     if (isSupplierCreatedOrder) {
-
+ 
       await Dealer.findByIdAndUpdate(
         order.dealerId,
         {
@@ -465,7 +465,7 @@ const confirmOrder = async (orderId, userId) => {
         { session }
       );
     }
-
+ 
     // Create transaction
     await Transaction.create([
       {
@@ -480,7 +480,7 @@ const confirmOrder = async (orderId, userId) => {
         createdBy: userId,
       }
     ], { session });
-
+ 
     // Audit log
     await auditService.log(
       'order',
@@ -496,7 +496,7 @@ const confirmOrder = async (orderId, userId) => {
         },
       }
     );
-
+ 
     // Create invoice at confirmation (serial numbers added later on delivery)
     let confirmedInvoice = null;
     try {
@@ -531,14 +531,14 @@ const confirmOrder = async (orderId, userId) => {
     } catch (invoiceErr) {
       console.error('[confirmOrder] Invoice creation failed:', invoiceErr.message);
     }
-
+ 
     // Socket event
     emitToAll(ORDER_CONFIRMED, {
       orderId,
       orderNumber: order.orderNumber,
       dealerId: order.dealerId
     });
-
+ 
     // Notify Dealer Backend (with invoice if created)
     notifyDealerOrderStatus(order, 'confirmed', confirmedInvoice ? {
       invoice: {
@@ -563,21 +563,21 @@ const confirmOrder = async (orderId, userId) => {
         })),
       },
     } : {});
-
+ 
     return order;
   });
-
+ 
   // After transaction commits
   const confirmedItems = order.items?.length
     ? order.items
     : await OrderItem.find({ orderId }).lean();
-
+ 
   pushStockStatusAfterConfirm(
     confirmedItems,
     order.orderNumber,
     order.dealerId
   );
-
+ 
   return order;
 };
 
