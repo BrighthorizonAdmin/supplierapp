@@ -29,6 +29,20 @@ const PIPELINE_STAGES = [
   { key: 'approval', label: 'Approval', desc: 'Final approval and account activation.' },
 ];
 
+const PRICING_TIERS = [
+  { value: 'standard', label: 'Standard Wholesale' },
+  { value: 'silver', label: 'Silver Wholesale' },
+  { value: 'gold', label: 'Gold Wholesale' },
+  { value: 'platinum', label: 'Platinum Wholesale' },
+];
+
+const PAYMENT_TERMS = [
+  'Net 30 Days',
+  'Net 45 Days',
+  'Net 60 Days',
+  'Net 90 Days',
+  'Immediate Payment',
+];
 // Validation Helper Functions
 const isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -72,6 +86,20 @@ const validateForm = (form, docs) => {
     errors.phone = 'Phone number is required';
   } else if (!isValidPhone(form.phone)) {
     errors.phone = 'Please enter a valid 10-digit phone number';
+  }
+
+  if (form.creditLimit === '' || form.creditLimit === null || form.creditLimit === undefined) {
+    errors.creditLimit = 'Credit limit is required';
+  } else if (Number.isNaN(Number(form.creditLimit))) {
+    errors.creditLimit = 'Credit limit must be a number';
+  } else if (Number(form.creditLimit) < 0) {
+    errors.creditLimit = 'Credit limit cannot be negative';
+  }
+
+  if (!form.paymentTerms?.trim()) {
+    errors.paymentTerms = 'Payment terms is required';
+  } else if (!PAYMENT_TERMS.includes(form.paymentTerms)) {
+    errors.paymentTerms = 'Please select a valid payment term';
   }
 
   if (form.gstNumber && !isValidGST(form.gstNumber)) {
@@ -214,6 +242,10 @@ const AddNewDealerPage = () => {
     email: '',
     phone: '',
     gstNumber: '',
+    creditLimit: '',
+    pricingTier: 'standard',
+    paymentTerms: 'Net 30 Days',
+    onboardedBy: '',
     leadSource: '',
     street: '',
     district: '',
@@ -259,6 +291,10 @@ const AddNewDealerPage = () => {
     formData.append('state', form.state || '');
     formData.append('pincode', form.pincode || '');
     formData.append('country', form.country || 'India');
+    formData.append('creditLimit', form.creditLimit || 0);
+    formData.append('pricingTier', form.pricingTier || 'standard');
+    formData.append('paymentTerms', form.paymentTerms || '');
+    formData.append('onboardedBy', form.onboardedBy || '');
 
     if (docs.gst) formData.append('gst', docs.gst);
     if (docs.pan) formData.append('pan', docs.pan);
@@ -291,7 +327,7 @@ const AddNewDealerPage = () => {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={loading || !form.businessName?.trim() || !form.name?.trim() || !form.phone?.trim()}
+            disabled={loading || !form.businessName?.trim() || !form.name?.trim() || !form.phone?.trim() || form.creditLimit === '' || !form.paymentTerms?.trim()}
             className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Saving...' : 'Create Dealer'}
@@ -418,119 +454,88 @@ const AddNewDealerPage = () => {
           </div>
         </div>
 
-        {/* RIGHT: Initial Call Log + Pipeline */}
-        <div className="card">
-          <div className="sectionLabel">Documents Required</div>
+{/* RIGHT: Documents + Onboarding */}
+        <div className="col-span-1 space-y-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <h2 className="text-base font-bold text-slate-800 mb-4">Documents Required</h2>
+            <p className="text-sm text-slate-500 mb-5">
+              Please upload clear copies (PDF, JPG, PNG, HEIC). Max 5MB per file.
+            </p>
 
-          <div className="sectionDivider"></div>
+            <DocUploadRow
+              title="GST Certificate"
+              icon="📄"
+              file={docs.gst}
+              onUpload={(file) => handleUpload('gst', file)}
+              onRemove={() => handleRemove('gst')}
+            />
 
-          <p className="sectionDesc">
-            Please upload clear copies (PDF, JPG, PNG, HEIC). Max 5MB per file.
-          </p>
+            <DocUploadRow
+              title="PAN Card Copy"
+              icon="🪪"
+              file={docs.pan}
+              onUpload={(file) => handleUpload('pan', file)}
+              onRemove={() => handleRemove('pan')}
+            />
 
-          {/* GST Row */}
-          <DocUploadRow
-            title="GST Certificate"
-            icon="📄"
-            file={docs.gst}
-            onUpload={(file) => handleUpload("gst", file)}
-            onRemove={() => handleRemove("gst")}
-          />
+            <DocUploadRow
+              title="Bank Statement"
+              icon="🏦"
+              file={docs.bank}
+              onUpload={(file) => handleUpload('bank', file)}
+              onRemove={() => handleRemove('bank')}
+            />
+          </div>
 
-          <DocUploadRow
-            title="PAN Card Copy"
-            icon="🪪"
-            file={docs.pan}
-            onUpload={(file) => handleUpload("pan", file)}
-            onRemove={() => handleRemove("pan")}
-          />
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <h2 className="text-base font-bold text-slate-800 mb-4">Onboarding Settings</h2>
+            <div className="space-y-4">
+              <InputField
+                label="Credit Limit (INR)"
+                id="creditLimit"
+                type="number"
+                placeholder="Enter credit limit"
+                value={form.creditLimit}
+                onChange={setField('creditLimit')}
+                error={errors.creditLimit}
+              />
 
-          <DocUploadRow
-            title="Bank Statement"
-            icon="🏦"
-            file={docs.bank}
-            onUpload={(file) => handleUpload("bank", file)}
-            onRemove={() => handleRemove("bank")}
-          />
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1.5">Pricing Tier</label>
+                <SelectField
+                  id="pricingTier"
+                  value={form.pricingTier}
+                  onChange={setField('pricingTier')}
+                  options={PRICING_TIERS}
+                  placeholder="Select pricing tier"
+                />
+              </div>
 
-          {/* Back Button */}
-          {/* <div className="backRow">
-    <button
-      type="button"
-      className="backTxt"
-      onClick={() => navigate(-1)}
-    >
-      &lt;&lt; Back
-    </button> */}
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1.5">Net Payments</label>
+                <SelectField
+                  id="paymentTerms"
+                  value={form.paymentTerms}
+                  onChange={setField('paymentTerms')}
+                  options={PAYMENT_TERMS.map((term) => ({ value: term, label: term }))}
+                  placeholder="Select payment terms"
+                />
+                {errors.paymentTerms && <p className="text-xs text-red-500 mt-1.5">{errors.paymentTerms}</p>}
+              </div>
+
+              <InputField
+                label="Onboarded By"
+                id="onboardedBy"
+                placeholder="Enter onboarded by"
+                value={form.onboardedBy}
+                onChange={setField('onboardedBy')}
+                error={errors.onboardedBy}
+              />
+            </div>
+          </div>
         </div>
       </div>
-      {/* <div className="space-y-6">
-
-          <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <h2 className="text-base font-bold text-slate-800 mb-5">Initial Call Log</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Call Outcome</label>
-                <SelectField
-                  value={form.initialCallOutcome}
-                  onChange={setField('initialCallOutcome')}
-                  options={CALL_OUTCOMES}
-                  placeholder="Select outcome..."
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Notes / Remarks</label>
-                <textarea
-                  rows={4}
-                  placeholder="Add notes from the call..."
-                  value={form.initialCallNotes}
-                  onChange={(e) => setField('initialCallNotes')(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Next Follow-up Date</label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={form.nextFollowUpDate}
-                    onChange={(e) => setField('nextFollowUpDate')(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <h2 className="text-base font-bold text-slate-800 mb-5">Onboarding Pipeline</h2>
-            <div className="space-y-4">
-              {PIPELINE_STAGES.map((stage, idx) => (
-                <div key={stage.key} className="flex items-start gap-3">
-                  <div className="flex-shrink-0 mt-0.5">
-                    {idx === 0 ? (
-                      <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
-                        <svg viewBox="0 0 12 12" className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M2 6l3 3 5-5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                    ) : (
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-300 bg-white" />
-                    )}
-                  </div>
-                  <div>
-                    <p className={`text-sm font-semibold ${idx === 0 ? 'text-slate-800' : 'text-slate-400'}`}>
-                      {stage.label}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{stage.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div> */}
     </div>
-    // </div>
   );
 };
 

@@ -117,7 +117,10 @@ const createDealer = async (data, userId) => {
 
   const dealerData = {
     ...data,
-    onboardedBy: userId,
+    onboardedBy: data.onboardedBy || userId,
+    creditLimit: Number(data.creditLimit) || 0,
+    pricingTier: data.pricingTier || 'standard',
+    paymentTerms: data.paymentTerms || data.netPayments || '',
     status: shouldAutoApprove ? 'active' : data.status || 'pending',
     kycStatus: shouldAutoApprove ? 'verified' : data.kycStatus || 'pending',
     approvedBy: shouldAutoApprove ? userId : data.approvedBy,
