@@ -236,7 +236,7 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms,
 
   dealer.status = 'active';
   dealer.kycStatus = 'verified';
-  dealer.creditLimit  = creditLimit || 0;
+  dealer.creditLimit  = Math.min(creditLimit || 0, 2000);
   dealer.pricingTier  = pricingTier || 'standard';
   dealer.paymentTerms = paymentTerms || '';
   dealer.onboardedBy  = onboardedBy || '';
