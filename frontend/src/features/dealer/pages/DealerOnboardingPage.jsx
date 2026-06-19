@@ -174,7 +174,7 @@ const DealerOnboardingPage = () => {
     if (!selected) return;
     dispatch(approveDealer({
       id: selected._id,
-      creditLimit: Number(approveForm.creditLimit),
+      creditLimit: Math.min(Number(approveForm.creditLimit) || 0, 2000),
       pricingTier: approveForm.pricingTier || 'standard',
       paymentTerms: approveForm.paymentTerms,
       onboardedBy: approveForm.onboardedBy,
@@ -754,11 +754,16 @@ const DealerOnboardingPage = () => {
             <label className="text-sm font-semibold text-slate-800 mb-2 block">Credit Limit (INR)</label>
             <input
               type="number"
+              min={0}
+              max={2000}
               value={approveForm.creditLimit}
-              placeholder="Enter credit limit (e.g. 2500000)"
+              placeholder="Max ₹2,000"
               onChange={(e) => setApproveForm((f) => ({ ...f, creditLimit: e.target.value }))}
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {Number(approveForm.creditLimit) > 2000 && (
+              <p className="text-xs text-red-500 mt-1">Maximum allowed credit limit is ₹2,000</p>
+            )}
           </div>
           <div>
             <label className="text-sm font-semibold text-slate-800 mb-2 block">Payment Terms</label>
