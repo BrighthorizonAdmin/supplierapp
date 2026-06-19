@@ -2,6 +2,7 @@ const inventoryService = require('./inventory.service');
 const asyncHandler = require('../../utils/asyncHandler');
 const { success, paginated } = require('../../utils/response');
 const { AppError } = require('../../middlewares/error.middleware');
+const DispatchedUnit = require('../dispatchedUnits/model/DispatchedUnit.model');
 
 const getInventory = asyncHandler(async (req, res) => {
   const { data, pagination } = await inventoryService.getInventory(req.query);
@@ -62,7 +63,26 @@ const updateWarehouse = asyncHandler(async (req, res) => {
   return success(res, wh, 'Warehouse updated');
 });
 
+const getInventoryDetails = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!id) throw new AppError('Inventory ID is required', 400);
+  
+  console.log('Fetching inventory details for ID:', id);
+  const inv = await inventoryService.getInventoryById(id);
+  
+  const prodId = (inv.productId && inv.productId._id) ? inv.productId._id : inv.productId;
+  let serials = [];
+  if (prodId) {
+    const units = await DispatchedUnit.find({ productId: prodId, status: 'in_stock' })
+      .select('serialNumber')
+      .sort({ createdAt: 1 })
+      .lean();
+    serials = units.map((u) => u.serialNumber);
+  }
+  return success(res, { ...inv, serials }, 'Inventory details fetched');
+});
+
 module.exports = {
-  getInventory, getInventoryStats, getInventoryById, adjustStock, upsertInventory,
+  getInventory, getInventoryStats, getInventoryById, getInventoryDetails, adjustStock, upsertInventory,
   createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials, updateOpeningStock,
 };

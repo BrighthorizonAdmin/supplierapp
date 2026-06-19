@@ -1,4 +1,5 @@
 const axios = require('axios');
+const mongoose = require('mongoose');
 const Inventory = require('./model/Inventory.model');
 const Warehouse = require('./model/Warehouse.model');
 const Product = require('../products/model/Product.model');
@@ -158,6 +159,9 @@ const getInventory = async (query = {}) => {
           category: '$category',
           unit: '$unit',
           basePrice: '$basePrice',
+          taxRate: '$taxRate',
+          hsn: '$hsn',
+          mrp: '$mrp',
         },
         warehouseId:       { $arrayElemAt: ['$whArr', 0] },
         quantityOnHand:    { $ifNull: ['$invRecords.quantityOnHand',    '$openingStockQty'] },
@@ -358,31 +362,102 @@ const updateWarehouse = async (id, updates, userId) => {
   return wh;
 };
 
-const editStockWithSerials = async (productId, warehouseId, stockQuantity, serialNumbers, productName, userId) => {
-  if (serialNumbers && serialNumbers.length > 0) {
-    const upperSerials = serialNumbers.map((s) => s.trim().toUpperCase());
-    const existing = await DispatchedUnit.find({ serialNumber: { $in: upperSerials } }).select('serialNumber').lean();
+const editStockWithSerials = async (
+  productId,
+  warehouseId,
+  stockQuantity,
+  serialNumbers,
+  productName,
+  userId
+) => {
+  const normalizeSerial = (item) => {
+    const serial =
+      typeof item === 'string'
+        ? item
+        : item?.serialNumber || '';
+
+    return serial.trim().toUpperCase();
+  };
+
+  // Check for duplicate serials already in the system
+  if (Array.isArray(serialNumbers) && serialNumbers.length > 0) {
+    const upperSerials = serialNumbers
+      .map(normalizeSerial)
+      .filter(Boolean);
+      const duplicatesInRequest = upperSerials.filter(
+  (item, index) => upperSerials.indexOf(item) !== index
+);
+
+if (duplicatesInRequest.length > 0) {
+  throw new AppError(
+    `Duplicate serial number(s) in request: ${[
+      ...new Set(duplicatesInRequest),
+    ].join(', ')}`,
+    409
+  );
+}
+    const existing = await DispatchedUnit.find({
+      serialNumber: { $in: upperSerials },
+    })
+      .select('serialNumber')
+      .lean();
+
     if (existing.length > 0) {
       const dupes = existing.map((d) => d.serialNumber).join(', ');
-      throw new AppError(`Serial number(s) already exist in the system: ${dupes}`, 409);
+      throw new AppError(
+        `Serial number(s) already exist in the system: ${dupes}`,
+        409
+      );
     }
   }
 
-  // stockQuantity = 0 means registering serials for existing opening stock — skip inventory change
+  // stockQuantity = 0 means registering serials for existing opening stock
+  // Skip inventory adjustment
   let inv = null;
+
   if (stockQuantity > 0) {
-    inv = await adjustStock(productId, warehouseId, stockQuantity, 'add', userId);
-    await Product.findByIdAndUpdate(productId, { $inc: { currentStockQty: stockQuantity } });
+    inv = await adjustStock(
+      productId,
+      warehouseId,
+      stockQuantity,
+      'add',
+      userId
+    );
+
+    await Product.findByIdAndUpdate(productId, {
+      $inc: { currentStockQty: stockQuantity },
+    });
   }
 
-  if (serialNumbers && serialNumbers.length > 0) {
-    const units = serialNumbers.map((sn) => ({
-      serialNumber: sn.trim().toUpperCase(),
-      productId,
-      productName: productName || '',
-      status: 'in_stock',
-    }));
-    await DispatchedUnit.insertMany(units);
+  // Insert serial numbers
+  if (Array.isArray(serialNumbers) && serialNumbers.length > 0) {
+    const units = serialNumbers
+      .map((sn) => {
+        const serial = normalizeSerial(sn);
+
+        if (!serial) return null;
+
+        const unit = {
+          serialNumber: serial,
+          productId,
+          productName: productName || '',
+          status: 'in_stock',
+        };
+
+        if (
+          typeof sn === 'object' &&
+          sn?.dispatchedAt
+        ) {
+          unit.dispatchedAt = new Date(sn.dispatchedAt);
+        }
+
+        return unit;
+      })
+      .filter(Boolean);
+
+    if (units.length > 0) {
+      await DispatchedUnit.insertMany(units);
+    }
   }
 
   return inv;

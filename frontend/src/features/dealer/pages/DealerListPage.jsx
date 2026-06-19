@@ -5,6 +5,7 @@ import {
   Search, Filter, Download, Eye, MoreVertical,
   TrendingUp, CheckCircle, Clock, AlertTriangle,
   MapPin, ChevronDown, Store, X,
+  Plus,
 } from 'lucide-react';
 import { fetchDealers, fetchDealerCounts, approveDealer, rejectDealer, suspendDealer, updateDealer } from '../dealerSlice';
 import Pagination from '../../../components/ui/Pagination';
@@ -275,8 +276,16 @@ const DealerListPage = () => {
     <div className="space-y-5">
 
       {/* ── Page title ── */}
+      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
       <h1 className="text-2xl font-bold text-slate-900">Dealer Management</h1>
-
+       <button
+          onClick={() => navigate('/addnew-dealer')}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus size={15} />
+          Add New Dealer
+        </button>
+        </div>
       {/* ── Stats cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard

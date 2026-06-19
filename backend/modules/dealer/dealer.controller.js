@@ -3,7 +3,53 @@ const asyncHandler = require('../../utils/asyncHandler');
 const { success, paginated } = require('../../utils/response');
 
 const createDealer = asyncHandler(async (req, res) => {
-  const dealer = await dealerService.createDealer(req.body, req.user.id);
+  const files = req.files || {};
+  const submittedDocuments = {};
+
+  if (files.gst?.[0]) {
+    submittedDocuments.gst = {
+      fileName: files.gst[0].originalname,
+      fileUrl: `/uploads/documents/${files.gst[0].filename}`,
+      uploadedAt: new Date(),
+    };
+  }
+  if (files.pan?.[0]) {
+    submittedDocuments.pan = {
+      fileName: files.pan[0].originalname,
+      fileUrl: `/uploads/documents/${files.pan[0].filename}`,
+      uploadedAt: new Date(),
+    };
+  }
+  if (files.bank?.[0]) {
+    submittedDocuments.bank = {
+      fileName: files.bank[0].originalname,
+      fileUrl: `/uploads/documents/${files.bank[0].filename}`,
+      uploadedAt: new Date(),
+    };
+  }
+
+  const ownerName = req.body.ownerName || req.body.name || req.body.primaryContact || '';
+  const address = {
+    street: req.body.street || '',
+    city: req.body.district || '',
+    state: req.body.state || '',
+    pincode: req.body.pincode || '',
+    country: req.body.country || 'India',
+  };
+
+  const payload = {
+    ...req.body,
+    ownerName,
+    businessName: req.body.businessName,
+    email: req.body.email ? req.body.email.toLowerCase().trim() : undefined,
+    phone: req.body.phone ? req.body.phone.replace(/\D/g, '').slice(-10) : undefined,
+    businessType: 'dealer',
+    address,
+    submittedDocuments: Object.keys(submittedDocuments).length ? submittedDocuments : undefined,
+    autoApprove: true,
+  };
+
+  const dealer = await dealerService.createDealer(payload, req.user.id);
   return success(res, dealer, 'Dealer created successfully', 201);
 });
 
