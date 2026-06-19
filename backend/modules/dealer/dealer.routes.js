@@ -7,6 +7,7 @@ const {
 const { resolveDocuments, mirrorDocuments } = require('./dealer.service');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { authorize } = require('../../middlewares/rbac.middleware');
+const { uploadDocument } = require('../../config/multer');
 
 const router = express.Router();
 
@@ -150,7 +151,16 @@ router.post('/webhook/application-updated', async (req, res) => {
 router.use(authenticate);
 
 router.get('/', authorize('dealer:read'), getDealers);
-router.post('/', authorize('dealer:write'), createDealer);
+router.post(
+  '/',
+  authorize('dealer:write'),
+  uploadDocument.fields([
+    { name: 'gst', maxCount: 1 },
+    { name: 'pan', maxCount: 1 },
+    { name: 'bank', maxCount: 1 },
+  ]),
+  createDealer
+);
 router.get('/:id', authorize('dealer:read'), getDealerById);
 router.put('/:id', authorize('dealer:write'), updateDealer);
 router.get('/:id/stats', authorize('dealer:read'), getDealerStats);

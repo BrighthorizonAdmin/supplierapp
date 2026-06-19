@@ -38,7 +38,10 @@ export const fetchDealerById = createAsyncThunk('dealer/fetchById', async (id, {
 
 export const createDealer = createAsyncThunk('dealer/create', async (dealerData, { rejectWithValue }) => {
   try {
-    const { data } = await api.post('/dealers', dealerData);
+    const config = dealerData instanceof FormData
+      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      : undefined;
+    const { data } = await api.post('/dealers', dealerData, config);
     toast.success('Dealer created successfully');
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }

@@ -112,7 +112,36 @@ const syncToDealerApp = async (applicationId, action, payload = {}) => {
 };
 
 const createDealer = async (data, userId) => {
-  const dealer = await Dealer.create({ ...data, onboardedBy: userId });
+  const password = generateRandomPassword();
+  const shouldAutoApprove = data.autoApprove || data.status === 'active';
+
+  const dealerData = {
+    ...data,
+    onboardedBy: userId,
+    status: shouldAutoApprove ? 'active' : data.status || 'pending',
+    kycStatus: shouldAutoApprove ? 'verified' : data.kycStatus || 'pending',
+    approvedBy: shouldAutoApprove ? userId : data.approvedBy,
+    approvedAt: shouldAutoApprove ? new Date() : data.approvedAt,
+  };
+
+  if (shouldAutoApprove) {
+    dealerData.password = password;
+  }
+
+  const dealer = await Dealer.create(dealerData);
+
+  if (shouldAutoApprove && dealer.email) {
+    try {
+      await sendDealerApprovalEmail({
+        to: dealer.email,
+        businessName: dealer.businessName,
+        password,
+      });
+    } catch (err) {
+      console.error('[DealerCreate] Approval email failed:', err.message);
+    }
+  }
+
   await auditService.log('dealer', dealer._id, 'create', userId, { after: dealer.toObject() });
   return dealer;
 };

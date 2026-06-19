@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
@@ -174,11 +175,20 @@ const TagInput = ({ tags, onChange }) => {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
  
+  const normalizeTag = (raw) => ({
+    value: raw.trim().toUpperCase(),
+    date: format(new Date(), 'dd MMM yyyy'),
+    dateISO: new Date().toISOString(),
+  });
+ 
   const addTag = (raw) => {
-    const v = raw.trim().toUpperCase();
-    if (!v) return;
-    if (tags.includes(v)) { toast.error(`"${v}" already added`); return; }
-    onChange([...tags, v]);
+    const value = raw.trim().toUpperCase();
+    if (!value) return;
+    if (tags.some((tag) => (typeof tag === 'string' ? tag : tag.value) === value)) {
+      toast.error(`"${value}" already added`);
+      return;
+    }
+    onChange([...tags, normalizeTag(raw)]);
     setInputValue('');
   };
  
@@ -198,7 +208,12 @@ const TagInput = ({ tags, onChange }) => {
     e.preventDefault();
     const parts = e.clipboardData.getData('text').split(/[,\n\r\t]+/).map((s) => s.trim()).filter(Boolean);
     const next = [...tags];
-    parts.forEach((p) => { const u = p.toUpperCase(); if (u && !next.includes(u)) next.push(u); });
+    parts.forEach((p) => {
+      const value = p.toUpperCase();
+      if (value && !next.some((tag) => (typeof tag === 'string' ? tag : tag.value) === value)) {
+        next.push(normalizeTag(p));
+      }
+    });
     onChange(next);
     setInputValue('');
   };
@@ -220,13 +235,21 @@ const TagInput = ({ tags, onChange }) => {
       </div>
  
       {tags.length > 0 && (
-        <div className="p-3 flex flex-wrap gap-2 max-h-36 overflow-y-auto">
-          {tags.map((tag, i) => (
-            <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 border border-slate-300 rounded-lg text-xs text-slate-700 bg-white">
-              {tag}
-              <button type="button" onClick={() => removeTag(i)} className="text-slate-400 hover:text-red-500 leading-none ml-0.5">×</button>
-            </span>
-          ))}
+        <div className="p-3 space-y-3 max-h-52 overflow-y-auto">
+          {tags.map((tag, i) => {
+            const normalizedTag = typeof tag === 'string' ? { value: tag, date: format(new Date(), 'dd MMM yyyy') } : tag;
+            return (
+              <div key={i} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-800 break-all">{normalizedTag.value}</p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-slate-500 uppercase tracking-[0.12em] whitespace-nowrap">{normalizedTag.date}</span>
+                    <button type="button" onClick={() => removeTag(i)} className="text-slate-400 hover:text-red-500 leading-none">×</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
  
@@ -273,7 +296,10 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
       warehouseId:         item.warehouseId?._id || null,
       openingStockQty:     newOpeningQty,
       openingStockChanged: newOpeningQty !== origOpeningQty,
-      serialNumbers:       tags,
+      // send array of objects so backend can store per-serial dates
+      serialNumbers:       tags.map((tag) => (typeof tag === 'string'
+        ? { serialNumber: tag, dispatchedAt: new Date().toISOString() }
+        : { serialNumber: tag.value, dispatchedAt: tag.dateISO || new Date().toISOString() })),
       productName:         prod.name,
     });
   };
@@ -367,6 +393,7 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
 };
  
 const InventoryPage = () => {
+  const navigate = useNavigate();
   const dispatch = useDispatch();
   const { list, warehouses, stats, pagination, loading } = useSelector((s) => s.inventory);
   const { list: products } = useSelector((s) => s.product);
@@ -538,17 +565,6 @@ const InventoryPage = () => {
           saving={editSaving}
         />
       )}
- 
-      {/* Header */}
-      {/* <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="btn-primary flex items-center gap-2 text-sm py-2 px-4"
-        >
-          <Plus size={14} /> Add Stock
-        </button>
-      </div> */}
  
       {/* ── Top section: donut + stat cards, equal height ── */}
       {/* FIX 1: items-stretch so the donut card grows to match the stat-cards grid height */}
@@ -776,7 +792,9 @@ const InventoryPage = () => {
                   return (
                     <tr key={item._id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3.5">
-                        <p className="font-semibold text-slate-800 leading-snug">{prod.name || '—'}</p>
+                        <p className="font-semibold text-slate-800 leading-snug hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/inventory/${item._id}`, { state: { inventory: item } })}>
+                          {prod.name || '—'}
+                        </p>
                         <p className="text-xs text-slate-400 mt-0.5">
                           SKU: {prod.productCode || '—'}
                           {prod.category ? ` | Category: ${prod.category}` : ''}
@@ -789,34 +807,11 @@ const InventoryPage = () => {
                       <td className="px-4 py-3.5">
                         <div
                           className="relative inline-block"
-                          onMouseEnter={() => handleSerialHover(item)}
-                          onMouseLeave={() => setHoveredSerial(null)}
                         >
                           <p className="font-semibold text-slate-800 cursor-default">
                             {Math.max(0, item.currentStockQty ?? 0).toLocaleString('en-IN')}
                           </p>
                           {prod.unit && <p className="text-xs text-slate-400 mt-0.5">{prod.unit}</p>}
-                          {isHovered && (
-                            <div className="absolute left-0 top-8 z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-3 w-72">
-                              <p className="text-xs font-semibold text-slate-600 mb-2">Serial Numbers</p>
-                              {serial?.loading ? (
-                                <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
-                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary-600" />
-                                  Loading...
-                                </div>
-                              ) : serial?.serials?.length > 0 ? (
-                                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-                                  {serial.serials.map((sn, i) => (
-                                    <span key={i} className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs font-mono text-slate-700">
-                                      {sn}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-xs text-slate-400 italic py-1">No serials registered</p>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3.5">
