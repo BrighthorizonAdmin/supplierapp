@@ -134,6 +134,7 @@ const DealerOnboardingPage = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectComment, setRejectComment] = useState('');
+  const [rejectTouched, setRejectTouched] = useState(false);
 
   // Request update modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -189,15 +190,18 @@ const DealerOnboardingPage = () => {
 
   const handleConfirmReject = () => {
     if (!selected) return;
+    setRejectTouched(true);
+    if (!rejectReason) return;
     const reason = rejectComment
       ? `${rejectReason}: ${rejectComment}`
-      : rejectReason || 'Application rejected by admin';
+      : rejectReason;
     dispatch(rejectDealer({ id: selected._id, reason }))
       .then(() => {
         setSelected(null);
         setShowRejectModal(false);
         setRejectReason('');
         setRejectComment('');
+        setRejectTouched(false);
       });
   };
 
@@ -633,13 +637,18 @@ const DealerOnboardingPage = () => {
         </div>
 
         <div className="mb-4">
-          <label className="text-sm font-semibold text-slate-800 mb-2 block">Reason for Rejection</label>
+          <label className="text-sm font-semibold text-slate-800 mb-2 block">
+            Reason for Rejection <span className="text-red-500">*</span>
+          </label>
           <SelectField
             value={rejectReason}
-            onChange={setRejectReason}
+            onChange={(v) => { setRejectReason(v); setRejectTouched(false); }}
             placeholder="Select a reason..."
             options={REJECTION_REASONS}
           />
+          {rejectTouched && !rejectReason && (
+            <p className="text-red-500 text-xs mt-1">Please select a reason before rejecting.</p>
+          )}
         </div>
 
         <div className="mb-6">
@@ -655,7 +664,7 @@ const DealerOnboardingPage = () => {
 
         <div className="flex items-center justify-end gap-3">
           <button
-            onClick={() => { setShowRejectModal(false); setRejectReason(''); setRejectComment(''); }}
+            onClick={() => { setShowRejectModal(false); setRejectReason(''); setRejectComment(''); setRejectTouched(false); }}
             className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
           >
             Cancel
