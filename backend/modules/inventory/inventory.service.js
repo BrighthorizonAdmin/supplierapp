@@ -425,7 +425,7 @@ if (duplicatesInRequest.length > 0) {
     );
 
     await Product.findByIdAndUpdate(productId, {
-      $inc: { currentStockQty: stockQuantity },
+      $inc: { currentStockQty: stockQuantity, openingStockQty: stockQuantity },
     });
   }
 

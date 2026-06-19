@@ -495,7 +495,7 @@ const InventoryPage = () => {
       const res = await dispatch(editStockWithSerials({
         productId:     form.productId,
         warehouseId:   form.warehouseId,
-        stockQuantity: 0,
+        stockQuantity: form.serialNumbers.length,
         serialNumbers: form.serialNumbers,
         productName:   form.productName,
       }));
