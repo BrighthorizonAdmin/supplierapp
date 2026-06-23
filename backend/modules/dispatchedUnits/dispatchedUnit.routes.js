@@ -66,7 +66,7 @@ router.get('/All-Serials', authenticate, asyncHandler(async (req, res) => {
   const { productId } = req.query;
   if (!productId) throw new AppError('productId is required', 400);
   const units = await DispatchedUnit.find({ productId })
-    .select('serialNumber dispatchedAt invoiceId invoiceNumber status')
+    .select('serialNumber createdAt invoiceId invoiceNumber status')
     .populate('invoiceId', 'invoiceNumber')
     .sort({ createdAt: 1 })
     .lean();

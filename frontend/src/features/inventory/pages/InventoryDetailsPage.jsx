@@ -33,7 +33,7 @@ const InventoryDetailsPage = () => {
           const units = response.data?.data || [];
           serials = units.map((u) => ({
             serialNumber: u.serialNumber,
-            dispatchedAt: u.dispatchedAt,
+            dispatchedAt: u.createdAt,
             invoiceId: u.invoiceId,
             invoiceNumber: u.invoiceNumber,
             status: u.status,
@@ -235,7 +235,16 @@ const InventoryDetailsPage = () => {
                     <td className="px-4 py-4 font-mono text-slate-800">{serial.serialNumber || '—'}</td>
                     <td className="px-4 py-4 text-slate-600">{formatDateOrDash(serial.dispatchedAt)}</td>
                     <td className="px-4 py-4 text-slate-600 font-mono">
-                      {serial.invoiceId?.invoiceNumber || serial.invoiceNumber || serial.invoiceId || '—'}
+                      {serial.invoiceId || serial.invoiceNumber ? (
+                        <button
+                          onClick={() => navigate(`/invoices/${serial.invoiceId?._id || serial.invoiceId}`)}
+                          className="text-blue-500 hover:text-blue-700 cursor-pointer bg-transparent border-none font-mono"
+                        >
+                          {serial.invoiceId?.invoiceNumber || serial.invoiceNumber || serial.invoiceId || '—'}
+                        </button>
+                      ) : (
+                        <span>—</span>
+                      )}
                     </td>
                     <td className="px-4 py-4">
                       <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700">
