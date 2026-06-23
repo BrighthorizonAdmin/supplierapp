@@ -137,7 +137,7 @@ const DealerListPage = () => {
   const [editModal, setEditModal] = useState(null);
   const [editCreditLimit, setEditCreditLimit] = useState(0);
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm();
   const tabStatus = TABS.find((t) => t.id === activeTab)?.status ?? '';
 
   // Debounce search input — only fires API call after 400 ms of inactivity
@@ -174,6 +174,10 @@ const DealerListPage = () => {
 
   // Edit (credit limit) handler
   const handleEdit = () => {
+    if (Number(editCreditLimit) > 2000) {
+      toast.error('Credit limit cannot exceed ₹2,000');
+      return;
+    }
     dispatch(updateDealer({ id: editModal._id, creditLimit: Number(editCreditLimit) })).then(() => {
       setEditModal(null);
     });
@@ -579,8 +583,14 @@ const DealerListPage = () => {
         <form onSubmit={handleSubmit(handleApprove)} className="space-y-4">
           <div>
             <label className="label">Credit Limit (₹)</label>
-            <input type="number" className="input" defaultValue={100000} min={0}
-              {...register('creditLimit', { valueAsNumber: true })} />
+            <input type="number" className="input" defaultValue={0} min={0} max={2000}
+              {...register('creditLimit', {
+                valueAsNumber: true,
+                max: { value: 2000, message: 'Credit limit cannot exceed ₹2,000' },
+              })} />
+            {errors.creditLimit && (
+              <p className="text-red-500 text-xs mt-1">{errors.creditLimit.message}</p>
+            )}
           </div>
           <div>
             <label className="label">Pricing Tier</label>
