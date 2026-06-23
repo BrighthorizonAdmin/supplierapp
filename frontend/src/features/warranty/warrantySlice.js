@@ -90,7 +90,10 @@ const warrantySlice = createSlice({
       .addCase(lookupBySerial.rejected,  (state, action) => { state.lookupLoading = false; state.lookupError = action.payload; })
 
       .addCase(updateWarrantyStatus.fulfilled, (state, action) => {
-        state.selected = action.payload;
+        // Merge only scalar fields — preserve the populated dealerId object already in selected
+        if (state.selected && state.selected._id === action.payload._id) {
+          state.selected = { ...state.selected, ...action.payload, dealerId: state.selected.dealerId };
+        }
         const idx = state.list.findIndex((w) => w._id === action.payload._id);
         if (idx !== -1) state.list[idx] = action.payload;
       });
