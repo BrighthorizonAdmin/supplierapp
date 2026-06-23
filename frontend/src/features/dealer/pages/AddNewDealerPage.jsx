@@ -158,54 +158,43 @@ function DocUploadRow({ title, icon, file, onUpload, onRemove }) {
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      onUpload(selectedFile);
-    }
+    if (selectedFile) onUpload(selectedFile);
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "12px",
-        marginBottom: "4px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          alignItems: "center",
-        }}
-      >
-        <span style={{ fontSize: "12px" }}>{icon}</span>
-        <span>{title}</span>
+    <div className="flex items-center gap-3 py-3 border-b border-slate-100 last:border-0">
+      {/* Icon + title */}
+      <span className="text-lg flex-shrink-0">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-700">{title}</p>
+        {file && (
+          <p className="text-xs text-slate-400 truncate mt-0.5">{file.name}</p>
+        )}
       </div>
 
+      {/* Action */}
       {file ? (
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-          }}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="flex-shrink-0 text-xs font-medium text-red-500 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 transition-colors"
         >
-          <span>{file.name}</span>
-          <button onClick={onRemove}>Remove</button>
-        </div>
+          Remove
+        </button>
       ) : (
         <>
           <input
             ref={fileInputRef}
             type="file"
             accept=".pdf,.jpg,.jpeg,.png,.heic"
-            style={{ display: "none" }}
+            className="hidden"
             onChange={handleFileChange}
           />
-
-          <button onClick={() => fileInputRef.current.click()}>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current.click()}
+            className="flex-shrink-0 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors"
+          >
             Upload
           </button>
         </>
