@@ -129,6 +129,7 @@ const createDealer = async (data, userId) => {
 
   if (shouldAutoApprove) {
     dealerData.password = password;
+    dealerData.mustChangePassword = true;
   }
 
   const dealer = await Dealer.create(dealerData);

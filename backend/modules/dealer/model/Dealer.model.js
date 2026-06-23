@@ -176,6 +176,8 @@ const dealerSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
+    mustChangePassword: { type: Boolean, default: false },
+
   },
   {
     timestamps: true,

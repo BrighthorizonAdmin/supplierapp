@@ -22,7 +22,13 @@ const errorMiddleware = (err, req, res, next) => {
   if (err.code === 11000) {
     const field = Object.keys(err.keyValue)[0];
     const value = err.keyValue[field];
-    return error(res, `Duplicate value: '${value}' for field '${field}' already exists.`, 409);
+    let message = `Duplicate value: '${value}' for field '${field}' already exists.`;
+    if (field === 'email') {
+      message = `Email '${value}' already exists.`;
+    } else if (field === 'gstNumber') {
+      message = `GST number '${value}' already exists.`;
+    }
+    return error(res, message, 409);
   }
 
   // JWT errors

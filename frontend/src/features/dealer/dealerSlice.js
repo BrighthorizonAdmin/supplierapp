@@ -44,7 +44,11 @@ export const createDealer = createAsyncThunk('dealer/create', async (dealerData,
     const { data } = await api.post('/dealers', dealerData, config);
     toast.success('Dealer created successfully');
     return data.data;
-  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+  } catch (err) {
+    const message = err.response?.data?.message || 'Failed to create dealer';
+    toast.error(message);
+    return rejectWithValue(message);
+  }
 });
 
 export const approveDealer = createAsyncThunk('dealer/approve', async ({ id, ...body }, { rejectWithValue }) => {
