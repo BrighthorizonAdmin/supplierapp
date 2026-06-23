@@ -157,7 +157,7 @@ export default function QuoteFormPage() {
   const pickProduct = (idx, p) => {
     setItems((prev) => {
       const n = [...prev];
-      n[idx] = calcItem({ ...n[idx], productId: p._id, productName: p.name, unitPrice: p.basePrice || 0, taxRate: p.taxRate || 0, unit: (p.unit || 'PCS').toUpperCase(), hsnCode: p.hsnCode || '' });
+      n[idx] = calcItem({ ...n[idx], productId: p._id, productName: p.name, unitPrice: p.basePrice || 0, taxRate: p.taxRate || 0, unit: (p.unit || 'PCS').toUpperCase(), hsnCode: p.hsn || '' });
       return n;
     });
     setProdSearch((p2) => ({ ...p2, [idx]: p.name }));
