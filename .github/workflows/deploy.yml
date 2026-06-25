@@ -1,13 +1,13 @@
-name: Deploy Supplier to Development
+name: Deploy to GCP
 
 on:
   push:
     branches:
-      - Develop
+      - main
 
 jobs:
   deploy:
-    name: Deploy to Development Instance
+    name: Deploy to GCP Instance
     runs-on: ubuntu-latest
 
     steps:
@@ -17,22 +17,22 @@ jobs:
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.GCP_DEV_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.GCP_DEV_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.GCP_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy to Development
+      - name: Deploy to GCP
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
-            ${{ secrets.GCP_DEV_USERNAME }}@${{ secrets.GCP_DEV_HOST }} << 'EOF'
+            ${{ secrets.GCP_USERNAME }}@${{ secrets.GCP_HOST }} << 'EOF'
             set -e
 
             echo "==> Navigating to project directory"
-            cd ~/supplier-app/supplierapp
+            cd ~/supplierapp
 
-            echo "==> Pulling latest changes from Develop"
-            git fetch origin Develop
-            git reset --hard origin/Develop
+            echo "==> Pulling latest changes from main"
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "==> Installing backend dependencies"
             cd backend
@@ -45,11 +45,7 @@ jobs:
 
             echo "==> Restarting server with PM2"
             cd ../backend
-            pm2 restart supplier-dev || pm2 start server.js --name "supplier-dev"
-            pm2 save
+            pm2 restart server || pm2 start server.js --name server
 
-            echo "==> Reloading Nginx"
-            sudo systemctl reload nginx
-
-            echo "==> Development Deployment complete!"
+            echo "==> Deployment complete!"
           EOF
