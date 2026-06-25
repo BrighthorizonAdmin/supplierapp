@@ -45,6 +45,7 @@ import QuoteListPage from '../features/quotes/pages/QuoteListPage';
 import QuoteFormPage from '../features/quotes/pages/QuoteFormPage';
 import QuoteDetailPage from '../features/quotes/pages/QuoteDetailPage';
 import AddNewDealerPage from '../features/dealer/pages/AddNewDealerPage';
+import HsnPage from '../features/hsn/pages/HsnPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -257,7 +258,12 @@ const AppRouter = () => {
             <ProtectedRoute permission="dealer:write">
               <AddNewDealerPage />
             </ProtectedRoute>
-          } />          
+          } />
+          <Route path="hsn-codes" element={
+            <ProtectedRoute permission="products:read">
+              <HsnPage />
+            </ProtectedRoute>
+          } />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

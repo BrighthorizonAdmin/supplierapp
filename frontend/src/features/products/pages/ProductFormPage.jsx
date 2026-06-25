@@ -5,6 +5,7 @@ import {
   createProduct, updateProduct, fetchProductById,
   uploadProductImages, deleteProductImage, setPrimaryImage,
 } from '../productSlice';
+import { fetchHsnCategories } from '../../hsn/hsnSlice';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import Modal from '../../../components/ui/Modal';
@@ -362,6 +363,7 @@ const ProductFormPage = () => {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const { selected, loading } = useSelector((s) => s.product);
+  const hsnCategories = useSelector((s) => s.hsn.list);
 
   const [productImages,   setProductImages]   = useState([]);
   const [interfaceGroups, setInterfaceGroups] = useState([]);
@@ -372,6 +374,7 @@ const ProductFormPage = () => {
   const isEdit = !!id;
 
   useEffect(() => {
+    dispatch(fetchHsnCategories());
     if (isEdit) dispatch(fetchProductById(id));
   }, [dispatch, id, isEdit]);
 
@@ -495,7 +498,25 @@ const ProductFormPage = () => {
           {/* ── Left ── */}
           <div className="flex flex-col gap-4">
             <F label="Product Name" name="name" required />
-            <F label="Category"     name="category" required />
+            <div>
+              <label className="label">Category<span className="text-red-500">*</span></label>
+              <select
+                className="input"
+                {...register('category', { required: 'Required' })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setValue('category', val, { shouldDirty: true, shouldValidate: true });
+                  const cat = hsnCategories.find(c => c.name === val);
+                  if (cat?.hsnCode) setValue('hsn', cat.hsnCode, { shouldDirty: true });
+                }}
+              >
+                <option value="">Select category</option>
+                {hsnCategories.map(c => (
+                  <option key={c._id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+              {errors.category && <p className="text-red-500 text-xs mt-1">{errors.category.message}</p>}
+            </div>
             <F label="MRP"          name="mrp"       type="number" step="0.01" />
             <F label="Tax"          name="taxRate"   type="number" />
             <F label="Base Price"   name="basePrice" type="number" step="0.01" required />
