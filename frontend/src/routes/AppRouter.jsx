@@ -44,6 +44,8 @@ import WarrantyLookupPage from '../features/warranty/pages/WarrantyLookupPage';
 import QuoteListPage from '../features/quotes/pages/QuoteListPage';
 import QuoteFormPage from '../features/quotes/pages/QuoteFormPage';
 import QuoteDetailPage from '../features/quotes/pages/QuoteDetailPage';
+import DeliveryChallanListPage from '../features/deliveryChallan/pages/DeliveryChallanListPage';
+import DeliveryChallanFormPage from '../features/deliveryChallan/pages/DeliveryChallanFormPage';
 import AddNewDealerPage from '../features/dealer/pages/AddNewDealerPage';
 import HsnPage from '../features/hsn/pages/HsnPage';
 
@@ -252,6 +254,26 @@ const AppRouter = () => {
           <Route path="quotes/:id/edit" element={
             <ProtectedRoute permission="invoices:write">
               <QuoteFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="delivery-challan" element={
+            <ProtectedRoute permission="invoices:read">
+              <DeliveryChallanListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="delivery-challan/new" element={
+            <ProtectedRoute permission="invoices:write">
+              <DeliveryChallanFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="delivery-challan/:id" element={
+            <ProtectedRoute permission="invoices:read">
+              <DeliveryChallanFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="delivery-challan/:id/edit" element={
+            <ProtectedRoute permission="invoices:write">
+              <DeliveryChallanFormPage />
             </ProtectedRoute>
           } />
           <Route path="addnew-dealer" element={
