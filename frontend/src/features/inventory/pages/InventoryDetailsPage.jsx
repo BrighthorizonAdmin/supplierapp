@@ -177,7 +177,7 @@ const InventoryDetailsPage = () => {
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">HSN Code</p>
-                <p className="font-medium text-slate-800">{prod.hsn || prod.hsnCode || '—'}</p>
+                <p className="font-medium text-slate-800">{prod.hsnCode || '—'}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

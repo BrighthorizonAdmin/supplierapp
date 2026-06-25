@@ -100,7 +100,7 @@ const productSchema = new mongoose.Schema(
       default: 18,
       min: [0, 'Tax rate cannot be negative'],
     },
-    hsn: {
+    hsnCode: {
       type: String,
       trim: true,
     },

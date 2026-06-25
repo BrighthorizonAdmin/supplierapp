@@ -8,12 +8,20 @@ const calcTotals = (lineItems = []) => {
   const items = lineItems.map((item) => {
     const qty      = Number(item.quantity)  || 0;
     const price    = Number(item.unitPrice) || 0;
-    const taxable  = qty * price;
+    const base     = qty * price;
+    const discAmt  = Number(item.discountAmount) || 0;
+    const taxable  = Math.max(0, base - discAmt);
     const tax      = taxable * ((Number(item.taxRate) || 0) / 100);
     const lineTotal = taxable + tax;
-    subtotal   += taxable;
-    taxAmount  += tax;
-    return { ...item, taxAmount: +tax.toFixed(2), lineTotal: +lineTotal.toFixed(2) };
+    subtotal  += base;
+    taxAmount += tax;
+    return {
+      ...item,
+      discountPercent: Number(item.discountPercent) || 0,
+      discountAmount:  +discAmt.toFixed(2),
+      taxAmount:       +tax.toFixed(2),
+      lineTotal:       +lineTotal.toFixed(2),
+    };
   });
   return {
     items,
@@ -30,7 +38,6 @@ const getQuotes = async (query = {}) => {
   if (query.source === 'dealer') {
     match.source = 'dealer';
   } else if (query.source === 'supplier') {
-    // include existing quotes that predate the source field (no source = supplier-created)
     match.$and = [...(match.$and || []), { $or: [{ source: 'supplier' }, { source: { $exists: false } }] }];
   }
   if (query.dealerId) match.dealerId = query.dealerId;
@@ -57,8 +64,19 @@ const getQuoteById = async (id) => {
 };
 
 const createQuote = async (body, user) => {
-  const { lineItems = [], dealerId, ...rest } = body;
-  const { items, subtotal, taxAmount, totalAmount } = calcTotals(lineItems);
+  const {
+    lineItems = [],
+    dealerId,
+    totalAmount: clientTotal,
+    additionalCharges,
+    overallDiscount,
+    autoRoundOff,
+    roundOffAmount,
+    validForDays,
+    ...rest
+  } = body;
+
+  const { items, subtotal, taxAmount } = calcTotals(lineItems);
 
   let { partyName, partyPhone, partyGST, partyAddress } = rest;
   if (dealerId && !partyName) {
@@ -72,11 +90,21 @@ const createQuote = async (body, user) => {
     }
   }
 
+  // Trust the client's computed total (includes charges, discounts, round-off)
+  const totalAmount = clientTotal != null ? +Number(clientTotal).toFixed(2) : +(subtotal + taxAmount).toFixed(2);
+
   return Quote.create({
     ...rest,
     dealerId,
     lineItems: items,
-    subtotal, taxAmount, totalAmount,
+    subtotal,
+    taxAmount,
+    totalAmount,
+    additionalCharges: additionalCharges || [],
+    overallDiscount:   overallDiscount   || undefined,
+    autoRoundOff:      autoRoundOff      || false,
+    roundOffAmount:    roundOffAmount     || 0,
+    validForDays:      validForDays       || 30,
     partyName, partyPhone, partyGST, partyAddress,
     createdBy: user?._id,
   });
@@ -86,14 +114,35 @@ const updateQuote = async (id, body) => {
   const quote = await Quote.findById(id);
   if (!quote) throw new AppError('Quote not found', 404);
 
-  const { lineItems, ...rest } = body;
+  const {
+    lineItems,
+    totalAmount: clientTotal,
+    additionalCharges,
+    overallDiscount,
+    autoRoundOff,
+    roundOffAmount,
+    validForDays,
+    ...rest
+  } = body;
+
   if (lineItems) {
-    const { items, subtotal, taxAmount, totalAmount } = calcTotals(lineItems);
-    quote.lineItems   = items;
-    quote.subtotal    = subtotal;
-    quote.taxAmount   = taxAmount;
-    quote.totalAmount = totalAmount;
+    const { items, subtotal, taxAmount } = calcTotals(lineItems);
+    quote.lineItems  = items;
+    quote.subtotal   = subtotal;
+    quote.taxAmount  = taxAmount;
+    quote.totalAmount = clientTotal != null
+      ? +Number(clientTotal).toFixed(2)
+      : +(subtotal + taxAmount).toFixed(2);
+  } else if (clientTotal != null) {
+    quote.totalAmount = +Number(clientTotal).toFixed(2);
   }
+
+  if (additionalCharges !== undefined) quote.additionalCharges = additionalCharges;
+  if (overallDiscount   !== undefined) quote.overallDiscount   = overallDiscount;
+  if (autoRoundOff      !== undefined) quote.autoRoundOff      = autoRoundOff;
+  if (roundOffAmount    !== undefined) quote.roundOffAmount     = roundOffAmount;
+  if (validForDays      !== undefined) quote.validForDays       = validForDays;
+
   Object.assign(quote, rest);
   await quote.save();
   return quote;

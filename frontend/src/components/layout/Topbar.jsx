@@ -41,7 +41,7 @@ const getNotificationRoute = (n) => {
   if (entityType === 'order' || type === 'order') return '/orders';
   if (entityType === 'invoice' || type === 'payment') return '/invoices';
   if(entityType === 'warranty' || type === 'warranty') return '/warranty';
-  return null;
+    if(type === 'return') return '/exchanges';
 };
  
 function timeAgo(dateStr) {
