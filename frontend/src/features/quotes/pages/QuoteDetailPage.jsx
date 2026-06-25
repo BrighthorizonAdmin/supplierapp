@@ -359,6 +359,28 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
                   <span style={{ fontWeight: '500' }}>₹ {fmtNum(q.subtotal)}</span>
                 </div>
               )}
+              {/* Additional Charges */}
+              {(q.additionalCharges || []).filter(c => Number(c.amount) > 0).map((c, i) => (
+                <div key={i}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#374151', marginBottom: '3px' }}>
+                    <span>{c.label || 'Additional Charge'}</span>
+                    <span style={{ fontWeight: '500' }}>₹ {fmtNum(c.amount)}</span>
+                  </div>
+                  {Number(c.taxRate) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#6b7280', marginBottom: '3px' }}>
+                      <span>GST @{c.taxRate}% on {c.label || 'charge'}</span>
+                      <span>₹ {fmtNum(c.taxAmount)}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {/* Overall Discount */}
+              {q.overallDiscount && Number(q.overallDiscount.amount) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#dc2626', marginBottom: '3px' }}>
+                  <span>Discount {q.overallDiscount.discountType === 'percent' ? `(${q.overallDiscount.value}%)` : ''}</span>
+                  <span style={{ fontWeight: '500' }}>- ₹ {fmtNum(q.overallDiscount.amount)}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '700', color: '#111827', borderTop: '1px solid #e5e7eb', paddingTop: '6px', marginTop: '2px' }}>
                 <span>Total Amount</span>
                 <span>₹ {fmtInt(q.totalAmount)}</span>

@@ -160,7 +160,7 @@ const getInventory = async (query = {}) => {
           unit: '$unit',
           basePrice: '$basePrice',
           taxRate: '$taxRate',
-          hsn: '$hsn',
+          hsnCode: '$hsnCode',
           mrp: '$mrp',
         },
         warehouseId:       { $arrayElemAt: ['$whArr', 0] },

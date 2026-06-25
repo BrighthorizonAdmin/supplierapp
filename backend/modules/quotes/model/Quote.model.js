@@ -9,16 +9,38 @@ const bankDetailsSchema = new mongoose.Schema({
 
 const lineItemSchema = new mongoose.Schema(
   {
-    productId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
-    productName: { type: String, required: true },
-    description: { type: String },
-    hsnCode:     { type: String },
-    quantity:    { type: Number, required: true, min: 1 },
-    unitPrice:   { type: Number, required: true, min: 0 },
-    unit:        { type: String, default: 'PCS' },
-    taxRate:     { type: Number, default: 0 },
-    taxAmount:   { type: Number, default: 0 },
-    lineTotal:   { type: Number, default: 0 },
+    productId:       { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+    productName:     { type: String, required: true },
+    description:     { type: String },
+    hsnCode:         { type: String },
+    quantity:        { type: Number, required: true, min: 1 },
+    unitPrice:       { type: Number, required: true, min: 0 },
+    unit:            { type: String, default: 'PCS' },
+    discountPercent: { type: Number, default: 0 },
+    discountAmount:  { type: Number, default: 0 },
+    taxRate:         { type: Number, default: 0 },
+    taxAmount:       { type: Number, default: 0 },
+    lineTotal:       { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const additionalChargeSchema = new mongoose.Schema(
+  {
+    label:     { type: String, default: '' },
+    amount:    { type: Number, default: 0 },
+    taxRate:   { type: Number, default: 0 },
+    taxAmount: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const overallDiscountSchema = new mongoose.Schema(
+  {
+    discountType: { type: String, enum: ['percent', 'amount'], default: 'percent' },
+    value:        { type: Number, default: 0 },
+    afterTax:     { type: Boolean, default: true },
+    amount:       { type: Number, default: 0 },
   },
   { _id: false }
 );
@@ -38,11 +60,24 @@ const quoteSchema = new mongoose.Schema(
     salesman:      { type: String },
 
     // Dates
-    quoteDate:  { type: Date, default: Date.now },
-    expiryDate: { type: Date },
+    quoteDate:   { type: Date, default: Date.now },
+    expiryDate:  { type: Date },
+    validForDays: { type: Number, default: 30 },
 
-    // Line items & totals
-    lineItems:   [lineItemSchema],
+    // Line items
+    lineItems:    [lineItemSchema],
+
+    // Additional charges
+    additionalCharges: { type: [additionalChargeSchema], default: [] },
+
+    // Overall / footer discount
+    overallDiscount: { type: overallDiscountSchema, default: null },
+
+    // Round-off
+    autoRoundOff:   { type: Boolean, default: false },
+    roundOffAmount: { type: Number, default: 0 },
+
+    // Stored totals
     subtotal:    { type: Number, default: 0 },
     taxAmount:   { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },
@@ -54,7 +89,6 @@ const quoteSchema = new mongoose.Schema(
     notes:              { type: String, trim: true },
     termsAndConditions: { type: String },
 
-    // Quotes are always editable regardless of status
     status: {
       type: String,
       enum: ['draft', 'sent', 'accepted', 'rejected', 'expired'],
