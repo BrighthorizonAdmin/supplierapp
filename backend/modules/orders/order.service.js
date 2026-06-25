@@ -359,32 +359,32 @@ const createOrder = async ({ dealerId, items, notes, orderType }, userId) => {
  
 const confirmOrder = async (orderId, userId) => {
   const order = await withTransaction(async (session) => {
-
+ 
     const order = await Order.findById(orderId)
       .populate('dealerId')
       .session(session);
-
+ 
     if (!order) {
       throw new AppError('Order not found', 404);
     }
-
+ 
     if (!['draft', 'pending'].includes(order.status)) {
       throw new AppError(`Order is already ${order.status}`, 400);
     }
-
+ 
     const dealer = order.dealerId;
-
+ 
     if (!dealer) {
       throw new AppError('Dealer not found', 404);
     }
-
+ 
     if (dealer.status !== 'active') {
       throw new AppError('Dealer account is not active', 400);
     }
-
+ 
     // Supplier-created orders only
     const isSupplierCreatedOrder = !order.dbeOrderId;
-
+ 
     // Credit limit validation
     if (
       isSupplierCreatedOrder &&
@@ -395,15 +395,15 @@ const confirmOrder = async (orderId, userId) => {
         400
       );
     }
-
+ 
     // Fetch order items
     const orderItemDocs = await OrderItem.find({ orderId }).session(session);
-
+ 
     const items =
       orderItemDocs.length > 0
         ? orderItemDocs
         : (order.items || []);
-
+ 
     // ==========================================
     // STOCK ALLOCATION
     // ==========================================
@@ -411,11 +411,11 @@ const confirmOrder = async (orderId, userId) => {
     // allocateStock() already reduces currentStockQty
     // so DO NOT reduce stock again manually
     // ==========================================
-
+ 
     for (const item of items) {
-
+ 
       if (item.warehouseId) {
-
+ 
         await inventoryService.allocateStock(
           item.productId,
           item.warehouseId,
@@ -424,37 +424,37 @@ const confirmOrder = async (orderId, userId) => {
         );
       }
     }
-
+ 
     // Update order
     order.status = 'confirmed';
     order.confirmedBy = userId;
     order.confirmedAt = new Date();
     order.creditUsed = order.netAmount;
-
+ 
     await order.save({ session });
-
+ 
     // ==========================================
     // REMOVED DUPLICATE STOCK DEDUCTION
     // ==========================================
     // THIS BLOCK WAS CAUSING DOUBLE DECREMENT
     //
-    // for (const item of items) {
-    //   const qty = Number(item.quantity) || 0;
-    //   const pid = item.productId;
-    //
-    //   if (pid && qty > 0) {
-    //     await Product.findByIdAndUpdate(
-    //       pid,
-    //       { $inc: { currentStockQty: -qty } },
-    //       { session, returnDocument: 'after' }
-    //     );
-    //   }
-    // }
+    for (const item of items) {
+      const qty = Number(item.quantity) || 0;
+      const pid = item.productId;
+   
+      if (pid && qty > 0) {
+        await Product.findByIdAndUpdate(
+          pid,
+          { $inc: { currentStockQty: -qty } },
+          { session, returnDocument: 'after' }
+        );
+      }
+    }
     // ==========================================
-
+ 
     // Update dealer credit usage
     if (isSupplierCreatedOrder) {
-
+ 
       await Dealer.findByIdAndUpdate(
         order.dealerId,
         {
@@ -465,7 +465,7 @@ const confirmOrder = async (orderId, userId) => {
         { session }
       );
     }
-
+ 
     // Create transaction
     await Transaction.create([
       {
@@ -480,7 +480,7 @@ const confirmOrder = async (orderId, userId) => {
         createdBy: userId,
       }
     ], { session });
-
+ 
     // Audit log
     await auditService.log(
       'order',
@@ -496,31 +496,88 @@ const confirmOrder = async (orderId, userId) => {
         },
       }
     );
-
+ 
+    // Create invoice at confirmation (serial numbers added later on delivery)
+    let confirmedInvoice = null;
+    try {
+      const isAlreadyPaid = order.paymentStatus === 'completed';
+      const invoiceLineItems = items.map((i) => ({
+        productId:     i.productId,
+        productName:   i.productName || i.name || '',
+        productCode:   i.productCode || i.sku || '',
+        quantity:      Number(i.quantity) || 0,
+        unitPrice:     Number(i.unitPrice || i.basePrice) || 0,
+        taxRate:       Number(i.taxRate) || 0,
+        taxAmount:     Number(i.taxAmount) || 0,
+        lineTotal:     Number(i.lineTotal) || 0,
+        serialNumbers: [],
+      }));
+      const inv = await Invoice.create([{
+        orderId:     order._id,
+        dealerId:    order.dealerId,
+        lineItems:   invoiceLineItems,
+        subtotal:    order.subtotal,
+        taxAmount:   order.taxAmount,
+        totalAmount: order.netAmount,
+        amountPaid:  isAlreadyPaid ? order.netAmount : 0,
+        status:      isAlreadyPaid ? 'paid' : 'issued',
+        paymentMode: order.paymentMethod || undefined,
+        issuedAt:    new Date(),
+        dueDate:     addDays(new Date(), 30),
+      }], { session });
+      confirmedInvoice = inv[0];
+      order.invoiceId = inv[0]._id;
+      await order.save({ session });
+    } catch (invoiceErr) {
+      console.error('[confirmOrder] Invoice creation failed:', invoiceErr.message);
+    }
+ 
     // Socket event
     emitToAll(ORDER_CONFIRMED, {
       orderId,
       orderNumber: order.orderNumber,
       dealerId: order.dealerId
     });
-
-    // Notify Dealer Backend
-    notifyDealerOrderStatus(order, 'confirmed');
-
+ 
+    // Notify Dealer Backend (with invoice if created)
+    notifyDealerOrderStatus(order, 'confirmed', confirmedInvoice ? {
+      invoice: {
+        supplierInvoiceId: confirmedInvoice._id.toString(),
+        invoiceNumber:     confirmedInvoice.invoiceNumber,
+        amount:            confirmedInvoice.totalAmount,
+        subtotal:          confirmedInvoice.subtotal,
+        taxAmount:         confirmedInvoice.taxAmount || 0,
+        status:            confirmedInvoice.status,
+        dueDate:           confirmedInvoice.dueDate,
+        paymentMode:       confirmedInvoice.paymentMode || null,
+        lineItems: (confirmedInvoice.lineItems || []).map(i => ({
+          productId:   i.productId ? i.productId.toString() : null,
+          productName: i.productName || '',
+          productCode: i.productCode || '',
+          quantity:    i.quantity    || 0,
+          unitPrice:   i.unitPrice   || 0,
+          taxRate:     i.taxRate     || 0,
+          taxAmount:   i.taxAmount   || 0,
+          lineTotal:   i.lineTotal   || 0,
+          serialNumbers: [],
+        })),
+      },
+    } : {});
+ 
     return order;
   });
-
+ 
   // After transaction commits
   const confirmedItems = order.items?.length
     ? order.items
     : await OrderItem.find({ orderId }).lean();
-
+ 
   pushStockStatusAfterConfirm(
     confirmedItems,
     order.orderNumber,
     order.dealerId
   );
-
+ 
   return order;
 };
 
@@ -830,14 +887,10 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
     }
   }
  
-  // Create invoice when order is delivered (if not already created)
+  // On delivery: attach serial numbers to the invoice created at confirmation
   if (status === 'delivered') {
     try {
-      const items = order.items?.length
-        ? order.items
-        : await OrderItem.find({ orderId: order._id }).lean();
-
-      // Fetch delivered units to attach serial numbers to invoice line items
+      // Fetch delivered units to get serial numbers per product
       const orderDispatchedUnits = await DispatchedUnit.find(
         { orderId: order._id, status: 'delivered' },
         'serialNumber productId'
@@ -852,22 +905,38 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
         }
       });
 
-      const invoiceLineItems = (items || []).map((i) => ({
-        productId:     i.productId,
-        productName:   i.productName || i.name || '',
-        productCode:   i.productCode || i.sku || '',
-        quantity:      Number(i.quantity) || 0,
-        unitPrice:     Number(i.unitPrice || i.basePrice) || 0,
-        taxRate:       Number(i.taxRate) || 0,
-        taxAmount:     Number(i.taxAmount) || 0,
-        lineTotal:     Number(i.lineTotal) || 0,
-        serialNumbers: serialsByProduct[i.productId?.toString()] || [],
-      }));
+      let deliveredInvoice;
 
-      const isAlreadyPaid = order.paymentStatus === 'completed';
+      if (order.invoiceId) {
+        // Normal path: invoice was created at confirmation — update line items with serial numbers
+        deliveredInvoice = await Invoice.findById(order.invoiceId);
+        if (deliveredInvoice) {
+          deliveredInvoice.lineItems = (deliveredInvoice.lineItems || []).map(li => ({
+            ...li.toObject ? li.toObject() : li,
+            serialNumbers: serialsByProduct[li.productId?.toString()] || li.serialNumbers || [],
+          }));
+          await deliveredInvoice.save();
+        }
+      } else {
+        // Fallback: invoice was not created at confirmation — create it now with serial numbers
+        const items = order.items?.length
+          ? order.items
+          : await OrderItem.find({ orderId: order._id }).lean();
 
-      if (!order.invoiceId) {
-        const invoice = await Invoice.create({
+        const invoiceLineItems = (items || []).map((i) => ({
+          productId:     i.productId,
+          productName:   i.productName || i.name || '',
+          productCode:   i.productCode || i.sku || '',
+          quantity:      Number(i.quantity) || 0,
+          unitPrice:     Number(i.unitPrice || i.basePrice) || 0,
+          taxRate:       Number(i.taxRate) || 0,
+          taxAmount:     Number(i.taxAmount) || 0,
+          lineTotal:     Number(i.lineTotal) || 0,
+          serialNumbers: serialsByProduct[i.productId?.toString()] || [],
+        }));
+
+        const isAlreadyPaid = order.paymentStatus === 'completed';
+        deliveredInvoice = await Invoice.create({
           orderId:      order._id,
           dealerId:     order.dealerId,
           lineItems:    invoiceLineItems,
@@ -880,37 +949,38 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
           issuedAt:     new Date(),
           dueDate:      addDays(new Date(), 30),
         });
-
-        order.invoiceId = invoice._id;
+        order.invoiceId = deliveredInvoice._id;
         await order.save();
+      }
 
-        // Link delivered dispatched units to the invoice for warranty tracking
-        if (orderDispatchedUnits.length > 0) {
-          const serialNums = orderDispatchedUnits.map(du => du.serialNumber);
-          await DispatchedUnit.updateMany(
-            { serialNumber: { $in: serialNums } },
-            { $set: { invoiceId: invoice._id } }
-          ).catch(() => {});
-        }
+      // Link dispatched units to the invoice for warranty tracking
+      if (deliveredInvoice && orderDispatchedUnits.length > 0) {
+        const serialNums = orderDispatchedUnits.map(du => du.serialNumber);
+        await DispatchedUnit.updateMany(
+          { serialNumber: { $in: serialNums } },
+          { $set: { invoiceId: deliveredInvoice._id } }
+        ).catch(() => {});
+      }
 
-        await auditService.log('order', orderId, 'invoice:create', userId, {
-          before: { status: 'delivered' },
-          after: { invoiceId: invoice._id },
-        });
+      await auditService.log('order', orderId, 'invoice:serial-update', userId, {
+        before: { status: 'delivered' },
+        after: { invoiceId: deliveredInvoice?._id },
+      });
 
-        // Notify dealer with invoice data
+      // Notify dealer with updated invoice data
+      if (deliveredInvoice) {
         try {
           notifyDealerOrderStatus(order, 'delivered', {
             invoice: {
-              supplierInvoiceId: invoice._id.toString(),
-              invoiceNumber:     invoice.invoiceNumber,
-              amount:            invoice.totalAmount,
-              subtotal:          invoice.subtotal,
-              taxAmount:         invoice.taxAmount || 0,
-              status:            invoice.status,
-              dueDate:           invoice.dueDate,
-              paymentMode:       invoice.paymentMode || null,
-              lineItems: (invoice.lineItems || []).map(i => ({
+              supplierInvoiceId: deliveredInvoice._id.toString(),
+              invoiceNumber:     deliveredInvoice.invoiceNumber,
+              amount:            deliveredInvoice.totalAmount,
+              subtotal:          deliveredInvoice.subtotal,
+              taxAmount:         deliveredInvoice.taxAmount || 0,
+              status:            deliveredInvoice.status,
+              dueDate:           deliveredInvoice.dueDate,
+              paymentMode:       deliveredInvoice.paymentMode || null,
+              lineItems: (deliveredInvoice.lineItems || []).map(i => ({
                 productId:    i.productId ? i.productId.toString() : null,
                 productName:  i.productName  || '',
                 productCode:  i.productCode  || '',
@@ -928,7 +998,7 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
         }
       }
     } catch (err) {
-      console.error('[updateOrderStatus] Invoice creation failed for order', order.orderNumber, err.message);
+      console.error('[updateOrderStatus] Invoice serial update failed for order', order.orderNumber, err.message);
     }
   }
 

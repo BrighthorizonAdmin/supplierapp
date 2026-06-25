@@ -109,6 +109,10 @@ const DealerDetailPage = () => {
  
   /* ── save credit limit / tier ── */
   const handleSaveEdit = async () => {
+    if (Number(editCredit) > 2000) {
+      toast.error('Credit limit cannot exceed ₹2,000');
+      return;
+    }
     setEditSaving(true);
     try {
       await dispatch(updateDealer({
@@ -313,6 +317,10 @@ const DealerDetailPage = () => {
                   dealer.address?.state, dealer.address?.pincode]
                     .filter(Boolean).join(', ') || '—'}
                 </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Onboarded By</p>
+                <p className="text-slate-700 font-medium">{dealer.onboardedBy || '—'}</p>
               </div>
             </div>
           </div>
@@ -671,11 +679,15 @@ const DealerDetailPage = () => {
               <input
                 type="number"
                 min="0"
+                max="2000"
                 value={editCredit}
                 onChange={(e) => setEditCredit(e.target.value)}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-                placeholder="e.g. 200000"
+                placeholder="e.g. 2000"
               />
+              {Number(editCredit) > 2000 && (
+                <p className="text-red-500 text-xs mt-1">Credit limit cannot exceed ₹2,000</p>
+              )}
             </div>
  
             {/* Pricing Tier */}

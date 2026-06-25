@@ -5,6 +5,7 @@ import {
   Search, Filter, Download, Eye, MoreVertical,
   TrendingUp, CheckCircle, Clock, AlertTriangle,
   MapPin, ChevronDown, Store, X,
+  Plus,
 } from 'lucide-react';
 import { fetchDealers, fetchDealerCounts, approveDealer, rejectDealer, suspendDealer, updateDealer } from '../dealerSlice';
 import Pagination from '../../../components/ui/Pagination';
@@ -136,7 +137,7 @@ const DealerListPage = () => {
   const [editModal, setEditModal] = useState(null);
   const [editCreditLimit, setEditCreditLimit] = useState(0);
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm();
   const tabStatus = TABS.find((t) => t.id === activeTab)?.status ?? '';
 
   // Debounce search input — only fires API call after 400 ms of inactivity
@@ -173,6 +174,10 @@ const DealerListPage = () => {
 
   // Edit (credit limit) handler
   const handleEdit = () => {
+    if (Number(editCreditLimit) > 2000) {
+      toast.error('Credit limit cannot exceed ₹2,000');
+      return;
+    }
     dispatch(updateDealer({ id: editModal._id, creditLimit: Number(editCreditLimit) })).then(() => {
       setEditModal(null);
     });
@@ -275,8 +280,16 @@ const DealerListPage = () => {
     <div className="space-y-5">
 
       {/* ── Page title ── */}
+      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
       <h1 className="text-2xl font-bold text-slate-900">Dealer Management</h1>
-
+       <button
+          onClick={() => navigate('/addnew-dealer')}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus size={15} />
+          Add New Dealer
+        </button>
+        </div>
       {/* ── Stats cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
@@ -570,8 +583,14 @@ const DealerListPage = () => {
         <form onSubmit={handleSubmit(handleApprove)} className="space-y-4">
           <div>
             <label className="label">Credit Limit (₹)</label>
-            <input type="number" className="input" defaultValue={100000} min={0}
-              {...register('creditLimit', { valueAsNumber: true })} />
+            <input type="number" className="input" defaultValue={0} min={0} max={2000}
+              {...register('creditLimit', {
+                valueAsNumber: true,
+                max: { value: 2000, message: 'Credit limit cannot exceed ₹2,000' },
+              })} />
+            {errors.creditLimit && (
+              <p className="text-red-500 text-xs mt-1">{errors.creditLimit.message}</p>
+            )}
           </div>
           <div>
             <label className="label">Pricing Tier</label>

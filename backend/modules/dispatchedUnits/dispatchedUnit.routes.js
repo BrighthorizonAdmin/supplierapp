@@ -56,10 +56,21 @@ router.get('/in-stock', authenticate, asyncHandler(async (req, res) => {
   const { productId } = req.query;
   if (!productId) throw new AppError('productId is required', 400);
   const units = await DispatchedUnit.find({ productId, status: 'in_stock' })
-    .select('serialNumber')
+    .select('serialNumber dispatchedAt')
     .sort({ createdAt: 1 })
     .lean();
   return success(res, units, 'In-stock serial numbers fetched');
+}));
+
+router.get('/All-Serials', authenticate, asyncHandler(async (req, res) => {
+  const { productId } = req.query;
+  if (!productId) throw new AppError('productId is required', 400);
+  const units = await DispatchedUnit.find({ productId })
+    .select('serialNumber createdAt invoiceId invoiceNumber status')
+    .populate('invoiceId', 'invoiceNumber')
+    .sort({ createdAt: 1 })
+    .lean();
+  return success(res, units, 'Serial numbers fetched');
 }));
 
 // GET /api/dispatched-units?invoiceId=xxx  (list all units for an invoice)

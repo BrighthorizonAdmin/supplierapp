@@ -112,7 +112,40 @@ const syncToDealerApp = async (applicationId, action, payload = {}) => {
 };
 
 const createDealer = async (data, userId) => {
-  const dealer = await Dealer.create({ ...data, onboardedBy: userId });
+  const password = generateRandomPassword();
+  const shouldAutoApprove = data.autoApprove || data.status === 'active';
+
+  const dealerData = {
+    ...data,
+    onboardedBy: data.onboardedBy || userId,
+    creditLimit: Number(data.creditLimit) || 0,
+    pricingTier: data.pricingTier || 'standard',
+    paymentTerms: data.paymentTerms || data.netPayments || '',
+    status: shouldAutoApprove ? 'active' : data.status || 'pending',
+    kycStatus: shouldAutoApprove ? 'verified' : data.kycStatus || 'pending',
+    approvedBy: shouldAutoApprove ? userId : data.approvedBy,
+    approvedAt: shouldAutoApprove ? new Date() : data.approvedAt,
+  };
+
+  if (shouldAutoApprove) {
+    dealerData.password = password;
+    dealerData.mustChangePassword = true;
+  }
+
+  const dealer = await Dealer.create(dealerData);
+
+  if (shouldAutoApprove && dealer.email) {
+    try {
+      await sendDealerApprovalEmail({
+        to: dealer.email,
+        businessName: dealer.businessName,
+        password,
+      });
+    } catch (err) {
+      console.error('[DealerCreate] Approval email failed:', err.message);
+    }
+  }
+
   await auditService.log('dealer', dealer._id, 'create', userId, { after: dealer.toObject() });
   return dealer;
 };
@@ -205,7 +238,6 @@ const getDealers = async (query = {}) => {
 
   const [data, total] = await Promise.all([
     Dealer.find(match)
-      .populate('onboardedBy', 'name email')
       .populate('approvedBy', 'name email')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -219,14 +251,13 @@ const getDealers = async (query = {}) => {
 
 const getDealerById = async (id) => {
   const dealer = await Dealer.findById(id)
-    .populate('onboardedBy', 'name email role')
     .populate('approvedBy', 'name email role')
     .lean({ virtuals: true });
   if (!dealer) throw new AppError('Dealer not found', 404);
   return withResolvedDocs(dealer);
 };
 
-const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms, assignedManager }, userId) => {
+const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms, onboardedBy }, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
   if (!['pending', 'updates-required'].includes(dealer.status)) throw new AppError(`Cannot approve dealer with status: ${dealer.status}`, 400);
@@ -238,9 +269,11 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms,
 
   dealer.status = 'active';
   dealer.kycStatus = 'verified';
+  if ((creditLimit || 0) > 2000) throw new AppError('Credit limit cannot exceed ₹2,000', 400);
   dealer.creditLimit  = creditLimit || 0;
   dealer.pricingTier  = pricingTier || 'standard';
   dealer.paymentTerms = paymentTerms || '';
+  dealer.onboardedBy  = onboardedBy || '';
   dealer.approvedBy = userId;
   dealer.approvedAt = new Date();
   dealer.password = randomPassword; // pre-save hook will hash this
@@ -270,6 +303,7 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms,
   await syncToDealerApp(dealer.applicationId, 'APPROVE', {
     creditLimit:  creditLimit || 0,
     paymentTerms: paymentTerms || '',
+    onboardedBy:  onboardedBy || '',
   });
 
   // Return plain object; tempPassword is exposed once here (not stored in response elsewhere)
@@ -362,6 +396,9 @@ const reactivateDealer = async (dealerId, userId) => {
 const updateDealer = async (dealerId, updates, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
+
+  if (updates.creditLimit !== undefined && Number(updates.creditLimit) > 2000)
+    throw new AppError('Credit limit cannot exceed ₹2,000', 400);
 
   const before = dealer.toObject();
   Object.assign(dealer, updates);

@@ -134,6 +134,7 @@ const DealerOnboardingPage = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectComment, setRejectComment] = useState('');
+  const [rejectTouched, setRejectTouched] = useState(false);
 
   // Request update modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -146,7 +147,7 @@ const DealerOnboardingPage = () => {
     creditLimit: '',
     paymentTerms: '',
     pricingTier: '',
-    assignedManager: '',
+    onboardedBy: '',
   });
 
   useEffect(() => {
@@ -174,30 +175,33 @@ const DealerOnboardingPage = () => {
     if (!selected) return;
     dispatch(approveDealer({
       id: selected._id,
-      creditLimit: Number(approveForm.creditLimit),
+      creditLimit: Math.min(Number(approveForm.creditLimit) || 0, 2000),
       pricingTier: approveForm.pricingTier || 'standard',
       paymentTerms: approveForm.paymentTerms,
-      assignedManager: approveForm.assignedManager,
+      onboardedBy: approveForm.onboardedBy,
     })).then((res) => {
       if (!res.error) {
         setSelected(null);
         setShowApproveModal(false);
-        setApproveForm({ creditLimit: '', paymentTerms: '', pricingTier: '', assignedManager: '' });
+        setApproveForm({ creditLimit: '', paymentTerms: '', pricingTier: '', onboardedBy: '' });
       }
     });
   };
 
   const handleConfirmReject = () => {
     if (!selected) return;
+    setRejectTouched(true);
+    if (!rejectReason) return;
     const reason = rejectComment
       ? `${rejectReason}: ${rejectComment}`
-      : rejectReason || 'Application rejected by admin';
+      : rejectReason;
     dispatch(rejectDealer({ id: selected._id, reason }))
       .then(() => {
         setSelected(null);
         setShowRejectModal(false);
         setRejectReason('');
         setRejectComment('');
+        setRejectTouched(false);
       });
   };
 
@@ -633,13 +637,18 @@ const DealerOnboardingPage = () => {
         </div>
 
         <div className="mb-4">
-          <label className="text-sm font-semibold text-slate-800 mb-2 block">Reason for Rejection</label>
+          <label className="text-sm font-semibold text-slate-800 mb-2 block">
+            Reason for Rejection <span className="text-red-500">*</span>
+          </label>
           <SelectField
             value={rejectReason}
-            onChange={setRejectReason}
+            onChange={(v) => { setRejectReason(v); setRejectTouched(false); }}
             placeholder="Select a reason..."
             options={REJECTION_REASONS}
           />
+          {rejectTouched && !rejectReason && (
+            <p className="text-red-500 text-xs mt-1">Please select a reason before rejecting.</p>
+          )}
         </div>
 
         <div className="mb-6">
@@ -655,7 +664,7 @@ const DealerOnboardingPage = () => {
 
         <div className="flex items-center justify-end gap-3">
           <button
-            onClick={() => { setShowRejectModal(false); setRejectReason(''); setRejectComment(''); }}
+            onClick={() => { setShowRejectModal(false); setRejectReason(''); setRejectComment(''); setRejectTouched(false); }}
             className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
           >
             Cancel
@@ -754,11 +763,16 @@ const DealerOnboardingPage = () => {
             <label className="text-sm font-semibold text-slate-800 mb-2 block">Credit Limit (INR)</label>
             <input
               type="number"
+              min={0}
+              max={2000}
               value={approveForm.creditLimit}
-              placeholder="Enter credit limit (e.g. 2500000)"
+              placeholder="Max ₹2,000"
               onChange={(e) => setApproveForm((f) => ({ ...f, creditLimit: e.target.value }))}
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {Number(approveForm.creditLimit) > 2000 && (
+              <p className="text-xs text-red-500 mt-1">Maximum allowed credit limit is ₹2,000</p>
+            )}
           </div>
           <div>
             <label className="text-sm font-semibold text-slate-800 mb-2 block">Payment Terms</label>
@@ -781,15 +795,16 @@ const DealerOnboardingPage = () => {
           />
         </div>
 
-        {/* <div className="mb-6">
-          <label className="text-sm font-semibold text-slate-800 mb-2 block">Assigned Manager</label>
-          <SelectField
-            value={approveForm.assignedManager}
-            onChange={(v) => setApproveForm((f) => ({ ...f, assignedManager: v }))}
-            placeholder="Select manager"
-            options={[]}
+        <div className="mb-6">
+          <label className="text-sm font-semibold text-slate-800 mb-2 block">Onboarded By</label>
+          <input
+            type="text"
+            value={approveForm.onboardedBy}
+            onChange={(e) => setApproveForm((f) => ({ ...f, onboardedBy: e.target.value }))}
+            placeholder="Enter name of person who onboarded this dealer"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-        </div> */}
+        </div>
 
         <div className="flex items-center justify-end gap-3">
           <button

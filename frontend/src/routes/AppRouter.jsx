@@ -14,6 +14,7 @@ import DealerListPage from '../features/dealer/pages/DealerListPage';
 import DealerDetailPage from '../features/dealer/pages/DealerDetailPage';
 import DealerOnboardingPage from '../features/dealer/pages/DealerOnboardingPage';
 import InventoryPage from '../features/inventory/pages/InventoryPage';
+import InventoryDetailsPage from '../features/inventory/pages/InventoryDetailsPage';
 import ProductListPage from '../features/products/pages/ProductListPage';
 import ProductFormPage from '../features/products/pages/ProductFormPage';
 import OrderListPage from '../features/orders/pages/OrderListPage';
@@ -40,6 +41,10 @@ import SupportListPage from '../features/support/pages/SupportListPage';
 import WarrantyListPage from '../features/warranty/pages/WarrantyListPage';
 import WarrantyDetailPage from '../features/warranty/pages/WarrantyDetailPage';
 import WarrantyLookupPage from '../features/warranty/pages/WarrantyLookupPage';
+import QuoteListPage from '../features/quotes/pages/QuoteListPage';
+import QuoteFormPage from '../features/quotes/pages/QuoteFormPage';
+import QuoteDetailPage from '../features/quotes/pages/QuoteDetailPage';
+import AddNewDealerPage from '../features/dealer/pages/AddNewDealerPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -85,6 +90,11 @@ const AppRouter = () => {
           <Route path="inventory" element={
             <ProtectedRoute permission="inventory:read">
               <InventoryPage />
+            </ProtectedRoute>
+          } />
+          <Route path="inventory/:id" element={
+            <ProtectedRoute permission="inventory:read">
+              <InventoryDetailsPage />
             </ProtectedRoute>
           } />
           <Route path="products" element={
@@ -223,6 +233,31 @@ const AppRouter = () => {
               <WarrantyDetailPage />
             </ProtectedRoute>
           } />
+          <Route path="quotes" element={
+            <ProtectedRoute permission="invoices:read">
+              <QuoteListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="quotes/new" element={
+            <ProtectedRoute permission="invoices:write">
+              <QuoteFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="quotes/:id" element={
+            <ProtectedRoute permission="invoices:read">
+              <QuoteDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="quotes/:id/edit" element={
+            <ProtectedRoute permission="invoices:write">
+              <QuoteFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="addnew-dealer" element={
+            <ProtectedRoute permission="dealer:write">
+              <AddNewDealerPage />
+            </ProtectedRoute>
+          } />          
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -44,11 +44,12 @@ const confirmPayment = async (paymentId, userId) => {
       invoice.status = invoice.balance === 0 ? 'paid' : 'partial';
       await invoice.save({ session });
 
-      // Reduce dealer creditUsed when invoice is paid
+      // Reduce dealer creditUsed and reward 5% credit limit bonus when invoice is fully paid
       if (invoice.status === 'paid') {
+        const creditBonus = +(invoice.totalAmount * 0.05).toFixed(2);
         await Dealer.findByIdAndUpdate(
           payment.dealerId,
-          { $inc: { creditUsed: -invoice.totalAmount } },
+          { $inc: { creditUsed: -invoice.totalAmount, creditLimit: creditBonus } },
           { session }
         );
       }
