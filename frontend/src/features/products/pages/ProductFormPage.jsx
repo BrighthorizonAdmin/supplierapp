@@ -367,9 +367,11 @@ const ProductFormPage = () => {
 
   const [productImages,   setProductImages]   = useState([]);
   const [interfaceGroups, setInterfaceGroups] = useState([]);
+  const [hsnValue,        setHsnValue]        = useState('');
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isDirty } } = useForm({ defaultValues: { isActive: true } });
   const isActiveValue = watch('isActive');
+  const { ref: catRef, onChange: catRhfChange, ...catRest } = register('category', { required: 'Required' });
 
   const isEdit = !!id;
 
@@ -380,6 +382,8 @@ const ProductFormPage = () => {
 
   useEffect(() => {
     if (isEdit && selected) {
+      const cat = hsnCategories.find(c => c.name === selected.category);
+      setHsnValue(selected.hsn || cat?.hsnCode || '');
       reset({
         ...selected,
         stockDate:      selected.openingStockDate
@@ -405,6 +409,14 @@ const ProductFormPage = () => {
       setInterfaceGroups(selected.interfaceGroups || []);
     }
   }, [selected, isEdit, reset]);
+
+  // If categories loaded after the product, fill HSN from category master
+  useEffect(() => {
+    if (isEdit && selected && hsnCategories.length > 0 && !hsnValue) {
+      const cat = hsnCategories.find(c => c.name === selected.category);
+      if (cat?.hsnCode) setHsnValue(cat.hsnCode);
+    }
+  }, [hsnCategories]);
 
   // ── API handlers for existing images ──────────────────────────────────────
   const handleDeleteExisting = async (fileName) => {
@@ -502,12 +514,14 @@ const ProductFormPage = () => {
               <label className="label">Category<span className="text-red-500">*</span></label>
               <select
                 className="input"
-                {...register('category', { required: 'Required' })}
+                ref={catRef}
+                {...catRest}
                 onChange={(e) => {
-                  const val = e.target.value;
-                  setValue('category', val, { shouldDirty: true, shouldValidate: true });
-                  const cat = hsnCategories.find(c => c.name === val);
-                  if (cat?.hsnCode) setValue('hsn', cat.hsnCode, { shouldDirty: true });
+                  catRhfChange(e);
+                  const cat = hsnCategories.find(c => c.name === e.target.value);
+                  const hsn = cat?.hsnCode || '';
+                  setHsnValue(hsn);
+                  setValue('hsn', hsn, { shouldDirty: true });
                 }}
               >
                 <option value="">Select category</option>
@@ -539,7 +553,18 @@ const ProductFormPage = () => {
           {/* ── Right ── */}
           <div className="flex flex-col gap-4">
             <F label="SKU Code" name="sku" />
-            <F label="HSN Code" name="hsnCode" />
+            <div>
+              <label className="label">HSN Code</label>
+              <input
+                type="text"
+                className="input"
+                value={hsnValue}
+                onChange={(e) => {
+                  setHsnValue(e.target.value);
+                  setValue('hsn', e.target.value, { shouldDirty: true });
+                }}
+              />
+            </div>
             <F label="MOQ"      name="moq" type="number" />
             {/* Opening Stock fields hidden — openingStockQty defaults to 0 on creation */}
             {/* <div>
