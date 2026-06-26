@@ -5,6 +5,7 @@ import {
   createProduct, updateProduct, fetchProductById,
   uploadProductImages, deleteProductImage, setPrimaryImage,
 } from '../productSlice';
+import { fetchHsnCategories } from '../../hsn/hsnSlice';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import Modal from '../../../components/ui/Modal';
@@ -362,21 +363,27 @@ const ProductFormPage = () => {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const { selected, loading } = useSelector((s) => s.product);
+  const hsnCategories = useSelector((s) => s.hsn.list);
 
   const [productImages,   setProductImages]   = useState([]);
   const [interfaceGroups, setInterfaceGroups] = useState([]);
+  const [hsnValue,        setHsnValue]        = useState('');
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isDirty } } = useForm({ defaultValues: { isActive: true } });
   const isActiveValue = watch('isActive');
+  const { ref: catRef, onChange: catRhfChange, ...catRest } = register('category', { required: 'Required' });
 
   const isEdit = !!id;
 
   useEffect(() => {
+    dispatch(fetchHsnCategories());
     if (isEdit) dispatch(fetchProductById(id));
   }, [dispatch, id, isEdit]);
 
   useEffect(() => {
     if (isEdit && selected) {
+      const cat = hsnCategories.find(c => c.name === selected.category);
+      setHsnValue(selected.hsn || cat?.hsnCode || '');
       reset({
         ...selected,
         stockDate:      selected.openingStockDate
@@ -402,6 +409,14 @@ const ProductFormPage = () => {
       setInterfaceGroups(selected.interfaceGroups || []);
     }
   }, [selected, isEdit, reset]);
+
+  // If categories loaded after the product, fill HSN from category master
+  useEffect(() => {
+    if (isEdit && selected && hsnCategories.length > 0 && !hsnValue) {
+      const cat = hsnCategories.find(c => c.name === selected.category);
+      if (cat?.hsnCode) setHsnValue(cat.hsnCode);
+    }
+  }, [hsnCategories]);
 
   // ── API handlers for existing images ──────────────────────────────────────
   const handleDeleteExisting = async (fileName) => {
@@ -495,7 +510,27 @@ const ProductFormPage = () => {
           {/* ── Left ── */}
           <div className="flex flex-col gap-4">
             <F label="Product Name" name="name" required />
-            <F label="Category"     name="category" required />
+            <div>
+              <label className="label">Category<span className="text-red-500">*</span></label>
+              <select
+                className="input"
+                ref={catRef}
+                {...catRest}
+                onChange={(e) => {
+                  catRhfChange(e);
+                  const cat = hsnCategories.find(c => c.name === e.target.value);
+                  const hsn = cat?.hsnCode || '';
+                  setHsnValue(hsn);
+                  setValue('hsn', hsn, { shouldDirty: true });
+                }}
+              >
+                <option value="">Select category</option>
+                {hsnCategories.map(c => (
+                  <option key={c._id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+              {errors.category && <p className="text-red-500 text-xs mt-1">{errors.category.message}</p>}
+            </div>
             <F label="MRP"          name="mrp"       type="number" step="0.01" />
             <F label="Tax"          name="taxRate"   type="number" />
             <F label="Base Price"   name="basePrice" type="number" step="0.01" required />
@@ -518,7 +553,18 @@ const ProductFormPage = () => {
           {/* ── Right ── */}
           <div className="flex flex-col gap-4">
             <F label="SKU Code" name="sku" />
-            <F label="HSN Code" name="hsnCode" />
+            <div>
+              <label className="label">HSN Code</label>
+              <input
+                type="text"
+                className="input"
+                value={hsnValue}
+                onChange={(e) => {
+                  setHsnValue(e.target.value);
+                  setValue('hsn', e.target.value, { shouldDirty: true });
+                }}
+              />
+            </div>
             <F label="MOQ"      name="moq" type="number" />
             {/* Opening Stock fields hidden — openingStockQty defaults to 0 on creation */}
             {/* <div>

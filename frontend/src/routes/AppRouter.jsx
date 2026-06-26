@@ -44,7 +44,11 @@ import WarrantyLookupPage from '../features/warranty/pages/WarrantyLookupPage';
 import QuoteListPage from '../features/quotes/pages/QuoteListPage';
 import QuoteFormPage from '../features/quotes/pages/QuoteFormPage';
 import QuoteDetailPage from '../features/quotes/pages/QuoteDetailPage';
+import DeliveryChallanListPage from '../features/deliveryChallan/pages/DeliveryChallanListPage';
+import DeliveryChallanFormPage from '../features/deliveryChallan/pages/DeliveryChallanFormPage';
+import DeliveryChallanPrintPage from '../features/deliveryChallan/pages/DeliveryChallanPrintPage';
 import AddNewDealerPage from '../features/dealer/pages/AddNewDealerPage';
+import HsnPage from '../features/hsn/pages/HsnPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -253,11 +257,41 @@ const AppRouter = () => {
               <QuoteFormPage />
             </ProtectedRoute>
           } />
+          <Route path="delivery-challan" element={
+            <ProtectedRoute permission="invoices:read">
+              <DeliveryChallanListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="delivery-challan/new" element={
+            <ProtectedRoute permission="invoices:write">
+              <DeliveryChallanFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="delivery-challan/:id" element={
+            <ProtectedRoute permission="invoices:read">
+              <DeliveryChallanFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="delivery-challan/:id/edit" element={
+            <ProtectedRoute permission="invoices:write">
+              <DeliveryChallanFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="delivery-challan/:id/print" element={
+            <ProtectedRoute permission="invoices:read">
+              <DeliveryChallanPrintPage />
+            </ProtectedRoute>
+          } />
           <Route path="addnew-dealer" element={
             <ProtectedRoute permission="dealer:write">
               <AddNewDealerPage />
             </ProtectedRoute>
-          } />          
+          } />
+          <Route path="hsn-codes" element={
+            <ProtectedRoute permission="products:read">
+              <HsnPage />
+            </ProtectedRoute>
+          } />
           <Route path="unauthorized" element={<div className="p-8 text-center text-red-600 text-xl">Access Denied</div>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

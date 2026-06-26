@@ -67,7 +67,6 @@ const InventoryDetailsPage = () => {
   const lowStockEnabled = lowStockThreshold != null && availableQty <= lowStockThreshold && availableQty > 0;
   const purchasePrice = prod.purchasePrice ?? prod.basePrice ?? 0;
   const gstRate = prod.taxRate != null ? `${prod.taxRate}%` : '—';
-  console.log(gstRate, prod.taxRate, prod);
   const showOnline = prod.showOnline ? 'Yes' : 'No';
 
   const formatValue = (value) => {
