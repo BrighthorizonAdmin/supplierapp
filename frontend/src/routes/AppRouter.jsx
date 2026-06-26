@@ -46,6 +46,7 @@ import QuoteFormPage from '../features/quotes/pages/QuoteFormPage';
 import QuoteDetailPage from '../features/quotes/pages/QuoteDetailPage';
 import DeliveryChallanListPage from '../features/deliveryChallan/pages/DeliveryChallanListPage';
 import DeliveryChallanFormPage from '../features/deliveryChallan/pages/DeliveryChallanFormPage';
+import DeliveryChallanPrintPage from '../features/deliveryChallan/pages/DeliveryChallanPrintPage';
 import AddNewDealerPage from '../features/dealer/pages/AddNewDealerPage';
 import HsnPage from '../features/hsn/pages/HsnPage';
 
@@ -274,6 +275,11 @@ const AppRouter = () => {
           <Route path="delivery-challan/:id/edit" element={
             <ProtectedRoute permission="invoices:write">
               <DeliveryChallanFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="delivery-challan/:id/print" element={
+            <ProtectedRoute permission="invoices:read">
+              <DeliveryChallanPrintPage />
             </ProtectedRoute>
           } />
           <Route path="addnew-dealer" element={

@@ -36,15 +36,29 @@ const overallDiscountSchema = new mongoose.Schema({
   amount:       { type: Number, default: 0 },
 }, { _id: false });
 
+const shipToSchema = new mongoose.Schema({
+  name:    { type: String },
+  address: { type: String },
+  gstin:   { type: String },
+}, { _id: false });
+
 const challanSchema = new mongoose.Schema({
   challanNumber: { type: String, unique: true, trim: true },
 
-  dealerId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Dealer' },
-  partyName:    { type: String },
-  partyPhone:   { type: String },
-  partyAddress: { type: String },
-  partyGST:     { type: String },
-  salesman:     { type: String },
+  dealerId:       { type: mongoose.Schema.Types.ObjectId, ref: 'Dealer' },
+  partyName:      { type: String },
+  partyPhone:     { type: String },
+  partyAddress:   { type: String },
+  partyGST:       { type: String },
+  partyPAN:       { type: String },
+  placeOfSupply:  { type: String },
+  salesman:       { type: String },
+
+  shipTo:         { type: shipToSchema },
+  courierPartner: { type: String },
+  awbNumber:      { type: String },
+  orderId:        { type: String },
+  warrantyPeriod: { type: String },
 
   challanDate: { type: Date, default: Date.now },
 

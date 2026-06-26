@@ -66,7 +66,7 @@ const getChallans = async (query = {}) => {
 
 const getChallanById = async (id) => {
   const challan = await DeliveryChallan.findById(id)
-    .populate('dealerId', 'businessName dealerCode email address phone')
+    .populate('dealerId', 'businessName dealerCode email address phone gstNumber panNumber')
     .lean();
   if (!challan) throw new AppError('Delivery Challan not found', 404);
   return challan;
@@ -92,7 +92,7 @@ const createChallan = async (body, user) => {
     if (dealer) {
       partyName    = dealer.businessName;
       partyPhone   = dealer.phone;
-      partyGST     = dealer.gstin;
+      partyGST     = dealer.gstNumber;
       partyAddress = [dealer.address?.street, dealer.address?.city, dealer.address?.state, dealer.address?.pincode]
         .filter(Boolean).join(', ');
     }

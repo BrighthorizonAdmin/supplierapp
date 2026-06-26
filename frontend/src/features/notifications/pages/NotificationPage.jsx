@@ -19,6 +19,7 @@ const Toggle = ({ checked, onChange }) => (
 );
 
 const TABS = [
+  'Company Info',
   'General Dealer & Onboarding Settings',
   'Credit & Financial Defaults',
   'Order & Pricing controls',
@@ -26,6 +27,10 @@ const TABS = [
 ];
 
 const DEFAULT_SETTINGS = {
+  companyName: '', companyAddress: '', companyMobile: '',
+  companyGSTIN: '', companyPAN: '', companyEmail: '', companyWebsite: '',
+  bankName: '', bankIFSC: '', bankAccount: '', bankBranch: '',
+  termsAndConditions: '',
   defaultStatus: 'active', autoApprove: true, multipleUsers: true,
   dealerIdFormat: 'auto', defaultDealerType: 'distributor',
   gstCertificate: true, panCard: true, bankDetails: true, addressProof: true, manualApproval: true,
@@ -80,6 +85,120 @@ const NotificationPage = () => {
 
         <div className="p-6">
           {activeTab === 0 && (
+            <div className="max-w-2xl space-y-8">
+              {/* Company Details */}
+              <div>
+                <h3 className="font-semibold text-slate-800 mb-5">Company Details</h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">Company Name <span className="text-red-400">*</span></label>
+                      <input
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Your Company Name"
+                        value={settings.companyName || ''}
+                        onChange={(e) => set('companyName', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">Mobile / Phone</label>
+                      <input
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="9XXXXXXXXX"
+                        value={settings.companyMobile || ''}
+                        onChange={(e) => set('companyMobile', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Company Address</label>
+                    <textarea rows={2}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      placeholder="Street, City, State, Pincode"
+                      value={settings.companyAddress || ''}
+                      onChange={(e) => set('companyAddress', e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">GSTIN</label>
+                      <input
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                        placeholder="22AAAAA0000A1Z5"
+                        value={settings.companyGSTIN || ''}
+                        onChange={(e) => set('companyGSTIN', e.target.value.toUpperCase())}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">PAN Number</label>
+                      <input
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                        placeholder="AAAAA0000A"
+                        value={settings.companyPAN || ''}
+                        onChange={(e) => set('companyPAN', e.target.value.toUpperCase())}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">Email</label>
+                      <input type="email"
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="info@company.com"
+                        value={settings.companyEmail || ''}
+                        onChange={(e) => set('companyEmail', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">Website</label>
+                      <input
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="www.company.com"
+                        value={settings.companyWebsite || ''}
+                        onChange={(e) => set('companyWebsite', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bank Details */}
+              <div>
+                <h3 className="font-semibold text-slate-800 mb-5">Default Bank Details</h3>
+                <p className="text-xs text-slate-400 mb-4">These will be pre-filled on all new Delivery Challans and Sales Invoices.</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { label: "Account Holder's Name", key: 'bankName',    placeholder: 'Company / Account name' },
+                    { label: 'Account Number',        key: 'bankAccount', placeholder: 'XXXXXXXXXXXXXXXX'        },
+                    { label: 'IFSC Code',             key: 'bankIFSC',    placeholder: 'KKBK0007475'             },
+                    { label: 'Bank & Branch Name',    key: 'bankBranch',  placeholder: 'Kotak Mahindra, KPHB'   },
+                  ].map(({ label, key, placeholder }) => (
+                    <div key={key}>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">{label}</label>
+                      <input
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder={placeholder}
+                        value={settings[key] || ''}
+                        onChange={(e) => set(key, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Terms & Conditions */}
+              <div>
+                <h3 className="font-semibold text-slate-800 mb-2">Default Terms & Conditions</h3>
+                <p className="text-xs text-slate-400 mb-3">Pre-filled on all new Delivery Challans and Sales Invoices.</p>
+                <textarea rows={4}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  placeholder="e.g. Warranty: 1 Year from date of purchase..."
+                  value={settings.termsAndConditions || ''}
+                  onChange={(e) => set('termsAndConditions', e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 1 && (
             <div className="grid grid-cols-2 gap-10">
               <div>
                 <h3 className="font-semibold text-slate-800 mb-5">General Dealer Settings</h3>
@@ -140,7 +259,7 @@ const NotificationPage = () => {
             </div>
           )}
 
-          {activeTab === 1 && (
+          {activeTab === 2 && (
             <div className="max-w-lg">
               <h3 className="font-semibold text-slate-800 mb-6">Credit & Financial Defaults</h3>
               <div className="space-y-5">
@@ -179,7 +298,7 @@ const NotificationPage = () => {
             </div>
           )}
 
-          {activeTab === 2 && (
+          {activeTab === 3 && (
             <div className="max-w-lg">
               <h3 className="font-semibold text-slate-800 mb-6">Order & Pricing controls</h3>
               <div className="space-y-5">
@@ -244,7 +363,7 @@ const NotificationPage = () => {
             </div>
           )}
 
-          {activeTab === 3 && (
+          {activeTab === 4 && (
             <p className="text-sm text-slate-400 py-10 text-center">Territory & Access rules — coming soon</p>
           )}
         </div>

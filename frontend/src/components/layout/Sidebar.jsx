@@ -1,11 +1,11 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { useState } from 'react';
-import { ShieldCheck, X, KeyRound, ChevronDown, Tag } from 'lucide-react';
 import {
+  ShieldCheck, X, KeyRound, ChevronDown, Tag,
   LayoutDashboard, Users, Package, Boxes, ShoppingCart, Headphones,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
-  UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText, ShieldCheck as WarrantyIcon, Tag,
+  UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText, ShieldCheck as WarrantyIcon,
 } from 'lucide-react';
 import { toggleSidebar } from '../../store/uiSlice';
 import { usePermission } from '../../routes/ProtectedRoute';

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchChallans, deleteChallan } from '../deliveryChallanSlice';
-import { Search, Eye, Edit2, Trash2, FileText, ChevronDown, Calendar } from 'lucide-react';
+import { Search, Eye, Edit2, Trash2, FileText, ChevronDown, Calendar, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 
 const STATUS_COLORS = {
@@ -54,7 +54,7 @@ export default function DeliveryChallanListPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="bg-white flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 148px)' }}>
 
       {/* Top bar */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
@@ -155,9 +155,9 @@ export default function DeliveryChallanListPage() {
                   <td className="px-5 py-3.5">
                     <div className="flex items-center justify-center gap-1">
                       <button
-                        onClick={() => navigate(`/delivery-challan/${c._id}/edit`)}
+                        onClick={() => navigate(`/delivery-challan/${c._id}/print`)}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                        title="View / Edit"
+                        title="View / Print"
                       >
                         <Eye size={15} />
                       </button>
