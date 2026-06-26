@@ -39,6 +39,8 @@ const { router: supportRoutes, whRouter: supportWebhookRoutes } = require('./mod
 const warrantyRoutes = require('./modules/warranty/warranty.routes');
 const dispatchedUnitRoutes = require('./modules/dispatchedUnits/dispatchedUnit.routes');
 const quoteRoutes          = require('./modules/quotes/quote.routes');
+const categoryRoutes       = require('./modules/categories/category.routes');
+const challanRoutes        = require('./modules/deliveryChallan/deliveryChallan.routes');
 
 const app = express();
 
@@ -164,6 +166,8 @@ app.use('/api/marketing-leads', marketingLeadRoutes);
 app.use('/api/warranty-requests', warrantyRoutes);
 app.use('/api/dispatched-units', dispatchedUnitRoutes);
 app.use('/api/quotes',          quoteRoutes);
+app.use('/api/categories',     categoryRoutes);
+app.use('/api/delivery-challans', challanRoutes);
 
 // Frontend routing - serve index.html for all non-API routes (React Router support)
 app.get('*', (req, res, next) => {

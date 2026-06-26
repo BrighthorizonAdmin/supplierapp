@@ -202,7 +202,13 @@ const setPrimaryImage = async (id, fileName, userId) => {
 };
 
 const getCategories = async () => {
-  return Product.distinct('category', { isActive: true });
+  const Category = require('../categories/model/Category.model');
+  const [productCats, categoryCats] = await Promise.all([
+    Product.distinct('category', { isActive: true }),
+    Category.find({}, 'name').sort({ name: 1 }).lean(),
+  ]);
+  const nameSet = new Set([...productCats, ...categoryCats.map(c => c.name)]);
+  return Array.from(nameSet).sort();
 };
 
 module.exports = {

@@ -1,8 +1,8 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { useState } from 'react';
-import { ShieldCheck, X, KeyRound } from 'lucide-react';
 import {
+  ShieldCheck, X, KeyRound, ChevronDown, Tag,
   LayoutDashboard, Users, Package, Boxes, ShoppingCart, Headphones,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
   UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText, ShieldCheck as WarrantyIcon,
@@ -12,18 +12,24 @@ import { usePermission } from '../../routes/ProtectedRoute';
 import { logout } from '../../features/auth/authSlice';
 import toast from 'react-hot-toast';
 
+const SALES_CHILDREN = [
+  { to: '/invoices',          label: 'Sales Invoice',    perm: 'invoices:read' },
+  { to: '/quotes',            label: 'Quotes',           perm: 'invoices:read' },
+  { to: '/delivery-challan',  label: 'Delivery Challan', perm: 'invoices:read' },
+];
+
 const NAV_ITEMS = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', perm: 'dashboard:read' },
   { to: '/marketing-leads', icon: Users, label: 'Marketing Leads', perm: 'marketing:read', end: false },
   { to: '/onboarding', icon: UserPlus, label: 'Onboarding', perm: 'dealer:read' },
   { to: '/dealers', icon: Users, label: 'Dealer Management', perm: 'dealer:read', end: false },
   { to: '/products', icon: Package, label: 'Product Catalog', perm: 'products:read' },
+  { to: '/hsn-codes', icon: Tag, label: 'HSN Codes', perm: 'products:read' },
   { to: '/inventory', icon: Boxes, label: 'Inventory', perm: 'inventory:read' },
   { to: '/orders', icon: ShoppingCart, label: 'Orders', perm: 'orders:read' },
   { to: '/finance', icon: TrendingUp, label: 'Finances', perm: 'finance:read' },
   { to: '/payments', icon: CreditCard, label: 'Payments & Credits', perm: 'payments:read' },
-  { to: '/invoices', icon: FileText, label: 'Sales Invoices', perm: 'invoices:read' },
-  { to: '/quotes',   icon: FileText, label: 'Quotes',         perm: 'invoices:read' },
+  { group: 'sales', icon: Tag, label: 'Sales', perm: 'invoices:read', children: SALES_CHILDREN },
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
   { to: '/exchanges', icon: RotateCcw, label: 'Exchanges', perm: 'returns:read' },
   { to: '/warranty', icon: WarrantyIcon, label: 'Warranty', perm: 'orders:read' },
@@ -37,10 +43,14 @@ const NAV_ITEMS = [
 const Sidebar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const sidebarOpen = useSelector((s) => s.ui.sidebarOpen);
   const { user } = useSelector((s) => s.auth);
   const { hasPermission } = usePermission();
   const [showHelpCard, setShowHelpCard] = useState(true);
+
+  const isSalesActive = SALES_CHILDREN.some((p) => location.pathname.startsWith(p.to));
+  const [salesOpen, setSalesOpen] = useState(isSalesActive);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -78,13 +88,57 @@ const Sidebar = () => {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {NAV_ITEMS.map(({ to, icon: Icon, label, perm, end }) => {
+        {NAV_ITEMS.map((item) => {
+          const { icon: Icon, label, perm } = item;
           if (perm && !hasPermission(perm)) return null;
+
+          if (item.group) {
+            const visibleChildren = item.children.filter((c) => !c.perm || hasPermission(c.perm));
+            if (visibleChildren.length === 0) return null;
+            const isOpen = sidebarOpen ? salesOpen : isSalesActive;
+            return (
+              <div key={item.group}>
+                <button
+                  onClick={() => { if (sidebarOpen) setSalesOpen((v) => !v); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isSalesActive ? 'text-blue-700 bg-blue-50/60' : 'text-blue-600 hover:bg-white/10'}`}
+                >
+                  <Icon size={17} className="flex-shrink-0" />
+                  {sidebarOpen && (
+                    <>
+                      <span className="flex-1 truncate text-left">{label}</span>
+                      <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                    </>
+                  )}
+                </button>
+                {isOpen && (
+                  <div className={`mt-0.5 space-y-0.5 ${sidebarOpen ? 'ml-3 border-l-2 border-blue-200 pl-3' : ''}`}>
+                    {visibleChildren.map((child) => (
+                      <NavLink
+                        key={child.to}
+                        to={child.to}
+                        end
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${isActive
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-blue-600 hover:bg-white/10'
+                          }`
+                        }
+                      >
+                        <FileText size={15} className="flex-shrink-0" />
+                        {sidebarOpen && <span className="truncate">{child.label}</span>}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
           return (
             <NavLink
-              key={`${to}-${label}`}
-              to={to}
-              end={end !== false}
+              key={`${item.to}-${label}`}
+              to={item.to}
+              end={item.end !== false}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive
                   ? 'bg-blue-600 text-white shadow-sm'
