@@ -269,7 +269,6 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms,
 
   dealer.status = 'active';
   dealer.kycStatus = 'verified';
-  if ((creditLimit || 0) > 2000) throw new AppError('Credit limit cannot exceed ₹2,000', 400);
   dealer.creditLimit  = creditLimit || 0;
   dealer.pricingTier  = pricingTier || 'standard';
   dealer.paymentTerms = paymentTerms || '';
@@ -396,9 +395,6 @@ const reactivateDealer = async (dealerId, userId) => {
 const updateDealer = async (dealerId, updates, userId) => {
   const dealer = await Dealer.findById(dealerId);
   if (!dealer) throw new AppError('Dealer not found', 404);
-
-  if (updates.creditLimit !== undefined && Number(updates.creditLimit) > 2000)
-    throw new AppError('Credit limit cannot exceed ₹2,000', 400);
 
   const before = dealer.toObject();
   Object.assign(dealer, updates);
