@@ -40,6 +40,7 @@ const settingsSchema = new mongoose.Schema(
     bankIFSC: { type: String, default: '' },
     bankAccount: { type: String, default: '' },
     bankBranch: { type: String, default: '' },
+    termsAndConditions: { type: String, default: '' },
   },
   { timestamps: true, versionKey: false }
 );

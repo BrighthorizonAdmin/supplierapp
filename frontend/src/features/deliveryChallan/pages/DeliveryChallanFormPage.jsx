@@ -6,7 +6,7 @@ import { fetchDealers } from '../../dealer/dealerSlice';
 import { fetchProducts } from '../../products/productSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
 import {
-  ArrowLeft, Plus, Trash2, X, Calendar, Search, ChevronDown, QrCode,
+  ArrowLeft, Plus, Trash2, X, Calendar, Search, ChevronDown, QrCode, Printer,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -369,6 +369,8 @@ export default function DeliveryChallanFormPage() {
   const [dealer,        setDealer]        = useState(null);
   const [dealerSearch,  setDealerSearch]  = useState('');
   const [showPartyDrop, setShowPartyDrop] = useState(false);
+  const [partyGST,      setPartyGST]      = useState('');
+  const [partyPAN,      setPartyPAN]      = useState('');
   const partyRef       = useRef(null);
   const partySearchRef = useRef(null);
 
@@ -390,6 +392,16 @@ export default function DeliveryChallanFormPage() {
   const [bankIFSC,    setBankIFSC]    = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [bankBranch,  setBankBranch]  = useState('');
+
+  const [shipSame,         setShipSame]         = useState(true);
+  const [shipToName,       setShipToName]       = useState('');
+  const [shipToAddress,    setShipToAddress]    = useState('');
+  const [shipToGST,        setShipToGST]        = useState('');
+  const [placeOfSupply,    setPlaceOfSupply]    = useState('');
+  const [courierPartner,   setCourierPartner]   = useState('');
+  const [awbNumber,        setAwbNumber]        = useState('');
+  const [orderId,          setOrderId]          = useState('');
+  const [warrantyPeriod,   setWarrantyPeriod]   = useState('');
 
   const [errors, setErrors] = useState({});
 
@@ -434,6 +446,8 @@ export default function DeliveryChallanFormPage() {
     setBankAccount(c.bankDetails?.accountNumber || '');
     setBankBranch(c.bankDetails?.bankBranch      || '');
     const d = c.dealerId;
+    setPartyGST(c.partyGST || (typeof d === 'object' ? d?.gstNumber : '') || '');
+    setPartyPAN(c.partyPAN || (typeof d === 'object' ? d?.panNumber : '') || '');
     if (d && typeof d === 'object') setDealer(d);
     else if (c.partyName) setDealer({ businessName: c.partyName, _id: c.dealerId });
     setItems((c.lineItems || []).map((li) => calcItem({ ...EMPTY_ITEM, ...li })));
@@ -445,6 +459,19 @@ export default function DeliveryChallanFormPage() {
       else setOverallDiscFlat(c.overallDiscount.value || 0);
     }
     setAutoRoundOff(c.autoRoundOff || false);
+    setPlaceOfSupply(c.placeOfSupply   || '');
+    setCourierPartner(c.courierPartner || '');
+    setAwbNumber(c.awbNumber           || '');
+    setOrderId(c.orderId               || '');
+    setWarrantyPeriod(c.warrantyPeriod || '');
+    if (c.shipTo?.name) {
+      setShipSame(false);
+      setShipToName(c.shipTo.name       || '');
+      setShipToAddress(c.shipTo.address || '');
+      setShipToGST(c.shipTo.gstin       || '');
+    } else {
+      setShipSame(true);
+    }
   }, [selectedChallan, isEdit, id]);
 
   const filteredDealers = useMemo(() =>
@@ -456,6 +483,8 @@ export default function DeliveryChallanFormPage() {
 
   const selectDealer = useCallback((d) => {
     setDealer(d); setDealerSearch(''); setShowPartyDrop(false);
+    setPartyGST(d?.gstNumber || '');
+    setPartyPAN(d?.panNumber || '');
     setErrors((e) => ({ ...e, dealer: '' }));
   }, []);
 
@@ -577,6 +606,9 @@ export default function DeliveryChallanFormPage() {
     setChallanNo(''); setChallanDate(today);
     setBankName(settingsData.bankName || ''); setBankIFSC(settingsData.bankIFSC || '');
     setBankAccount(settingsData.bankAccount || ''); setBankBranch(settingsData.bankBranch || '');
+    setPartyGST(''); setPartyPAN('');
+    setShipSame(true); setShipToName(''); setShipToAddress(''); setShipToGST('');
+    setPlaceOfSupply(''); setCourierPartner(''); setAwbNumber(''); setOrderId(''); setWarrantyPeriod('');
     setErrors({});
   };
 
@@ -585,11 +617,13 @@ export default function DeliveryChallanFormPage() {
     const validItems = items.filter((i) => i.productName?.trim()).map(calcItem);
     const payload = {
       dealerId: dealer?._id || '', partyName: dealer?.businessName || '',
-      partyPhone: dealer?.phone || '', partyGST: dealer?.gstin || '',
+      partyPhone: dealer?.phone || '', partyGST, partyPAN,
       partyAddress: dealer?.address
         ? [dealer.address.street, dealer.address.city, dealer.address.state, dealer.address.pincode].filter(Boolean).join(', ')
         : '',
       salesman, challanDate, challanNumber: challanNo || undefined, status,
+      placeOfSupply, courierPartner, awbNumber, orderId, warrantyPeriod,
+      shipTo: !shipSame && shipToName ? { name: shipToName, address: shipToAddress, gstin: shipToGST } : null,
       lineItems: validItems, additionalCharges,
       overallDiscount: showOverallDiscount && (overallDiscPct > 0 || overallDiscFlat > 0) ? {
         discountType: overallDiscPct > 0 ? 'percent' : 'amount',
@@ -611,10 +645,10 @@ export default function DeliveryChallanFormPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="bg-gray-50 flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 148px)' }}>
 
       {/* Top bar */}
-      <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between flex-shrink-0 shadow-sm sticky top-0 z-40">
+      <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between flex-shrink-0 shadow-sm">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/delivery-challan')} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 transition-colors">
             <ArrowLeft size={18} />
@@ -623,14 +657,20 @@ export default function DeliveryChallanFormPage() {
         </div>
         <div className="flex items-center gap-2">
           {isEdit && (
-            <select
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white focus:border-indigo-400 mr-2"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="open">Open</option>
-              <option value="closed">Closed</option>
-            </select>
+            <>
+              <select
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white focus:border-indigo-400"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+              </select>
+              <button onClick={() => navigate(`/delivery-challan/${id}/print`)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <Printer size={14} /> Print
+              </button>
+            </>
           )}
           <button onClick={() => handleSave(true)} disabled={loading}
             className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
@@ -645,7 +685,7 @@ export default function DeliveryChallanFormPage() {
 
       <div className="flex-1 overflow-y-auto">
 
-        {/* Bill To + Meta */}
+        {/* Bill To + Ship To + Meta */}
         <div className="bg-white border-b border-gray-200 flex">
           <div className="flex-1 p-6 border-r border-gray-200">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Bill To</div>
@@ -702,12 +742,57 @@ export default function DeliveryChallanFormPage() {
                   </p>
                 )}
                 {dealer.phone && <p className="text-sm text-gray-400 mt-0.5">{dealer.phone}</p>}
-                <button onClick={() => { setDealer(null); setDealerSearch(''); setShowPartyDrop(false); }}
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-0.5">GSTIN</label>
+                    <input
+                      className="w-full text-xs border border-gray-200 rounded px-2 py-1 outline-none focus:border-indigo-400 font-mono bg-gray-50"
+                      placeholder="22AAAAA0000A1Z5"
+                      value={partyGST}
+                      onChange={(e) => setPartyGST(e.target.value.toUpperCase())}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-0.5">PAN Number</label>
+                    <input
+                      className="w-full text-xs border border-gray-200 rounded px-2 py-1 outline-none focus:border-indigo-400 font-mono bg-gray-50"
+                      placeholder="AAAAA0000A"
+                      value={partyPAN}
+                      onChange={(e) => setPartyPAN(e.target.value.toUpperCase())}
+                    />
+                  </div>
+                </div>
+                <button onClick={() => { setDealer(null); setDealerSearch(''); setShowPartyDrop(false); setPartyGST(''); setPartyPAN(''); }}
                   className="mt-2 text-xs text-indigo-500 font-semibold hover:underline">Change Party</button>
               </div>
             )}
           </div>
 
+          {/* Ship To */}
+          <div className="flex-1 p-6 border-r border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ship To</div>
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500">
+                <input type="checkbox" checked={shipSame} onChange={(e) => { setShipSame(e.target.checked); if (e.target.checked) { setShipToName(''); setShipToAddress(''); setShipToGST(''); } }}
+                  className="w-3.5 h-3.5 rounded accent-indigo-500" />
+                Same as Bill To
+              </label>
+            </div>
+            {shipSame ? (
+              <div className="text-sm text-gray-400 italic">Same as billing address</div>
+            ) : (
+              <div className="space-y-2">
+                <input className="w-full text-sm font-semibold text-gray-800 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 bg-gray-50 transition-colors"
+                  placeholder="Ship To Name" value={shipToName} onChange={(e) => setShipToName(e.target.value)} />
+                <textarea rows={2} className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 bg-gray-50 resize-none transition-colors"
+                  placeholder="Shipping Address" value={shipToAddress} onChange={(e) => setShipToAddress(e.target.value)} />
+                <input className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 bg-gray-50 transition-colors"
+                  placeholder="GSTIN (optional)" value={shipToGST} onChange={(e) => setShipToGST(e.target.value)} />
+              </div>
+            )}
+          </div>
+
+          {/* Meta */}
           <div className="w-80 p-5 flex-shrink-0">
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
@@ -729,12 +814,23 @@ export default function DeliveryChallanFormPage() {
                 </div>
               </div>
             </div>
-            <div>
-              <label className="text-xs text-gray-500 font-semibold block mb-1">Salesman:</label>
-              <input
-                className="w-full text-sm text-gray-800 bg-gray-100 rounded-lg px-3 py-2 outline-none focus:bg-white focus:ring-1 focus:ring-indigo-300 border border-transparent focus:border-indigo-400 transition-all"
-                value={salesman} onChange={(e) => setSalesman(e.target.value)}
-              />
+            <div className="space-y-2">
+              {[
+                { label: 'Salesman',        val: salesman,       set: setSalesman       },
+                { label: 'Place of Supply', val: placeOfSupply,  set: setPlaceOfSupply  },
+                { label: 'Courier Partner', val: courierPartner, set: setCourierPartner },
+                { label: 'AWB Number',      val: awbNumber,      set: setAwbNumber      },
+                { label: 'Order ID',        val: orderId,        set: setOrderId        },
+                { label: 'Warranty Period', val: warrantyPeriod, set: setWarrantyPeriod },
+              ].map(({ label, val, set }) => (
+                <div key={label}>
+                  <label className="text-xs text-gray-500 font-semibold block mb-0.5">{label}:</label>
+                  <input
+                    className="w-full text-sm text-gray-800 bg-gray-100 rounded-lg px-3 py-1.5 outline-none focus:bg-white focus:ring-1 focus:ring-indigo-300 border border-transparent focus:border-indigo-400 transition-all"
+                    value={val} onChange={(e) => set(e.target.value)}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         </div>
