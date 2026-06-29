@@ -37,6 +37,12 @@ const dispatchedUnitSchema = new mongoose.Schema(
       enum: ['dispatched', 'delivered', 'in_stock'],
       default: 'dispatched',
     },
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    deletedReason: { type: String, trim: true },
+    restoredAt: { type: Date },
+    restoredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   {
     timestamps: true,

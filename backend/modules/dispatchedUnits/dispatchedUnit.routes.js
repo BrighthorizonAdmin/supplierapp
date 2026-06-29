@@ -55,7 +55,7 @@ router.get('/for-order', authenticate, asyncHandler(async (req, res) => {
 router.get('/in-stock', authenticate, asyncHandler(async (req, res) => {
   const { productId } = req.query;
   if (!productId) throw new AppError('productId is required', 400);
-  const units = await DispatchedUnit.find({ productId, status: 'in_stock' })
+  const units = await DispatchedUnit.find({ productId, status: 'in_stock', isDeleted: { $ne: true } })
     .select('serialNumber dispatchedAt')
     .sort({ createdAt: 1 })
     .lean();

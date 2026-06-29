@@ -1,6 +1,7 @@
 const inventoryService = require('./inventory.service');
 const asyncHandler = require('../../utils/asyncHandler');
 const { success, paginated } = require('../../utils/response');
+const { error } = require('../../utils/response');
 const { AppError } = require('../../middlewares/error.middleware');
 const DispatchedUnit = require('../dispatchedUnits/model/DispatchedUnit.model');
 
@@ -66,23 +67,44 @@ const updateWarehouse = asyncHandler(async (req, res) => {
 const getInventoryDetails = asyncHandler(async (req, res) => {
   const { id } = req.params;
   if (!id) throw new AppError('Inventory ID is required', 400);
-  
-  console.log('Fetching inventory details for ID:', id);
+
   const inv = await inventoryService.getInventoryById(id);
-  
+
   const prodId = (inv.productId && inv.productId._id) ? inv.productId._id : inv.productId;
   let serials = [];
   if (prodId) {
-    const units = await DispatchedUnit.find({ productId: prodId, status: 'in_stock' })
-      .select('serialNumber')
+    const units = await DispatchedUnit.find({ productId: prodId, status: 'in_stock', isDeleted: { $ne: true } })
+      .select('serialNumber _id')
       .sort({ createdAt: 1 })
       .lean();
-    serials = units.map((u) => u.serialNumber);
+    serials = units.map((u) => ({ _id: u._id, serialNumber: u.serialNumber }));
   }
   return success(res, { ...inv, serials }, 'Inventory details fetched');
+});
+
+const softDeleteSerials = asyncHandler(async (req, res) => {
+  const { serialIds, reason } = req.body;
+  if (!Array.isArray(serialIds) || serialIds.length === 0)
+    throw new AppError('serialIds array is required', 400);
+  const result = await inventoryService.softDeleteSerialNumbers(serialIds, reason, req.user.id);
+  return success(res, result, `${result.deletedCount} serial number(s) soft-deleted successfully`);
+});
+
+const restoreSerials = asyncHandler(async (req, res) => {
+  const { serialIds } = req.body;
+  if (!Array.isArray(serialIds) || serialIds.length === 0)
+    throw new AppError('serialIds array is required', 400);
+  const result = await inventoryService.restoreSerialNumbers(serialIds, req.user.id);
+  return success(res, result, `${result.restoredCount} serial number(s) restored successfully`);
+});
+
+const getDeletedSerials = asyncHandler(async (req, res) => {
+  const { data, pagination } = await inventoryService.getDeletedSerialNumbers(req.query);
+  return paginated(res, data, pagination, 'Deleted serial numbers fetched');
 });
 
 module.exports = {
   getInventory, getInventoryStats, getInventoryById, getInventoryDetails, adjustStock, upsertInventory,
   createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials, updateOpeningStock,
+  softDeleteSerials, restoreSerials, getDeletedSerials,
 };

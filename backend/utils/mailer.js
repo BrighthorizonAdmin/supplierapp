@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const twilio = require('twilio');
 
 const transporter = nodemailer.createTransport({
   host: "smtp.office365.com",
@@ -57,4 +58,67 @@ const sendDealerApprovalEmail = async ({ to, businessName, password }) => {
   });
 };
 
-module.exports = { generateRandomPassword, sendDealerApprovalEmail };
+const sendDealerApprovalSMS = async ({ phone, businessName, password }) => {
+  if (!phone) {
+    console.warn('[SMS] Skipped: dealer has no phone number registered');
+    return;
+  }
+
+  const accountSid    = process.env.TWILIO_ACCOUNT_SID?.trim();
+  const authToken     = process.env.TWILIO_AUTH_TOKEN?.trim();
+  const fromNumber    = process.env.TWILIO_PHONE_NUMBER?.trim();
+  // Ensure whatsapp: prefix is present regardless of how it's written in .env
+  const rawWhatsapp   = process.env.TWILIO_WHATSAPP_NUMBER?.trim();
+  const whatsappFrom  = rawWhatsapp
+    ? rawWhatsapp.startsWith('whatsapp:') ? rawWhatsapp : `whatsapp:${rawWhatsapp}`
+    : null;
+
+  if (!accountSid || !authToken || !fromNumber) {
+    console.warn('[SMS] Skipped: Twilio credentials not configured in .env');
+    return;
+  }
+
+  // Normalize to E.164 (+91 for India): strip non-digits, keep last 10, prepend country code
+  const digits = phone.replace(/\D/g, '').slice(-10);
+  const e164   = `+91${digits}`;
+
+  const client  = twilio(accountSid, authToken);
+  const message = `Hi ${businessName}, your BrightHorizon dealer account is approved!\nTemporary Password: ${password}\nPlease log in and change your password immediately.`;
+
+  // Step 1: Try WhatsApp first, then check actual delivery status
+  if (whatsappFrom) {
+    try {
+      const waMsg = await client.messages.create({
+        from: whatsappFrom,
+        to:   `whatsapp:${e164}`,
+        body: message,
+      });
+
+      // Wait 4 seconds for Twilio to update the delivery status
+      // (sandbox silently fails non-joined numbers — status becomes 'failed'/'undelivered')
+      await new Promise(resolve => setTimeout(resolve, 4000));
+
+      const updated = await client.messages(waMsg.sid).fetch();
+      console.log(`[WhatsApp] Delivery status for ${e164}: ${updated.status}`);
+
+      if (updated.status === 'sent' || updated.status === 'delivered') {
+        console.log(`[WhatsApp] Delivered to ${e164} — skipping SMS`);
+        return; // WhatsApp delivered, no SMS needed
+      }
+
+      console.warn(`[WhatsApp] Status "${updated.status}" for ${e164} — falling back to SMS`);
+    } catch (err) {
+      console.warn(`[WhatsApp] Failed (${err.code || err.message}) — falling back to SMS`);
+    }
+  }
+
+  // Step 2: Fallback to normal SMS
+  await client.messages.create({
+    from: fromNumber,
+    to:   e164,
+    body: message,
+  });
+  console.log(`[SMS] Fallback SMS sent to ${e164}`);
+};
+
+module.exports = { generateRandomPassword, sendDealerApprovalEmail, sendDealerApprovalSMS };
