@@ -379,78 +379,109 @@ const editStockWithSerials = async (
     return serial.trim().toUpperCase();
   };
 
-  // Check for duplicate serials already in the system
-  if (Array.isArray(serialNumbers) && serialNumbers.length > 0) {
-    const upperSerials = serialNumbers
-      .map(normalizeSerial)
-      .filter(Boolean);
-      const duplicatesInRequest = upperSerials.filter(
-  (item, index) => upperSerials.indexOf(item) !== index
-);
+  const upperSerials = Array.isArray(serialNumbers)
+    ? serialNumbers.map(normalizeSerial).filter(Boolean)
+    : [];
 
-if (duplicatesInRequest.length > 0) {
-  throw new AppError(
-    `Duplicate serial number(s) in request: ${[
-      ...new Set(duplicatesInRequest),
-    ].join(', ')}`,
-    409
-  );
-}
-    const existing = await DispatchedUnit.find({
-      serialNumber: { $in: upperSerials },
-    })
-      .select('serialNumber')
-      .lean();
-
-    if (existing.length > 0) {
-      const dupes = existing.map((d) => d.serialNumber).join(', ');
+  if (upperSerials.length > 0) {
+    // Reject duplicates within the same request
+    const duplicatesInRequest = upperSerials.filter(
+      (item, index) => upperSerials.indexOf(item) !== index
+    );
+    if (duplicatesInRequest.length > 0) {
       throw new AppError(
-        `Serial number(s) already exist in the system: ${dupes}`,
+        `Duplicate serial number(s) in request: ${[...new Set(duplicatesInRequest)].join(', ')}`,
         409
       );
     }
+
+    // Find all existing records (active or soft-deleted) for these serials
+    const existingAll = await DispatchedUnit.find({
+      serialNumber: { $in: upperSerials },
+    }).select('serialNumber isDeleted').lean();
+
+    // Active (not soft-deleted) duplicates → hard error
+    const activeDupes = existingAll.filter((d) => !d.isDeleted);
+    if (activeDupes.length > 0) {
+      throw new AppError(
+        `Serial number(s) already exist in the system: ${activeDupes.map((d) => d.serialNumber).join(', ')}`,
+        409
+      );
+    }
+
+    // Soft-deleted records that match → will be restored, not re-inserted
+    const softDeletedSerials = existingAll
+      .filter((d) => d.isDeleted)
+      .map((d) => d.serialNumber);
+
+    if (softDeletedSerials.length > 0) {
+      // Restore soft-deleted records back to in_stock
+      await DispatchedUnit.updateMany(
+        { serialNumber: { $in: softDeletedSerials } },
+        {
+          $set: {
+            isDeleted: false,
+            status: 'in_stock',
+            productId,
+            productName: productName || '',
+            restoredAt: new Date(),
+            restoredBy: userId,
+          },
+          $unset: { deletedAt: '', deletedBy: '', deletedReason: '' },
+        }
+      );
+
+      // Increase stock for restored serials
+      const restoredCount = softDeletedSerials.length;
+      await adjustStock(productId, warehouseId, restoredCount, 'add', userId);
+      await Product.findByIdAndUpdate(productId, {
+        $inc: { currentStockQty: restoredCount, openingStockQty: restoredCount },
+      });
+
+      await auditService.log('inventory', productId, 'serial-restore', userId, {
+        after: { restoredSerials: softDeletedSerials, restoredCount },
+      });
+    }
   }
 
+  // Only genuinely new serials (not in DB at all) go to insertMany
+  const existingSerialNumbers = upperSerials.length > 0
+    ? (await DispatchedUnit.find({ serialNumber: { $in: upperSerials } }).select('serialNumber').lean())
+        .map((d) => d.serialNumber)
+    : [];
+
+  const newSerials = upperSerials.filter((s) => !existingSerialNumbers.includes(s));
+
+  // Subtract restored serials from stockQuantity to avoid double-counting
+  // (restored serials already had their stock increased in the restore block above)
+  const restoredCount = upperSerials.length - newSerials.length;
+  const effectiveStockQty = Math.max(0, stockQuantity - restoredCount);
+
   // stockQuantity = 0 means registering serials for existing opening stock
-  // Skip inventory adjustment
   let inv = null;
 
-  if (stockQuantity > 0) {
-    inv = await adjustStock(
-      productId,
-      warehouseId,
-      stockQuantity,
-      'add',
-      userId
-    );
-
+  if (effectiveStockQty > 0) {
+    inv = await adjustStock(productId, warehouseId, effectiveStockQty, 'add', userId);
     await Product.findByIdAndUpdate(productId, {
-      $inc: { currentStockQty: stockQuantity, openingStockQty: stockQuantity },
+      $inc: { currentStockQty: effectiveStockQty, openingStockQty: effectiveStockQty },
     });
   }
 
-  // Insert serial numbers
-  if (Array.isArray(serialNumbers) && serialNumbers.length > 0) {
+  // Insert only brand-new serial numbers
+  if (newSerials.length > 0) {
     const units = serialNumbers
       .map((sn) => {
         const serial = normalizeSerial(sn);
-
-        if (!serial) return null;
-
+        if (!serial || !newSerials.includes(serial)) return null;
         const unit = {
           serialNumber: serial,
           productId,
           productName: productName || '',
           status: 'in_stock',
         };
-
-        if (
-          typeof sn === 'object' &&
-          sn?.dispatchedAt
-        ) {
+        if (typeof sn === 'object' && sn?.dispatchedAt) {
           unit.dispatchedAt = new Date(sn.dispatchedAt);
         }
-
         return unit;
       })
       .filter(Boolean);
@@ -497,8 +528,117 @@ const updateOpeningStock = async (productId, warehouseId, newOpeningQty, reason,
   return { productId, oldOpeningQty: oldOpening, newOpeningQty, delta };
 };
 
+const softDeleteSerialNumbers = async (serialIds, reason, userId) => {
+  if (!Array.isArray(serialIds) || serialIds.length === 0)
+    throw new AppError('At least one serial number ID is required', 400);
+
+  // Only allow soft-delete of active in_stock serials that are not already deleted
+  const serials = await DispatchedUnit.find({
+    _id: { $in: serialIds },
+    isDeleted: { $ne: true },
+    status: 'in_stock',
+  }).lean();
+
+  if (serials.length === 0)
+    throw new AppError('No eligible serial numbers found to delete', 404);
+
+  // Mark all as soft-deleted
+  await DispatchedUnit.updateMany(
+    { _id: { $in: serials.map((s) => s._id) } },
+    { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: userId, deletedReason: reason || '' } }
+  );
+
+  // Group by productId to decrement stock per product
+  const countByProduct = {};
+  for (const s of serials) {
+    const pid = s.productId.toString();
+    countByProduct[pid] = (countByProduct[pid] || 0) + 1;
+  }
+
+  for (const [productId, count] of Object.entries(countByProduct)) {
+    // Decrease Product.currentStockQty
+    await Product.findByIdAndUpdate(productId, { $inc: { currentStockQty: -count } });
+
+    // Decrease quantityOnHand on the Inventory record with the most stock for this product
+    const inv = await Inventory.findOne({ productId, quantityOnHand: { $gte: count } })
+      .sort({ quantityOnHand: -1 });
+    if (inv) {
+      await Inventory.findByIdAndUpdate(inv._id, { $inc: { quantityOnHand: -count } });
+    }
+
+    await auditService.log('inventory', productId, 'serial-soft-delete', userId, {
+      after: { deletedCount: count, reason },
+    });
+  }
+
+  return { deletedCount: serials.length };
+};
+
+const restoreSerialNumbers = async (serialIds, userId) => {
+  if (!Array.isArray(serialIds) || serialIds.length === 0)
+    throw new AppError('At least one serial number ID is required', 400);
+
+  const serials = await DispatchedUnit.find({
+    _id: { $in: serialIds },
+    isDeleted: true,
+  }).lean();
+
+  if (serials.length === 0)
+    throw new AppError('No soft-deleted serial numbers found to restore', 404);
+
+  await DispatchedUnit.updateMany(
+    { _id: { $in: serials.map((s) => s._id) } },
+    { $set: { isDeleted: false, restoredAt: new Date(), restoredBy: userId },
+      $unset: { deletedAt: '', deletedBy: '', deletedReason: '' } }
+  );
+
+  // Group by productId to increment stock per product
+  const countByProduct = {};
+  for (const s of serials) {
+    const pid = s.productId.toString();
+    countByProduct[pid] = (countByProduct[pid] || 0) + 1;
+  }
+
+  for (const [productId, count] of Object.entries(countByProduct)) {
+    await Product.findByIdAndUpdate(productId, { $inc: { currentStockQty: count } });
+
+    // Increase quantityOnHand on the Inventory record with the least stock for this product
+    const inv = await Inventory.findOne({ productId }).sort({ quantityOnHand: 1 });
+    if (inv) {
+      await Inventory.findByIdAndUpdate(inv._id, { $inc: { quantityOnHand: count } });
+    }
+
+    await auditService.log('inventory', productId, 'serial-restore', userId, {
+      after: { restoredCount: count },
+    });
+  }
+
+  return { restoredCount: serials.length };
+};
+
+const getDeletedSerialNumbers = async (query = {}) => {
+  const { page, limit, skip } = getPagination(query);
+  const filter = { isDeleted: true };
+  if (query.productId) filter.productId = query.productId;
+
+  const [total, data] = await Promise.all([
+    DispatchedUnit.countDocuments(filter),
+    DispatchedUnit.find(filter)
+      .populate('productId', 'name productCode')
+      .populate('deletedBy', 'name email')
+      .populate('restoredBy', 'name email')
+      .sort({ deletedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
+
+  return { data, pagination: buildMeta(total, page, limit) };
+};
+
 module.exports = {
   adjustStock, allocateStock, releaseAllocation, getInventory, getInventoryStats,
   getInventoryById, upsertInventory, getOrCreateInventory,
   createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials, updateOpeningStock,
+  softDeleteSerialNumbers, restoreSerialNumbers, getDeletedSerialNumbers,
 };

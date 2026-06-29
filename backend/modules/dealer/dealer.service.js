@@ -8,7 +8,7 @@ const notificationService = require('../notifications/notification.service');
 const { emitToRole, emitToAll } = require('../../websocket/socket');
 const { DEALER_APPLICATION, DEALER_APPROVED, DEALER_REJECTED, DEALER_SUSPENDED } = require('../../websocket/events');
 const axios = require('axios');
-const { generateRandomPassword, sendDealerApprovalEmail } = require('../../utils/mailer');
+const { generateRandomPassword, sendDealerApprovalEmail, sendDealerApprovalSMS } = require('../../utils/mailer');
 
 const DEALER_API_URL = process.env.DEALER_API_URL || 'http://localhost:5000';
 const DEALER_UPLOADS_DIR = path.join(__dirname, '../../uploads/dealership');
@@ -143,6 +143,19 @@ const createDealer = async (data, userId) => {
       });
     } catch (err) {
       console.error('[DealerCreate] Approval email failed:', err.message);
+    }
+  }
+
+  if (shouldAutoApprove && dealer.phone) {
+    try {
+      await sendDealerApprovalSMS({
+        phone: dealer.phone,
+        businessName: dealer.businessName,
+        password,
+      });
+      console.log(`[DealerCreate] Approval SMS sent to ${dealer.phone}`);
+    } catch (err) {
+      console.error('[DealerCreate] Approval SMS failed:', err.message, err.code || '');
     }
   }
 
@@ -289,6 +302,18 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms,
     console.log(`[DealerApprove] Approval email sent to ${dealer.email}`);
   } catch (err) {
     console.error('[DealerApprove] Failed to send approval email:', err.message);
+  }
+
+  // Send the temp password via SMS
+  try {
+    await sendDealerApprovalSMS({
+      phone: dealer.phone,
+      businessName: dealer.businessName,
+      password: randomPassword,
+    });
+    console.log(`[DealerApprove] Approval SMS sent to ${dealer.phone}`);
+  } catch (err) {
+    console.error('[DealerApprove] Failed to send approval SMS:', err.message, err.code || '');
   }
 
   await auditService.log('dealer', dealerId, 'approve', userId, {
