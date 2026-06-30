@@ -383,7 +383,7 @@ const ProductFormPage = () => {
   useEffect(() => {
     if (isEdit && selected) {
       const cat = hsnCategories.find(c => c.name === selected.category);
-      setHsnValue(selected.hsn || cat?.hsnCode || '');
+      setHsnValue(selected.hsnCode || cat?.hsnCode || '');
       reset({
         ...selected,
         stockDate:      selected.openingStockDate
@@ -521,7 +521,7 @@ const ProductFormPage = () => {
                   const cat = hsnCategories.find(c => c.name === e.target.value);
                   const hsn = cat?.hsnCode || '';
                   setHsnValue(hsn);
-                  setValue('hsn', hsn, { shouldDirty: true });
+                  setValue('hsnCode', hsn, { shouldDirty: true });
                 }}
               >
                 <option value="">Select category</option>
@@ -561,7 +561,7 @@ const ProductFormPage = () => {
                 value={hsnValue}
                 onChange={(e) => {
                   setHsnValue(e.target.value);
-                  setValue('hsn', e.target.value, { shouldDirty: true });
+                  setValue('hsnCode', e.target.value, { shouldDirty: true });
                 }}
               />
             </div>
