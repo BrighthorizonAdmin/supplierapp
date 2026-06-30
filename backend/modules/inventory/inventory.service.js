@@ -148,6 +148,16 @@ const getInventory = async (query = {}) => {
       },
     },
 
+    // Left-join category to get hsnCode (category is stored as a string name on Product)
+    {
+      $lookup: {
+        from: 'categories',
+        localField: 'category',
+        foreignField: 'name',
+        as: 'categoryData',
+      },
+    },
+
     // Project into the shape the frontend already expects (mirrors .populate() output)
     {
       $project: {
@@ -160,7 +170,7 @@ const getInventory = async (query = {}) => {
           unit: '$unit',
           basePrice: '$basePrice',
           taxRate: '$taxRate',
-          hsnCode: '$hsnCode',
+          hsnCode: { $ifNull: [{ $arrayElemAt: ['$categoryData.hsnCode', 0] }, '$hsnCode', ''] },
           mrp: '$mrp',
         },
         warehouseId:       { $arrayElemAt: ['$whArr', 0] },
