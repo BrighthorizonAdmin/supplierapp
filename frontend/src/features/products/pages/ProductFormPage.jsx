@@ -364,6 +364,7 @@ const ProductFormPage = () => {
   const navigate  = useNavigate();
   const { selected, loading } = useSelector((s) => s.product);
   const hsnCategories = useSelector((s) => s.hsn.list);
+const TAX_OPTIONS = [0, 5, 12, 18, 28];
 
   const [productImages,   setProductImages]   = useState([]);
   const [interfaceGroups, setInterfaceGroups] = useState([]);
@@ -494,8 +495,15 @@ const ProductFormPage = () => {
           {options.map((o) => <option key={o.value || o} value={o.value || o}>{o.label || o}</option>)}
         </select>
       ) : (
-        <input type={type} step={step} className="input"
-          {...register(name, { required: required && 'Required', ...(type === 'number' ? { valueAsNumber: true } : {}) })}
+        <input
+          type={type}
+          step={step}
+          inputMode={type === 'number' ? 'decimal' : undefined}
+          className="input"
+          {...register(name, {
+            required: required && 'Required',
+            ...(type === 'number' ? { setValueAs: (v) => (v === '' || v == null ? '' : parseFloat(v)) } : {}),
+          })}
         />
       )}
       {errors[name] && <p className="text-red-500 text-xs mt-1">{errors[name]?.message}</p>}
@@ -532,7 +540,22 @@ const ProductFormPage = () => {
               {errors.category && <p className="text-red-500 text-xs mt-1">{errors.category.message}</p>}
             </div>
             <F label="MRP"          name="mrp"       type="number" step="0.01" />
-            <F label="Tax"          name="taxRate"   type="number" />
+            <div>
+              <label className="label">Tax Rate</label>
+              <select
+                className="input"
+                {...register('taxRate', { setValueAs: (v) => (v === '' ? '' : parseFloat(v)) })}
+              >
+                <option value="">Select Tax Rate</option>
+                {TAX_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option === 0 ? 'Nil (0%)' : `${option}%`}
+                  </option>
+                ))}
+              </select>
+            </div>
+           
+            {/* <F label="Tax"          name="taxRate"   type="number" /> */}
             <F label="Base Price"   name="basePrice" type="number" step="0.01" required />
             <div className="flex-1 flex flex-col">
               <label className="label mb-1">
@@ -603,7 +626,7 @@ const ProductFormPage = () => {
             <div>
               <p className="label">Specification</p>
               <div className="space-y-2">
-                <select className="input" {...register('specWeight')}>
+                {/* <select className="input" {...register('specWeight')}>
                   <option value="">Weight</option>
                   <option value="kg">kg</option>
                   <option value="g">g</option>
@@ -613,7 +636,7 @@ const ProductFormPage = () => {
                   <option value="">Dimensions</option>
                   <option value="cm">cm</option>
                   <option value="inch">inch</option>
-                </select>
+                </select> */}
                 <select className="input" {...register('specColor')}>
                   <option value="">Color/Variant</option>
                   <option value="red">Red</option>
