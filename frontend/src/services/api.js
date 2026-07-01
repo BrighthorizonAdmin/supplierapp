@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 
 const api = axios.create({
   baseURL: 'https://supplier.dealerkart.biz/api',
-  // baseURL: 'http://34.131.73.5:3001/api',
+  // baseURL: 'http://192.168.43.44:3001/api',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });

@@ -505,6 +505,7 @@ const confirmOrder = async (orderId, userId) => {
         productId:     i.productId,
         productName:   i.productName || i.name || '',
         productCode:   i.productCode || i.sku || '',
+        hsnCode:       i.hsnCode || i.productId?.hsnCode || '',
         quantity:      Number(i.quantity) || 0,
         unitPrice:     Number(i.unitPrice || i.basePrice) || 0,
         taxRate:       Number(i.taxRate) || 0,
@@ -797,7 +798,7 @@ const getOrderById = async (id) => {
   const items = order.items?.length
     ? order.items
     : await OrderItem.find({ orderId: id })
-      .populate('productId', 'name productCode unit')
+      .populate('productId', 'name productCode unit hsnCode')
       .populate('warehouseId', 'name code')
       .lean();
  
@@ -927,6 +928,7 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
           productId:     i.productId,
           productName:   i.productName || i.name || '',
           productCode:   i.productCode || i.sku || '',
+          hsnCode:       i.hsnCode || i.productId?.hsnCode || '',
           quantity:      Number(i.quantity) || 0,
           unitPrice:     Number(i.unitPrice || i.basePrice) || 0,
           taxRate:       Number(i.taxRate) || 0,

@@ -135,6 +135,32 @@ const getInvoiceById = async (id) => {
     }
   }
 
+  // Backfill hsnCode for line items where it was not captured at invoice creation.
+  // Falls back to the product's category HSN when the product's own hsnCode is empty.
+  const missingHsn = (inv.lineItems || []).filter(li => !li.hsnCode && li.productId);
+  if (missingHsn.length > 0) {
+    const Category = require('../categories/model/Category.model');
+    const productIds = [...new Set(missingHsn.map(li => li.productId.toString()))];
+    const products = await Product.find({ _id: { $in: productIds } }).select('hsnCode category').lean();
+
+    // For products still missing hsnCode, resolve via their category
+    const noHsnProducts = products.filter(p => !p.hsnCode && p.category);
+    if (noHsnProducts.length > 0) {
+      const categoryNames = [...new Set(noHsnProducts.map(p => p.category))];
+      const categories = await Category.find({ name: { $in: categoryNames } }).select('name hsnCode').lean();
+      const catHsnMap = {};
+      categories.forEach(c => { catHsnMap[c.name] = c.hsnCode || ''; });
+      products.forEach(p => { if (!p.hsnCode && p.category) p.hsnCode = catHsnMap[p.category] || ''; });
+    }
+
+    const hsnMap = {};
+    products.forEach(p => { hsnMap[p._id.toString()] = p.hsnCode || ''; });
+    inv.lineItems = inv.lineItems.map(li => ({
+      ...li,
+      hsnCode: li.hsnCode || hsnMap[li.productId?.toString()] || '',
+    }));
+  }
+
   return inv;
 };
 
