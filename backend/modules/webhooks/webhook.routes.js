@@ -816,7 +816,7 @@ router.post('/dealer-quote', async (req, res) => {
     const {
       dbeQuoteId, quoteNumber, quoteDate, expiryDate, status,
       dealerEmail, dealerName, dealerPhone,
-      customerName, customerPhone, customerCity,
+      customerName, customerPhone, customerCity, salesman,
       items, subtotal, taxAmount, totalAmount, notes,
     } = req.body;
 
@@ -856,6 +856,7 @@ router.post('/dealer-quote', async (req, res) => {
       partyName:   customerName,
       partyPhone:  customerPhone || '',
       partyAddress: customerCity || '',
+      salesman:    salesman || '',
       lineItems,
       subtotal:    Number(subtotal),
       taxAmount:   Number(taxAmount),
