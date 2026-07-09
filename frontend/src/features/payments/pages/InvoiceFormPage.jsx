@@ -118,6 +118,7 @@ export default function InvoiceFormPage() {
   const [shipAddress, setShipAddress] = useState(null); // selected shipping address
   const [items,       setItems]       = useState([{ ...EMPTY_ITEM }]);
   const [warrantyPeriod, setWarrantyPeriod] = useState('');
+  const [salesmanName, setSalesmanName] = useState('');
   const [notes,       setNotes]       = useState('');
   const [showNotes,   setShowNotes]   = useState(false);
   const [terms,       setTerms]       = useState('1. Goods once sold will not be taken back or exchanged\n2. All disputes are subject to [ENTER_YOUR_CITY_NAME] jurisdiction only');
@@ -303,6 +304,7 @@ export default function InvoiceFormPage() {
     setInvoiceNo(inv.invoiceNumber||''); setInvoiceDate(inv.invoiceDate?.split('T')[0]||today);
     setDueDate(inv.dueDate?.split('T')[0]||''); setNotes(inv.notes||''); setShowNotes(Boolean(inv.notes));
     setWarrantyPeriod(inv.warrantyPeriod || '');
+    setSalesmanName(inv.salesmanName || '');
     setTerms(inv.termsAndConditions||''); setShowTerms(Boolean(inv.termsAndConditions));
     setInvoiceDisc(inv.discountAmt||0); setShowDisc(Boolean(inv.discountAmt));
     setAmtReceived(inv.amountPaid||0); setMarkPaid(inv.amountPaid>0 && inv.balance===0);
@@ -458,6 +460,7 @@ export default function InvoiceFormPage() {
       dueDate,
       paymentTerms: `Net ${paymentDays}`,
       warrantyPeriod: warrantyPeriod || '',
+      salesmanName: salesmanName || '',
       notes:        showNotes ? notes : '',
       termsAndConditions: showTerms ? terms : '',
       lineItems:    calcedItems.map((item, idx) => {
@@ -502,7 +505,7 @@ export default function InvoiceFormPage() {
     if (!result.error) {
       if (andNew) {
         setDealer(null); setDealerSearch(''); setItems([{...EMPTY_ITEM}]); setProdSearch({});
-        setNotes(''); setWarrantyPeriod(''); setInvoiceDisc(0); setAmtReceived(0); setMarkPaid(false);
+        setNotes(''); setWarrantyPeriod(''); setSalesmanName(''); setInvoiceDisc(0); setAmtReceived(0); setMarkPaid(false);
         setShowDisc(false); setShowNotes(false); setInvoiceNo(''); setInvoiceDate(today);
         setAddlCharges(0); setShowAddlChg(false); setBankAccount(null); setErrors({});
         setPayMode('Cash'); setRoundOff(false); setShipAddress(null); setSerialInputs({});
@@ -808,6 +811,20 @@ export default function InvoiceFormPage() {
                 placeholder="e.g. 1 Year, 6 Months (auto-filled from product)"
                 value={warrantyPeriod}
                 onChange={(e) => setWarrantyPeriod(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Salesman Name */}
+          <div className="bg-white border-b border-gray-200 px-5 py-3">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-semibold text-gray-600 w-36 shrink-0">Salesman Name</label>
+              <input
+                type="text"
+                className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 transition-colors placeholder-gray-300"
+                placeholder="Name of salesman who created this invoice"
+                value={salesmanName}
+                onChange={(e) => setSalesmanName(e.target.value)}
               />
             </div>
           </div>

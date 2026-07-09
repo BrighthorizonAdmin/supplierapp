@@ -221,7 +221,7 @@ export default function InvoiceDetailPage() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontWeight: 'bold', fontSize: '11px' }}>Salesman</span>
-              <span style={{ fontSize: '11px' }}>—</span>
+              <span style={{ fontSize: '11px' }}>{inv.salesmanName || '—'}</span>
             </div>
           </div>
         </div>
