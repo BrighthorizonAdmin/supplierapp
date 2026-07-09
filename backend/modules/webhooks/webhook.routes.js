@@ -38,6 +38,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       totalAmount,
       receivedAmount,
       paymentMode,
+      salesmanName,
     } = req.body;
  
     // 2. Prevent duplicate — idempotent based on dbeInvoiceId OR invoiceNumber
@@ -129,6 +130,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
         partyPhone:   dealerPhone || '',
         partyAddress: custAddrStr || '',
         shippingAddress: shipAddrDoc,
+        salesmanName: salesmanName || '',
         notes:        `Retail sale to: ${customerName}${customerPhone ? ' | ' + customerPhone : ''}`,
         lineItems,
         subtotal:     Number(subtotal),
