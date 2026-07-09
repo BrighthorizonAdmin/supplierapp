@@ -28,7 +28,14 @@ const InvoiceListPage = () => {
     {
       key: 'invoiceNumber',
       label: 'Invoice #',
-      render: (v) => <span className="font-mono text-xs font-semibold text-blue-700">{v}</span>,
+      render: (v, row) => (
+        <div>
+          <span className="font-mono text-xs font-semibold text-blue-700">{v}</span>
+          {row.quoteNumber && (
+            <div className="text-[10px] text-gray-400">from {row.quoteNumber}</div>
+          )}
+        </div>
+      ),
     },
     {
       key: 'invoiceType',

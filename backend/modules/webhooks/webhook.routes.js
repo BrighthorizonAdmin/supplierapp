@@ -39,6 +39,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       receivedAmount,
       paymentMode,
       salesmanName,
+      quoteNumber,
     } = req.body;
  
     // 2. Prevent duplicate — idempotent based on dbeInvoiceId OR invoiceNumber
@@ -125,6 +126,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
         invoiceType:  'retail',
         dbeInvoiceId,
         invoiceNumber: `D-${invoiceNumber}`,
+        quoteNumber:  quoteNumber || '',
         dealerId:     dealer?._id || undefined,
         partyName:    dealerName || 'Unknown Dealer',
         partyPhone:   dealerPhone || '',
