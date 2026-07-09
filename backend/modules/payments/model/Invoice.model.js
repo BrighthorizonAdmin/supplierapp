@@ -111,6 +111,7 @@ const invoiceSchema = new mongoose.Schema({
 
   warrantyPeriod: { type: String, default: '' },
 
+  salesmanName: { type: String, trim: true, default: '' },
   notes: { type: String, trim: true },
   termsAndConditions: { type: String },
 

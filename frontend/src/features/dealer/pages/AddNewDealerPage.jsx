@@ -92,8 +92,6 @@ const validateForm = (form, docs) => {
     errors.creditLimit = 'Credit limit is required';
   } else if (Number.isNaN(Number(form.creditLimit))) {
     errors.creditLimit = 'Credit limit must be a number';
-  } else if(Number(form.creditLimit) > 2000) {
-    errors.creditLimit = 'Credit limit cannot exceed ₹2,000';
   }
   else if (Number(form.creditLimit) < 0) {
     errors.creditLimit = 'Credit limit cannot be negative';
@@ -485,10 +483,7 @@ const AddNewDealerPage = () => {
               <InputField
                 label="Credit Limit (INR)"
                 id="creditLimit"
-                min={0}
-                max={2000}
                 type="number"
-                placeholder="Max ₹2,000"
                 value={form.creditLimit}
                 onChange={setField('creditLimit')}
                 error={errors.creditLimit}

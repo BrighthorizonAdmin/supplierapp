@@ -149,6 +149,10 @@ const DealerOnboardingPage = () => {
     pricingTier: '',
     onboardedBy: '',
   });
+  const [approveErrors, setApproveErrors] = useState({
+    creditLimit: '',
+    paymentTerms: '',
+  });
 
   useEffect(() => {
     if (list.length > 0 && !selected) {
@@ -171,8 +175,40 @@ const DealerOnboardingPage = () => {
       .finally(() => setDocsLoading(false));
   }, [selected?._id]);
 
+  const validateApproveForm = () => {
+    const nextErrors = {};
+
+    if (approveForm.creditLimit === '' || approveForm.creditLimit === null || approveForm.creditLimit === undefined) {
+      nextErrors.creditLimit = 'Credit limit is required';
+    } else {
+      const creditLimitValue = Number(approveForm.creditLimit);
+      if (Number.isNaN(creditLimitValue)) {
+        nextErrors.creditLimit = 'Credit limit must be a number';
+      } else if (creditLimitValue < 0) {
+        nextErrors.creditLimit = 'Credit limit cannot be negative';
+      }
+    }
+
+    if (!approveForm.paymentTerms?.trim()) {
+      nextErrors.paymentTerms = 'Payment terms is required';
+    } else if (!PAYMENT_TERMS.includes(approveForm.paymentTerms)) {
+      nextErrors.paymentTerms = 'Please select a valid payment term';
+    }
+
+    setApproveErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleCloseApproveModal = () => {
+    setShowApproveModal(false);
+    setApproveForm({ creditLimit: '', paymentTerms: '', pricingTier: '', onboardedBy: '' });
+    setApproveErrors({ creditLimit: '', paymentTerms: '' });
+  };
+
   const handleConfirmApprove = () => {
     if (!selected) return;
+    if (!validateApproveForm()) return;
+
     dispatch(approveDealer({
       id: selected._id,
       creditLimit: Number(approveForm.creditLimit) || 0,
@@ -182,8 +218,7 @@ const DealerOnboardingPage = () => {
     })).then((res) => {
       if (!res.error) {
         setSelected(null);
-        setShowApproveModal(false);
-        setApproveForm({ creditLimit: '', paymentTerms: '', pricingTier: '', onboardedBy: '' });
+        handleCloseApproveModal();
       }
     });
   };
@@ -766,18 +801,26 @@ const DealerOnboardingPage = () => {
               min={0}
               value={approveForm.creditLimit}
               placeholder="Enter credit limit"
-              onChange={(e) => setApproveForm((f) => ({ ...f, creditLimit: e.target.value }))}
+              onChange={(e) => {
+                setApproveForm((f) => ({ ...f, creditLimit: e.target.value }));
+                setApproveErrors((errors) => ({ ...errors, creditLimit: '' }));
+              }}
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {approveErrors.creditLimit && <p className="text-xs text-red-500 mt-1.5">{approveErrors.creditLimit}</p>}
           </div>
           <div>
             <label className="text-sm font-semibold text-slate-800 mb-2 block">Payment Terms</label>
             <SelectField
               value={approveForm.paymentTerms}
-              onChange={(v) => setApproveForm((f) => ({ ...f, paymentTerms: v }))}
+              onChange={(v) => {
+                setApproveForm((f) => ({ ...f, paymentTerms: v }));
+                setApproveErrors((errors) => ({ ...errors, paymentTerms: '' }));
+              }}
               placeholder="Select payment terms"
               options={PAYMENT_TERMS}
             />
+            {approveErrors.paymentTerms && <p className="text-xs text-red-500 mt-1.5">{approveErrors.paymentTerms}</p>}
           </div>
         </div>
 
@@ -804,7 +847,7 @@ const DealerOnboardingPage = () => {
 
         <div className="flex items-center justify-end gap-3">
           <button
-            onClick={() => setShowApproveModal(false)}
+            onClick={handleCloseApproveModal}
             className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
           >
             Cancel
