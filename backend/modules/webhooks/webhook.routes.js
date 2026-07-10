@@ -888,5 +888,40 @@ router.post('/dealer-quote', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
- 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-quote-deleted
+// Called by D-BE when a dealer deletes a quote. We never delete the synced
+// supplier-side copy (keeps the audit trail) — just flag its status so admins
+// can see it was removed on the dealer side. No-ops if it was never synced.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-quote-deleted', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { dbeQuoteId } = req.body;
+    if (!dbeQuoteId) return res.status(400).json({ success: false, message: 'dbeQuoteId required' });
+
+    const quote = await Quote.findOneAndUpdate(
+      { dbeQuoteId },
+      { status: 'deletedByDealer' },
+      { new: true }
+    );
+
+    if (!quote) {
+      console.warn(`[Webhook] dealer-quote-deleted: no synced quote found for dbeQuoteId ${dbeQuoteId}`);
+      return res.json({ success: true, message: 'No synced quote found' });
+    }
+
+    console.log(`[Webhook] dealer-quote-deleted: flagged ${quote.quoteNumber}`);
+    return res.json({ success: true, data: quote });
+  } catch (err) {
+    console.error('[Webhook] dealer-quote-deleted error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
 module.exports = router;

@@ -91,7 +91,7 @@ const quoteSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ['draft', 'sent', 'accepted', 'rejected', 'expired'],
+      enum: ['draft', 'sent', 'accepted', 'rejected', 'expired', 'deletedByDealer'],
       default: 'draft',
     },
 
