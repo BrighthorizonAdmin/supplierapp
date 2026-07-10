@@ -44,7 +44,7 @@ router.post('/dealer-retail-invoice', async (req, res) => {
  
     // 2. Prevent duplicate — idempotent based on dbeInvoiceId OR invoiceNumber
     const existing = await Invoice.findOne({
-      $or: [
+      $or: [ 
         { dbeInvoiceId },
         { invoiceNumber: `D-${invoiceNumber}` },
       ],
