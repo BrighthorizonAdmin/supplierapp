@@ -11,6 +11,11 @@ const STATUS_COLORS = {
   accepted: 'bg-green-100 text-green-700',
   rejected: 'bg-red-100 text-red-600',
   expired:  'bg-orange-100 text-orange-700',
+  deletedByDealer: 'bg-red-200 text-red-800',
+};
+
+const STATUS_LABELS = {
+  deletedByDealer: 'Deleted by Dealer',
 };
 
 const TABS = [
@@ -194,7 +199,7 @@ export default function QuoteListPage() {
                     <td className="px-5 py-3.5 text-right font-semibold text-gray-800">{fmtAmt(q.totalAmount)}</td>
                     <td className="px-5 py-3.5 text-center">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {q.status}
+                        {STATUS_LABELS[q.status] || q.status}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
