@@ -38,6 +38,11 @@ const STATUS_COLORS = {
   accepted: 'bg-green-100 text-green-700',
   rejected: 'bg-red-100 text-red-600',
   expired:  'bg-orange-100 text-orange-700',
+  deletedByDealer: 'bg-red-200 text-red-800',
+};
+
+const STATUS_LABELS = {
+  deletedByDealer: 'Deleted by Dealer',
 };
 
 // ── Tax breakdown helper (CGST + SGST split) ──────────────────────────────────
@@ -149,7 +154,7 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
           <div>
             <h1 className="text-base font-bold text-gray-900">{q.quoteNumber}</h1>
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-600'}`}>
-              {q.status}
+              {STATUS_LABELS[q.status] || q.status}
             </span>
           </div>
         </div>

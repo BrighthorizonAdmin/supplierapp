@@ -57,6 +57,9 @@ const invoiceSchema = new mongoose.Schema({
     default: null,
   },
 
+  // Set when this retail invoice originated from a dealer quote (D-BE "Convert to Invoice")
+  quoteNumber: { type: String, default: '' },
+
   // Invoice numbering settings
   invoicePrefix: { type: String },
   invoiceSequence: { type: Number },
@@ -111,6 +114,7 @@ const invoiceSchema = new mongoose.Schema({
 
   warrantyPeriod: { type: String, default: '' },
 
+  salesmanName: { type: String, trim: true, default: '' },
   notes: { type: String, trim: true },
   termsAndConditions: { type: String },
 

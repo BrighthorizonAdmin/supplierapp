@@ -191,6 +191,11 @@ export default function InvoiceDetailPage() {
                 Order No.: <span style={{ fontWeight: 'bold', color: '#333' }}>{inv.orderId.orderNumber}</span>
               </span>
             )}
+            {inv.quoteNumber && (
+              <span style={{ marginLeft: '16px', color: '#666', fontSize: '11px' }}>
+                Quote No.: <span style={{ fontWeight: 'bold', color: '#333' }}>{inv.quoteNumber}</span>
+              </span>
+            )}
           </div>
           <div style={{ flex: 1, padding: '8px 24px' }}>
             <span style={{ color: '#666', fontSize: '11px' }}>Invoice Date: </span>
@@ -221,7 +226,7 @@ export default function InvoiceDetailPage() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontWeight: 'bold', fontSize: '11px' }}>Salesman</span>
-              <span style={{ fontSize: '11px' }}>—</span>
+              <span style={{ fontSize: '11px' }}>{inv.salesmanName || '—'}</span>
             </div>
           </div>
         </div>
