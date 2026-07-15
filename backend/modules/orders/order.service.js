@@ -501,6 +501,13 @@ const confirmOrder = async (orderId, userId) => {
     let confirmedInvoice = null;
     try {
       const isAlreadyPaid = order.paymentStatus === 'completed';
+      const isSplit = order.paymentMethod === 'split';
+      // For split orders: the dealer already paid splitPayNowAmount (cash/UPI) at placement.
+      // Use that as amountPaid so the invoice shows correct received vs balance.
+      const splitPaid = isSplit ? (Number(order.splitPayNowAmount) || 0) : 0;
+      const amountPaid = isAlreadyPaid ? order.netAmount : splitPaid;
+      const total = Number(order.netAmount) || 0;
+      const invoiceStatus = amountPaid >= total ? 'paid' : (amountPaid > 0 ? 'partial' : 'issued');
       const invoiceLineItems = items.map((i) => ({
         productId:     i.productId,
         productName:   i.productName || i.name || '',
@@ -519,9 +526,9 @@ const confirmOrder = async (orderId, userId) => {
         lineItems:   invoiceLineItems,
         subtotal:    order.subtotal,
         taxAmount:   order.taxAmount,
-        totalAmount: order.netAmount,
-        amountPaid:  isAlreadyPaid ? order.netAmount : 0,
-        status:      isAlreadyPaid ? 'paid' : 'issued',
+        totalAmount: total,
+        amountPaid,
+        status:      invoiceStatus,
         paymentMode: order.paymentMethod || undefined,
         issuedAt:    new Date(),
         dueDate:     addDays(new Date(), 30),
@@ -938,15 +945,20 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
         }));
 
         const isAlreadyPaid = order.paymentStatus === 'completed';
+        const isSplit = order.paymentMethod === 'split';
+        const splitPaid = isSplit ? (Number(order.splitPayNowAmount) || 0) : 0;
+        const amountPaid = isAlreadyPaid ? order.netAmount : splitPaid;
+        const total = Number(order.netAmount) || 0;
+        const invoiceStatus = amountPaid >= total ? 'paid' : (amountPaid > 0 ? 'partial' : 'issued');
         deliveredInvoice = await Invoice.create({
           orderId:      order._id,
           dealerId:     order.dealerId,
           lineItems:    invoiceLineItems,
           subtotal:     order.subtotal,
           taxAmount:    order.taxAmount,
-          totalAmount:  order.netAmount,
-          amountPaid:   isAlreadyPaid ? order.netAmount : 0,
-          status:       isAlreadyPaid ? 'paid' : 'issued',
+          totalAmount:  total,
+          amountPaid,
+          status:       invoiceStatus,
           paymentMode:  order.paymentMethod || undefined,
           issuedAt:     new Date(),
           dueDate:      addDays(new Date(), 30),

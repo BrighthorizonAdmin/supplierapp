@@ -208,6 +208,7 @@ router.post('/dealer-order', async (req, res) => {
       dbeOrderId, orderNumber, dealerId: dealerRef,
       dealerEmail, dealerName, dealerPhone,
       items, subtotal, taxAmount, netAmount, paymentMethod, paymentStatus,
+      splitPayNowAmount, splitCreditAmount,
     } = req.body;
  
     const Order = require('../orders/model/Order.model');
@@ -277,6 +278,8 @@ router.post('/dealer-order', async (req, res) => {
             netAmount: Number(netAmount || 0),
             paymentMethod: paymentMethod || '',
             paymentStatus: paymentStatus || '',
+            splitPayNowAmount: Number(splitPayNowAmount || 0),
+            splitCreditAmount: Number(splitCreditAmount || 0),
             notes: `Dealer order: ${orderNumber}`,
           },
         },
