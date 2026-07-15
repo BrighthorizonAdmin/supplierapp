@@ -2,6 +2,16 @@ const Quote  = require('./model/Quote.model');
 const Dealer = require('../dealer/model/Dealer.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
+const { reserveSeq, freeSeq, formatCode, peekSeq } = require('../../utils/numberSequence');
+
+// Preview only — does NOT reserve/advance the sequence, so opening the New
+// Quote form (and navigating away without saving) never burns a number. The
+// number is only actually assigned for real when the quote is created (see
+// Quote.model.js pre-save hook).
+const getNextQuoteNumber = async () => {
+  const seq = await peekSeq('supplier-quote');
+  return { quoteNumber: formatCode('QTN', seq) };
+};
 
 const calcTotals = (lineItems = []) => {
   let subtotal = 0, taxAmount = 0;
@@ -152,6 +162,11 @@ const deleteQuote = async (id) => {
   const quote = await Quote.findById(id);
   if (!quote) throw new AppError('Quote not found', 404);
   await quote.deleteOne();
+  if (quote.quoteSeq != null) {
+    freeSeq('supplier-quote', quote.quoteSeq).catch(err =>
+      console.error('[Quote] failed to free quote number:', err.message)
+    );
+  }
 };
 
-module.exports = { getQuotes, getQuoteById, createQuote, updateQuote, deleteQuote };
+module.exports = { getQuotes, getQuoteById, createQuote, updateQuote, deleteQuote, getNextQuoteNumber };

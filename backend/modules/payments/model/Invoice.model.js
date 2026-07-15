@@ -130,16 +130,17 @@ const invoiceSchema = new mongoose.Schema({
   versionKey: false,
 });
 
-// Auto invoice number
+// Auto invoice number: INV-YYYY-MM-0001 (continuous sequence, never resets — no reuse on delete)
 invoiceSchema.pre('save', async function () {
   if (this.invoiceNumber) return;
-  // If prefix+sequence set, compose number from them
+  // If prefix+sequence set, compose number from them (manual override — unchanged)
   if (this.invoicePrefix && this.invoiceSequence) {
     this.invoiceNumber = `${this.invoicePrefix}-${this.invoiceSequence}`;
     return;
   }
-  const { generateCode } = require('../../../utils/autoCode');
-  this.invoiceNumber = await generateCode(this.constructor, 'INV', 'invoiceNumber', 'yyyyMMdd');
+  const { reserveSeq, formatCode } = require('../../../utils/numberSequence');
+  const seq = await reserveSeq('supplier-invoice', { reuse: false });
+  this.invoiceNumber = formatCode('INV', seq);
 });
 
 // Keep balance in sync

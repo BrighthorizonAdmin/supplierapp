@@ -131,12 +131,18 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
   const totalItems     = (q.lineItems || []).reduce((s, i) => s + Number(i.quantity || 0), 0);
   const inWords        = numberToWords(Math.round(q.totalAmount || 0));
 
+  // A quote synced from the Dealer app is the dealer's own document — it must
+  // never show the Supplier's own bank details or company name, so Settings
+  // is not used as a fallback here at all.
+  const isDealerSourced = q.source === 'dealer';
+
   // Bank details: quote's own values first, fall back to company settings
+  // (only for the supplier's own quotes — never for dealer-sourced ones).
   const BANK = {
-    name:          q.bankDetails?.name          || COMPANY.bankName    || '',
-    ifscCode:      q.bankDetails?.ifscCode       || COMPANY.bankIFSC    || '',
-    accountNumber: q.bankDetails?.accountNumber  || COMPANY.bankAccount || '',
-    bankBranch:    q.bankDetails?.bankBranch      || COMPANY.bankBranch  || '',
+    name:          q.bankDetails?.name          || (isDealerSourced ? '' : COMPANY.bankName)    || '',
+    ifscCode:      q.bankDetails?.ifscCode       || (isDealerSourced ? '' : COMPANY.bankIFSC)    || '',
+    accountNumber: q.bankDetails?.accountNumber  || (isDealerSourced ? '' : COMPANY.bankAccount) || '',
+    bankBranch:    q.bankDetails?.bankBranch      || (isDealerSourced ? '' : COMPANY.bankBranch)  || '',
   };
 
   // ═══════════════════════════════════════════════════════════════════
@@ -412,7 +418,9 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
               <div style={{ height: '48px', marginBottom: '6px' }} />
               <div style={{ borderTop: '1px solid #9ca3af', paddingTop: '6px' }}>
                 <div style={{ fontSize: '10px', fontWeight: '700', color: '#374151', letterSpacing: '0.4px' }}>AUTHORISED SIGNATORY FOR</div>
-                <div style={{ fontSize: '11.5px', fontWeight: '700', color: '#1e3a8a', marginTop: '3px' }}>{COMPANY.name}</div>
+                <div style={{ fontSize: '11.5px', fontWeight: '700', color: '#1e3a8a', marginTop: '3px' }}>
+                  {isDealerSourced ? (q.dealerBusinessName || q.dealerId?.businessName || 'Dealer') : COMPANY.name}
+                </div>
               </div>
             </div>
           </div>
