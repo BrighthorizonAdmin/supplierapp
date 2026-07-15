@@ -112,6 +112,22 @@ export default function InvoiceDetailPage() {
   const sgst = cgst;
   const taxableAmount = inv.subtotal || 0;
 
+  // A retail invoice is always synced from the Dealer app — it's the dealer's
+  // own document and must never show the Supplier's own bank details or
+  // company name, so Settings is not used as a fallback here at all.
+  const BANK = isRetail
+    ? {
+        name:    inv.bankDetails?.holderName || inv.bankDetails?.label || '',
+        ifsc:    inv.bankDetails?.ifscCode || '',
+        account: inv.bankDetails?.accountNumber || '',
+        bank:    inv.bankDetails?.bankBranchName || '',
+      }
+    : COMPANY.bank;
+  // partyName on a retail invoice is the dealer's own business name (see
+  // webhook.routes.js dealer-retail-invoice) — not custName, which is the
+  // end customer parsed from notes.
+  const SIGNATORY_NAME = isRetail ? (inv.partyName || 'Dealer') : COMPANY.name;
+
   const totalRefund = +(returnInfo?.totalRefundAmount || returnInfo?.refundAmount || 0);
   const derivedTaxRate = (inv.subtotal || 0) > 0 ? (inv.taxAmount || 0) / inv.subtotal : 0;
   const netAfterReturn = Math.max(0, (+inv.totalAmount || 0) - totalRefund);
@@ -270,10 +286,10 @@ export default function InvoiceDetailPage() {
                     <td style={{ padding: '10px 6px', textAlign: 'center', verticalAlign: 'top' }}>{item.hsnCode || '—'}</td>
                     <td style={{ padding: '10px 6px', textAlign: 'center', verticalAlign: 'top' }}>{item.quantity} {item.unit || 'PCS'}</td>
                     <td style={{ padding: '10px 6px', textAlign: 'right', verticalAlign: 'top' }}>
-                      {item.unitPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {item.unitPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ padding: '10px 6px', textAlign: 'right', verticalAlign: 'top' }}>
-                      <div>{taxAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                      <div>{taxAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                       <div style={{ fontSize: '10px', color: '#666' }}>({item.taxRate || 0}%)</div>
                     </td>
                     <td style={{ padding: '10px 6px', textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold' }}>
@@ -293,7 +309,7 @@ export default function InvoiceDetailPage() {
                 </td>
                 <td></td>
                 <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 'bold' }}>
-                  ₹{taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 'bold' }}>
                   ₹{(+inv.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}
@@ -327,10 +343,10 @@ export default function InvoiceDetailPage() {
                     </td>
                     <td style={{ padding: '5px 12px', textAlign: 'center' }}>{ri.quantity} PCS</td>
                     <td style={{ padding: '5px 12px', textAlign: 'right' }}>
-                      ₹{(+(ri.unitPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      ₹{(+(ri.unitPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ padding: '5px 12px', textAlign: 'right', color: '#EF4444', fontWeight: '600' }}>
-                      -₹{(+(ri.lineRefundAmount || ((ri.unitPrice || 0) * (ri.quantity || 1) * (1 + derivedTaxRate))).toFixed(2)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      -₹{(+(ri.lineRefundAmount || ((ri.unitPrice || 0) * (ri.quantity || 1) * (1 + derivedTaxRate))).toFixed(2)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                 ))}
@@ -339,7 +355,7 @@ export default function InvoiceDetailPage() {
                 <tr style={{ borderTop: '2px solid #fca5a5', background: '#fee2e2' }}>
                   <td colSpan={3} style={{ padding: '6px 12px', fontWeight: 'bold', color: '#991B1B' }}>Total Refund</td>
                   <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 'bold', color: '#EF4444' }}>
-                    -₹{(+(returnInfo.totalRefundAmount || returnInfo.refundAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    -₹{(+(returnInfo.totalRefundAmount || returnInfo.refundAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                 </tr>
               </tfoot>
@@ -353,10 +369,10 @@ export default function InvoiceDetailPage() {
             <div style={{ fontWeight: 'bold', marginBottom: '6px', fontSize: '12px' }}>BANK DETAILS</div>
             <table style={{ fontSize: '11px', width: '100%' }}>
               <tbody>
-                <tr><td style={{ color: '#666', paddingRight: '8px', paddingBottom: '3px' }}>Name:</td><td style={{ fontWeight: 'bold' }}>{COMPANY.bank.name}</td></tr>
-                <tr><td style={{ color: '#666', paddingRight: '8px', paddingBottom: '3px' }}>IFSC Code:</td><td>{COMPANY.bank.ifsc}</td></tr>
-                <tr><td style={{ color: '#666', paddingRight: '8px', paddingBottom: '3px' }}>Account No:</td><td>{COMPANY.bank.account}</td></tr>
-                <tr><td style={{ color: '#666', paddingRight: '8px' }}>Bank:</td><td>{COMPANY.bank.bank}</td></tr>
+                <tr><td style={{ color: '#666', paddingRight: '8px', paddingBottom: '3px' }}>Name:</td><td style={{ fontWeight: 'bold' }}>{BANK.name}</td></tr>
+                <tr><td style={{ color: '#666', paddingRight: '8px', paddingBottom: '3px' }}>IFSC Code:</td><td>{BANK.ifsc}</td></tr>
+                <tr><td style={{ color: '#666', paddingRight: '8px', paddingBottom: '3px' }}>Account No:</td><td>{BANK.account}</td></tr>
+                <tr><td style={{ color: '#666', paddingRight: '8px' }}>Bank:</td><td>{BANK.bank}</td></tr>
               </tbody>
             </table>
           </div>
@@ -365,20 +381,20 @@ export default function InvoiceDetailPage() {
               <tbody>
                 <tr>
                   <td style={{ paddingBottom: '4px', color: '#444' }}>Taxable Amount</td>
-                  <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
                 <tr>
                   <td style={{ paddingBottom: '4px', color: '#444' }}>CGST @9%</td>
-                  <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
                 <tr>
                   <td style={{ paddingBottom: '4px', color: '#444' }}>SGST @9%</td>
-                  <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
                 {inv.discountAmt > 0 && (
                   <tr>
                     <td style={{ paddingBottom: '4px', color: '#444' }}>Discount</td>
-                    <td style={{ paddingBottom: '4px', textAlign: 'right', color: 'green' }}>- ₹{(+inv.discountAmt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ paddingBottom: '4px', textAlign: 'right', color: 'green' }}>- ₹{(+inv.discountAmt).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 )}
                 <tr style={{ borderTop: '2px solid #333', fontWeight: 'bold' }}>
@@ -390,7 +406,7 @@ export default function InvoiceDetailPage() {
                     <tr>
                       <td style={{ paddingBottom: '4px', color: '#EF4444' }}>Return Deduction</td>
                       <td style={{ paddingBottom: '4px', textAlign: 'right', color: '#EF4444' }}>
-                        - ₹{totalRefund.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        - ₹{totalRefund.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                     <tr style={{ borderTop: '2px solid #333', fontWeight: 'bold' }}>
@@ -441,7 +457,7 @@ export default function InvoiceDetailPage() {
               <span style={{ fontSize: '10px', color: '#ccc' }}>Seal / Stamp</span>
             </div>
             <div style={{ fontSize: '11px', fontWeight: 'bold' }}>AUTHORISED SIGNATORY FOR</div>
-            <div style={{ fontSize: '11px', fontWeight: 'bold' }}>{COMPANY.name}</div>
+            <div style={{ fontSize: '11px', fontWeight: 'bold' }}>{SIGNATORY_NAME}</div>
           </div>
         </div>
 

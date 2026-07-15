@@ -32,7 +32,9 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       customerPhone,
       customerAddress,
       shipToAddress,
+      dealerBankName, dealerAccountNumber, dealerIfscCode, dealerAccountHolderName,
       items,
+      additionalCharges,
       subtotal,
       taxAmount,
       totalAmount,
@@ -42,18 +44,15 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       quoteNumber,
     } = req.body;
  
-    // 2. Prevent duplicate — idempotent based on dbeInvoiceId OR invoiceNumber
+    // 2. Idempotent on dbeInvoiceId OR invoiceNumber — if already synced, this is an
+    // edit on the dealer side, so update the existing record instead of no-op'ing.
     const existing = await Invoice.findOne({
-      $or: [ 
+      $or: [
         { dbeInvoiceId },
         { invoiceNumber: `D-${invoiceNumber}` },
       ],
     });
-    if (existing) {
-      console.warn(`[Webhook] Already synced, returning existing: D-${invoiceNumber}`);
-      return res.json({ success: true, message: 'Already synced', data: existing });
-    }
- 
+
     // 3. Resolve dealer — email first (unique key), then phone, then businessName
     let dealer = null;
     if (dealerEmail) {
@@ -103,49 +102,73 @@ router.post('/dealer-retail-invoice', async (req, res) => {
     const balance  = Math.max(0, +(total - received).toFixed(2));
     const invoiceStatus = received >= total ? 'paid' : (received > 0 ? 'partial' : 'issued');
  
-    // 6. Create invoice — catch E11000 in case of race condition / D-BE retry after timeout
+    // Build customer address string from the customerAddress object if provided
+    const custAddrStr = customerAddress && typeof customerAddress === 'object'
+      ? [customerAddress.street, customerAddress.city, customerAddress.state, customerAddress.pincode].filter(Boolean).join(', ')
+      : (typeof customerAddress === 'string' ? customerAddress : '');
+
+    // Build shippingAddress subdocument from shipToAddress if provided
+    const shipAddrDoc = shipToAddress && typeof shipToAddress === 'object' && (shipToAddress.street || shipToAddress.city)
+      ? {
+          label:   shipToAddress.label || customerName || '',
+          street:  shipToAddress.street || '',
+          city:    shipToAddress.city || '',
+          state:   shipToAddress.state || '',
+          pincode: shipToAddress.pincode || shipToAddress.postalCode || '',
+        }
+      : undefined;
+
+    // Dealer's own bank details, in the Invoice model's bankDetailsSchema shape.
+    const dealerBankDetails = {
+      label:          dealerAccountHolderName || dealerName || '',
+      accountNumber:  dealerAccountNumber || '',
+      ifscCode:       dealerIfscCode || '',
+      bankBranchName: dealerBankName || '',
+      holderName:     dealerAccountHolderName || dealerName || '',
+    };
+
+    const invoiceFields = {
+      quoteNumber:  quoteNumber || '',
+      dealerId:     dealer?._id || undefined,
+      partyName:    dealerName || 'Unknown Dealer',
+      partyPhone:   dealerPhone || '',
+      partyAddress: custAddrStr || '',
+      shippingAddress: shipAddrDoc,
+      salesmanName: salesmanName || '',
+      notes:        `Retail sale to: ${customerName}${customerPhone ? ' | ' + customerPhone : ''}`,
+      lineItems,
+      bankDetails:  dealerBankDetails,
+      // Invoice.additionalCharges is a flat total (unlike Quote's itemized array) — sum here.
+      additionalCharges: (additionalCharges || []).reduce((s, c) => s + (Number(c.amount) || 0), 0),
+      subtotal:     Number(subtotal),
+      taxAmount:    Number(taxAmount),
+      totalAmount:  total,
+      amountPaid:   received,
+      balance,
+      paymentMode:  paymentMode || 'Cash',
+      status:       invoiceStatus,
+    };
+
+    // 6. Update existing (dealer-side edit) or create new — catch E11000 in case
+    // of race condition / D-BE retry after timeout
     let invoice;
+    let isNew = false;
     try {
-      // Build customer address string from the customerAddress object if provided
-      const custAddrStr = customerAddress && typeof customerAddress === 'object'
-        ? [customerAddress.street, customerAddress.city, customerAddress.state, customerAddress.pincode].filter(Boolean).join(', ')
-        : (typeof customerAddress === 'string' ? customerAddress : '');
- 
-      // Build shippingAddress subdocument from shipToAddress if provided
-      const shipAddrDoc = shipToAddress && typeof shipToAddress === 'object' && (shipToAddress.street || shipToAddress.city)
-        ? {
-            label:   shipToAddress.label || customerName || '',
-            street:  shipToAddress.street || '',
-            city:    shipToAddress.city || '',
-            state:   shipToAddress.state || '',
-            pincode: shipToAddress.pincode || shipToAddress.postalCode || '',
-          }
-        : undefined;
- 
-      invoice = await Invoice.create({
-        invoiceType:  'retail',
-        dbeInvoiceId,
-        invoiceNumber: `D-${invoiceNumber}`,
-        quoteNumber:  quoteNumber || '',
-        dealerId:     dealer?._id || undefined,
-        partyName:    dealerName || 'Unknown Dealer',
-        partyPhone:   dealerPhone || '',
-        partyAddress: custAddrStr || '',
-        shippingAddress: shipAddrDoc,
-        salesmanName: salesmanName || '',
-        notes:        `Retail sale to: ${customerName}${customerPhone ? ' | ' + customerPhone : ''}`,
-        lineItems,
-        subtotal:     Number(subtotal),
-        taxAmount:    Number(taxAmount),
-        totalAmount:  total,
-        discountAmt:  0,
-        amountPaid:   received,
-        balance,
-        paymentMode:  paymentMode || 'Cash',
-        invoiceDate:  invoiceDate ? new Date(invoiceDate) : new Date(),
-        status:       invoiceStatus,
-        issuedAt:     new Date(),
-      });
+      if (existing) {
+        Object.assign(existing, invoiceFields);
+        invoice = await existing.save();
+      } else {
+        isNew = true;
+        invoice = await Invoice.create({
+          invoiceType:  'retail',
+          dbeInvoiceId,
+          invoiceNumber: `D-${invoiceNumber}`,
+          ...invoiceFields,
+          discountAmt:  0,
+          invoiceDate:  invoiceDate ? new Date(invoiceDate) : new Date(),
+          issuedAt:     new Date(),
+        });
+      }
     } catch (createErr) {
       // Duplicate key — D-BE retried after a timeout but invoice was already saved
       if (createErr.code === 11000) {
@@ -160,28 +183,30 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       }
       throw createErr;
     }
- 
-    console.log(`[Webhook] Retail invoice synced: ${invoice.invoiceNumber} for dealer: ${dealerName}`);
- 
-    // Notify all active supplier admins about the new retail sale invoice
-    try {
-      const User = require('../auth/model/User.model');
-      const admins = await User.find({ isActive: true }).lean();
-      const itemCount = Array.isArray(items) ? items.length : 0;
-      for (const admin of admins) {
-        await notificationService.create({
-          recipientId: admin._id,
-          title:       `Retail Sale Invoice: ${invoice.invoiceNumber}`,
-          message:     `${dealerName || 'A dealer'} generated a retail sale of ₹${totalAmount} (${itemCount} item${itemCount !== 1 ? 's' : ''}) to ${customerName}`,
-          type:        'payment',
-          relatedEntity: { entityType: 'Invoice', entityId: invoice._id },
-        });
+
+    console.log(`[Webhook] Retail invoice ${isNew ? 'synced' : 'updated'}: ${invoice.invoiceNumber} for dealer: ${dealerName}`);
+
+    // Notify all active supplier admins — only for a genuinely new sale, not edits
+    if (isNew) {
+      try {
+        const User = require('../auth/model/User.model');
+        const admins = await User.find({ isActive: true }).lean();
+        const itemCount = Array.isArray(items) ? items.length : 0;
+        for (const admin of admins) {
+          await notificationService.create({
+            recipientId: admin._id,
+            title:       `Retail Sale Invoice: ${invoice.invoiceNumber}`,
+            message:     `${dealerName || 'A dealer'} generated a retail sale of ₹${totalAmount} (${itemCount} item${itemCount !== 1 ? 's' : ''}) to ${customerName}`,
+            type:        'payment',
+            relatedEntity: { entityType: 'Invoice', entityId: invoice._id },
+          });
+        }
+      } catch (notifErr) {
+        console.error('[Webhook] retail-invoice notification failed:', notifErr.message);
       }
-    } catch (notifErr) {
-      console.error('[Webhook] retail-invoice notification failed:', notifErr.message);
     }
- 
-    return res.status(201).json({ success: true, data: invoice });
+
+    return res.status(isNew ? 201 : 200).json({ success: true, data: invoice });
  
   } catch (err) {
     console.error('[Webhook] dealer-retail-invoice error:', err.message);
@@ -823,8 +848,9 @@ router.post('/dealer-quote', async (req, res) => {
     const {
       dbeQuoteId, quoteNumber, quoteDate, expiryDate, status,
       dealerEmail, dealerName, dealerPhone,
+      dealerBankName, dealerAccountNumber, dealerIfscCode, dealerAccountHolderName,
       customerName, customerPhone, customerCity, salesman,
-      items, subtotal, taxAmount, totalAmount, notes,
+      items, additionalCharges, subtotal, taxAmount, totalAmount, notes,
     } = req.body;
  
     if (!dbeQuoteId) return res.status(400).json({ success: false, message: 'dbeQuoteId required' });
@@ -856,15 +882,40 @@ router.post('/dealer-quote', async (req, res) => {
       };
     });
  
+    // Map D-BE additional charges (name/gstRate/includesGst) to S-BE shape (label/taxRate/taxAmount)
+    const mappedAdditionalCharges = (additionalCharges || []).map(charge => {
+      const amt  = Number(charge.amount) || 0;
+      const rate = charge.includesGst ? (Number(charge.gstRate) || 0) : 0;
+      const tax  = rate > 0 ? +(amt * (rate / 100)).toFixed(2) : 0;
+      return {
+        label:     charge.name || '',
+        amount:    amt,
+        taxRate:   rate,
+        taxAmount: tax,
+      };
+    });
+
+    // Dealer's own bank details, in the same shape QuoteDetailPage.jsx already
+    // renders for supplier-created quotes (name/ifscCode/accountNumber/bankBranch).
+    const dealerBankDetails = {
+      name:          dealerAccountHolderName || dealerName || '',
+      ifscCode:      dealerIfscCode || '',
+      accountNumber: dealerAccountNumber || '',
+      bankBranch:    dealerBankName || '',
+    };
+
     const quoteFields = {
       source:      'dealer',
       dbeQuoteId,
       dealerId:    dealer?._id || undefined,
+      dealerBusinessName: dealerName || '',
       partyName:   customerName,
       partyPhone:  customerPhone || '',
       partyAddress: customerCity || '',
       salesman:    salesman || '',
       lineItems,
+      additionalCharges: mappedAdditionalCharges,
+      bankDetails: dealerBankDetails,
       subtotal:    Number(subtotal),
       taxAmount:   Number(taxAmount),
       totalAmount: Number(totalAmount),
