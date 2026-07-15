@@ -13,7 +13,7 @@ import Modal from '../../../components/ui/Modal';
 import { useForm } from 'react-hook-form';
 import api from '../../../services/api';
 import { format } from 'date-fns';
-
+ 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 const TABS = [
   { id: 'all', label: 'All Dealers', status: 'active' },
@@ -22,7 +22,7 @@ const TABS = [
   { id: 'suspended', label: 'Suspended Dealers', status: 'suspended' },
   // { id: 'new',       label: 'New Applications',   status: 'pending' },
 ];
-
+ 
 // ─── Status chip ───────────────────────────────────────────────────────────────
 const STATUS_CLS = {
   active: 'badge-green',
@@ -41,7 +41,7 @@ const StatusChip = ({ status }) => {
     </span>
   );
 };
-
+ 
 // ─── Stats card ────────────────────────────────────────────────────────────────
 const StatsCard = ({ label, value, icon: Icon, cardCls, iconCls, valueCls }) => (
   <div className={`card p-4 flex items-center gap-4 ${cardCls}`}>
@@ -54,18 +54,18 @@ const StatsCard = ({ label, value, icon: Icon, cardCls, iconCls, valueCls }) => 
     </div>
   </div>
 );
-
+ 
 // ─── Per-row action menu ───────────────────────────────────────────────────────
 const RowActions = ({ row, onView, onEdit, onApprove, onReject, onSuspend }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-
+ 
   useEffect(() => {
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
-
+ 
   return (
     <div className="flex items-center gap-1" ref={ref}>
       <button
@@ -118,13 +118,13 @@ const RowActions = ({ row, onView, onEdit, onApprove, onReject, onSuspend }) => 
     </div>
   );
 };
-
+ 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 const DealerListPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { list, pagination, loading, counts, countsFetched } = useSelector((s) => s.dealer);
-
+ 
   const [activeTab, setActiveTab] = useState('all');
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
@@ -136,16 +136,16 @@ const DealerListPage = () => {
   const [rejectModal, setRejectModal] = useState(null);
   const [editModal, setEditModal] = useState(null);
   const [editCreditLimit, setEditCreditLimit] = useState(0);
-
+ 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
   const tabStatus = TABS.find((t) => t.id === activeTab)?.status ?? '';
-
+ 
   // Debounce search input — only fires API call after 400 ms of inactivity
   useEffect(() => {
     const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
     return () => clearTimeout(id);
   }, [searchInput]);
-
+ 
   // Fetch list — abort the previous in-flight request on every filter change
   useEffect(() => {
     const params = { page, limit: 20 };
@@ -158,12 +158,12 @@ const DealerListPage = () => {
     setSelected(new Set());
     return () => promise.abort();
   }, [dispatch, activeTab, page, search, bizType]);
-
+ 
   // Fetch aggregate counts once per session; Redux caches them across remounts
   useEffect(() => {
     if (!countsFetched) dispatch(fetchDealerCounts());
   }, [dispatch, countsFetched]);
-
+ 
   // Approve handler
   const handleApprove = (data) => {
     dispatch(approveDealer({ id: approvalModal._id, ...data })).then(() => {
@@ -171,18 +171,14 @@ const DealerListPage = () => {
       reset();
     });
   };
-
+ 
   // Edit (credit limit) handler
   const handleEdit = () => {
-    if (Number(editCreditLimit) > 2000) {
-      toast.error('Credit limit cannot exceed ₹2,000');
-      return;
-    }
     dispatch(updateDealer({ id: editModal._id, creditLimit: Number(editCreditLimit) })).then(() => {
       setEditModal(null);
     });
   };
-
+ 
   // Reject handler
   const handleReject = (data) => {
     dispatch(rejectDealer({ id: rejectModal._id, reason: data.reason })).then(() => {
@@ -190,25 +186,25 @@ const DealerListPage = () => {
       reset();
     });
   };
-
+ 
   // Bulk selection
   const allIds = list.map((d) => d._id);
   const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
   const someSelected = allIds.some((id) => selected.has(id)) && !allSelected;
-
+ 
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(allIds));
   const toggleRow = (id) => setSelected((prev) => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
-
+ 
   const fmt = (v) => `₹${(v || 0).toLocaleString('en-IN')}`;
-
+ 
   const handleExport = async () => {
     try {
       let dealers;
-
+ 
       // If user selected rows → export only selected
       if (selected.size > 0) {
         dealers = list.filter((d) => selected.has(d._id));
@@ -217,15 +213,15 @@ const DealerListPage = () => {
         const params = {
           limit: 10000,
         };
-
+ 
         if (tabStatus) params.status = tabStatus;   // ✅ important
         if (search) params.search = search;         // ✅ keep search
         if (bizType) params.businessType = bizType; // ✅ keep filters
-
+ 
         const res = await api.get('/dealers', { params });
         dealers = res.data.data || [];
       }
-
+ 
       const headers = [
         'Dealer Code',
         'Business Name',
@@ -237,7 +233,7 @@ const DealerListPage = () => {
         'Credit Limit',
         'Status',
       ];
-
+ 
       const rows = dealers.map((d) => [
         d.dealerCode || '',
         d.businessName || '',
@@ -249,36 +245,36 @@ const DealerListPage = () => {
         d.creditLimit || 0,
         d.status || '',
       ]);
-
+ 
       const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
       const csv = [headers, ...rows]
         .map((r) => r.map(escape).join(','))
         .join('\n');
-
+ 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
-
+ 
       const a = document.createElement('a');
-
+ 
       // Better file naming based on tab
       const suffix =
         selected.size > 0
           ? `selected-${selected.size}`
           : activeTab;
-
+ 
       a.href = url;
       a.download = `dealers-${suffix}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
       a.click();
-
+ 
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export failed line 270', err);
     }
   };
-
+ 
   return (
     <div className="space-y-5">
-
+ 
       {/* ── Page title ── */}
       <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
       <h1 className="text-2xl font-bold text-slate-900">Dealer Management</h1>
@@ -325,10 +321,10 @@ const DealerListPage = () => {
           valueCls="text-red-700"
         />
       </div>
-
+ 
       {/* ── Table card ── */}
       <div className="card overflow-hidden">
-
+ 
         {/* Tabs */}
         <div className="flex items-center border-b border-slate-200 px-1">
           {TABS.map((tab) => (
@@ -344,7 +340,7 @@ const DealerListPage = () => {
             </button>
           ))}
         </div>
-
+ 
         {/* Filter bar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
           <button
@@ -355,7 +351,7 @@ const DealerListPage = () => {
             Filters
             <ChevronDown size={13} className={`transition-transform duration-150 ${showFilters ? 'rotate-180' : ''}`} />
           </button>
-
+ 
           <div className="relative flex-1 max-w-xs">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -366,9 +362,9 @@ const DealerListPage = () => {
               className="input pl-8 py-1.5 text-sm"
             />
           </div>
-
+ 
           <div className="flex-1" />
-
+ 
           <button
             title="Export dealers to CSV"
             onClick={handleExport}
@@ -377,7 +373,7 @@ const DealerListPage = () => {
             <Download size={14} />
           </button>
         </div>
-
+ 
         {/* Collapsible advanced filters */}
         {showFilters && (
           <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border-b border-slate-100">
@@ -401,7 +397,7 @@ const DealerListPage = () => {
             )}
           </div>
         )}
-
+ 
         {/* Bulk action bar */}
         {selected.size > 0 && (
           <div className="flex items-center gap-3 px-4 py-2.5 bg-primary-50 border-b border-primary-100">
@@ -414,7 +410,7 @@ const DealerListPage = () => {
             </button>
           </div>
         )}
-
+ 
         {/* Table */}
         {loading ? (
           <div className="flex items-center justify-center h-48">
@@ -467,14 +463,14 @@ const DealerListPage = () => {
                         className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
                       />
                     </td>
-
+ 
                     {/* Dealer ID */}
                     <td className="px-4 py-3.5">
                       <span className="font-mono text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
                         {d.dealerCode || '—'}
                       </span>
                     </td>
-
+ 
                     {/* Dealer Name */}
                     <td className="px-4 py-3.5">
                       <button
@@ -497,7 +493,7 @@ const DealerListPage = () => {
                         </div>
                       </button>
                     </td>
-
+ 
                     {/* Location */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-start gap-1.5">
@@ -512,23 +508,23 @@ const DealerListPage = () => {
                         </div>
                       </div>
                     </td>
-
+ 
                     {/* Contact */}
                     <td className="px-4 py-3.5">
                       <p className="text-slate-700 leading-snug">{d.email || '—'}</p>
                       <p className="text-xs text-slate-400 mt-0.5">{d.phone || ''}</p>
                     </td>
-
+ 
                     {/* Credit Limit */}
                     <td className="px-4 py-3.5 font-semibold text-slate-800">
                       {fmt(d.creditLimit)}
                     </td>
-
+ 
                     {/* Status */}
                     <td className="px-4 py-3.5">
                       <StatusChip status={d.status} />
                     </td>
-
+ 
                     {/* Actions */}
                     {/* <td className="px-4 py-3.5">
                       <RowActions
@@ -546,10 +542,10 @@ const DealerListPage = () => {
             </table>
           </div>
         )}
-
+ 
         <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
-
+ 
       {/* ── Edit modal (credit limit only) ── */}
       <Modal
         isOpen={!!editModal}
@@ -573,7 +569,7 @@ const DealerListPage = () => {
           </div>
         </div>
       </Modal>
-
+ 
       {/* ── Approve modal ── */}
       <Modal
         isOpen={!!approvalModal}
@@ -583,10 +579,9 @@ const DealerListPage = () => {
         <form onSubmit={handleSubmit(handleApprove)} className="space-y-4">
           <div>
             <label className="label">Credit Limit (₹)</label>
-            <input type="number" className="input" defaultValue={0} min={0} max={2000}
+            <input type="number" className="input" defaultValue={0} min={0}
               {...register('creditLimit', {
                 valueAsNumber: true,
-                max: { value: 2000, message: 'Credit limit cannot exceed ₹2,000' },
               })} />
             {errors.creditLimit && (
               <p className="text-red-500 text-xs mt-1">{errors.creditLimit.message}</p>
@@ -607,7 +602,7 @@ const DealerListPage = () => {
           </div>
         </form>
       </Modal>
-
+ 
       {/* ── Reject modal ── */}
       <Modal
         isOpen={!!rejectModal}
@@ -625,10 +620,10 @@ const DealerListPage = () => {
           </div>
         </form>
       </Modal>
-
-
+ 
+ 
     </div>
   );
 };
-
+ 
 export default DealerListPage;
