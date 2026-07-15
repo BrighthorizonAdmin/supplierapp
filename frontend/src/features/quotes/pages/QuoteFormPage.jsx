@@ -5,6 +5,7 @@ import { createQuote, updateQuote, fetchQuoteById } from '../quoteSlice';
 import { fetchDealers } from '../../dealer/dealerSlice';
 import { fetchProducts } from '../../products/productSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
+import api from '../../../services/api';
 import {
   ArrowLeft, Plus, Trash2, X, Calendar, Search, ChevronDown, QrCode,
 } from 'lucide-react';
@@ -451,6 +452,9 @@ export default function QuoteFormPage() {
 
   // ── Core quote fields ────────────────────────────────────────────────────
   const [quoteNo,    setQuoteNo]    = useState('');
+  // Tracks the previewed (not reserved) suggestion so we can tell "untouched
+  // preview" apart from "admin manually typed a custom number" at submit time.
+  const [reservedQuoteNo, setReservedQuoteNo] = useState('');
   const [quoteDate,  setQuoteDate]  = useState(today);
   const [expiryDate, setExpiryDate] = useState(expiry30);
   const [validForDays, setValidForDays] = useState(30);
@@ -512,6 +516,21 @@ export default function QuoteFormPage() {
     dispatch(fetchSettings());
     if (isEdit) dispatch(fetchQuoteById(id));
   }, [dispatch, id, isEdit]);
+
+  // ── Preview the quote number immediately — only for a brand-new quote,
+  // never when editing an existing one. This does not reserve/advance the
+  // sequence, so opening this form and navigating away without saving never
+  // burns a number.
+  useEffect(() => {
+    if (isEdit) return;
+    api.get('/quotes/next-number')
+      .then(({ data }) => {
+        const num = data?.data?.quoteNumber || '';
+        setQuoteNo(num);
+        setReservedQuoteNo(num);
+      })
+      .catch(() => {});
+  }, [isEdit]);
 
   // ── Pre-fill bank from settings ──────────────────────────────────────────
   useEffect(() => {
@@ -774,7 +793,13 @@ export default function QuoteFormPage() {
       quoteDate,
       expiryDate:  expiryDate || undefined,
       validForDays,
-      quoteNumber: quoteNo    || undefined,
+      // Only send quoteNumber if creating AND the admin manually changed it
+      // away from the previewed suggestion — if it's still just the untouched
+      // preview, omit it entirely so the server assigns the real number
+      // atomically at save time (the preview was never reserved).
+      ...(isEdit
+        ? { quoteNumber: quoteNo || undefined }
+        : (quoteNo && quoteNo !== reservedQuoteNo ? { quoteNumber: quoteNo } : {})),
       status,
       lineItems:   validItems,
       additionalCharges,

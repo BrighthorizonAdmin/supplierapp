@@ -48,9 +48,14 @@ const overallDiscountSchema = new mongoose.Schema(
 const quoteSchema = new mongoose.Schema(
   {
     quoteNumber: { type: String, unique: true, trim: true },
+    quoteSeq:    { type: Number }, // underlying continuous sequence number behind quoteNumber (needed to free it on delete)
 
     // Party (Dealer / Customer)
     dealerId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Dealer' },
+    // Raw business name of the dealer that created this quote (source: 'dealer' only) —
+    // stored directly from the webhook payload so the signatory line doesn't depend
+    // on dealerId resolving/populating successfully.
+    dealerBusinessName: { type: String },
     partyName:     { type: String },
     partyPhone:    { type: String },
     partyAddress:  { type: String },
@@ -104,10 +109,14 @@ const quoteSchema = new mongoose.Schema(
   { timestamps: true, versionKey: false }
 );
 
+// Auto-generate quote number: QTN-YYYY-MM-0001 (continuous sequence, never resets;
+// reuses numbers freed by deleted quotes — see numberSequence.js / quote.service.js deleteQuote)
 quoteSchema.pre('save', async function () {
   if (this.quoteNumber) return;
-  const { generateCode } = require('../../../utils/autoCode');
-  this.quoteNumber = await generateCode(this.constructor, 'QUO', 'quoteNumber', 'yyyyMMdd');
+  const { reserveSeq, formatCode } = require('../../../utils/numberSequence');
+  const seq = await reserveSeq('supplier-quote', { reuse: true });
+  this.quoteSeq    = seq;
+  this.quoteNumber = formatCode('QTN', seq);
 });
 
 quoteSchema.index({ dealerId: 1 });

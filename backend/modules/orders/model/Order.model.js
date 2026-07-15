@@ -128,6 +128,8 @@ const orderSchema = new mongoose.Schema(
     // Link back to the originating dealer-side order (set when order arrives via webhook)
     dbeOrderId:        { type: String, default: null },   // dealer's MongoDB _id
     dealerOrderNumber: { type: String, default: null },   // dealer's orderNumber (e.g. ORD-xxx)
+    splitPayNowAmount: { type: Number, default: 0 },      // cash paid at order placement (split only)
+    splitCreditAmount: { type: Number, default: 0 },      // credit portion still owed (split only)
     deliveryAddress: {
       label: { type: String },
       fullAddress: { type: String },

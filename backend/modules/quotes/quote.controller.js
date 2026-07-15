@@ -7,6 +7,11 @@ const getQuotes    = asyncHandler(async (req, res) => {
   return paginated(res, data, pagination, 'Quotes fetched');
 });
 
+const getNextQuoteNumber = asyncHandler(async (req, res) => {
+  const data = await quoteService.getNextQuoteNumber();
+  return success(res, data, 'Next quote number reserved');
+});
+
 const getQuoteById = asyncHandler(async (req, res) => {
   const q = await quoteService.getQuoteById(req.params.id);
   return success(res, q, 'Quote fetched');
@@ -27,4 +32,4 @@ const deleteQuote  = asyncHandler(async (req, res) => {
   return success(res, null, 'Quote deleted');
 });
 
-module.exports = { getQuotes, getQuoteById, createQuote, updateQuote, deleteQuote };
+module.exports = { getQuotes, getQuoteById, createQuote, updateQuote, deleteQuote, getNextQuoteNumber };
