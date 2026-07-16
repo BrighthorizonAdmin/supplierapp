@@ -849,7 +849,7 @@ router.post('/dealer-quote', async (req, res) => {
       dbeQuoteId, quoteNumber, quoteDate, expiryDate, status,
       dealerEmail, dealerName, dealerPhone,
       dealerBankName, dealerAccountNumber, dealerIfscCode, dealerAccountHolderName,
-      customerName, customerPhone, customerCity, salesman,
+      customerName, customerCompany, customerGST, customerPhone, customerCity, salesman,
       items, additionalCharges, subtotal, taxAmount, totalAmount, notes,
     } = req.body;
  
@@ -910,6 +910,7 @@ router.post('/dealer-quote', async (req, res) => {
       dealerId:    dealer?._id || undefined,
       dealerBusinessName: dealerName || '',
       partyName:   customerName,
+      partyGST:    customerGST || '',
       partyPhone:  customerPhone || '',
       partyAddress: customerCity || '',
       salesman:    salesman || '',
