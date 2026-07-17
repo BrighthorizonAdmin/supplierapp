@@ -14,9 +14,9 @@ import { useMemo } from 'react';
 
 // ─── Type tabs ────────────────────────────────────────────────────────────────
 const TYPE_TABS = [
-  { id: 'all',  label: 'All Orders'   },
-  { id: 'b2b',  label: 'Dealer(B2B)'  },
-  { id: 'b2c',  label: 'Retail(B2C)'  },
+  { id: 'all',  label: 'All Orders'    },
+  { id: 'b2b',  label: 'Dealer(B2B)'   },
+  { id: 'b2c',  label: 'Buvvas Orders' },
 ];
 
 // ─── Status filter tabs ───────────────────────────────────────────────────────
@@ -31,12 +31,12 @@ const STATUS_TABS = [
 ];
 // ─── Type badge ───────────────────────────────────────────────────────────────
 const TypeBadge = ({ type }) => {
-  const isRetail = type === 'b2c';
+  const isBuvvas = type === 'b2c';
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${
-      isRetail ? 'bg-red-100 text-red-500' : 'bg-blue-100 text-blue-600'
+      isBuvvas ? 'bg-red-100 text-red-500' : 'bg-blue-100 text-blue-600'
     }`}>
-      {isRetail ? 'Retail' : 'B2B'}
+      {isBuvvas ? 'Buvvas' : 'B2B'}
     </span>
   );
 };
@@ -286,7 +286,7 @@ const filteredOrders = useMemo(() => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Order Management</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Track and manage all dealers orders</p>
+          <p className="text-sm text-slate-500 mt-0.5">Track and manage all dealer and Buvvas Ecommerce orders</p>
         </div>
 
         <div className="flex items-center gap-3">

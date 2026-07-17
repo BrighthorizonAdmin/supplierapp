@@ -147,8 +147,8 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber, dealerId) {
       )
     );
  
-    // ✅ Send to dealer (single API call)
-    if (DEALER_API_URL && DEALER_WEBHOOK_SECRET) {
+    // ✅ Send to dealer (single API call) — not applicable to b2c (no dealer) orders
+    if (DEALER_API_URL && DEALER_WEBHOOK_SECRET && dealerId) {
       axios
         .post(
           `${DEALER_API_URL}/api/notifications/supplier/stock-alert`,
@@ -372,22 +372,26 @@ const confirmOrder = async (orderId, userId) => {
       throw new AppError(`Order is already ${order.status}`, 400);
     }
  
+    // Buvvas Ecommerce (b2c) orders have no dealer — only enforce dealer
+    // checks for dealer (b2b) orders.
     const dealer = order.dealerId;
- 
-    if (!dealer) {
-      throw new AppError('Dealer not found', 404);
+
+    if (order.orderType !== 'b2c') {
+      if (!dealer) {
+        throw new AppError('Dealer not found', 404);
+      }
+      if (dealer.status !== 'active') {
+        throw new AppError('Dealer account is not active', 400);
+      }
     }
- 
-    if (dealer.status !== 'active') {
-      throw new AppError('Dealer account is not active', 400);
-    }
- 
+
     // Supplier-created orders only
     const isSupplierCreatedOrder = !order.dbeOrderId;
- 
+
     // Credit limit validation
     if (
       isSupplierCreatedOrder &&
+      dealer &&
       dealer.creditUsed + order.netAmount > dealer.creditLimit
     ) {
       throw new AppError(
@@ -453,8 +457,8 @@ const confirmOrder = async (orderId, userId) => {
     // ==========================================
  
     // Update dealer credit usage
-    if (isSupplierCreatedOrder) {
- 
+    if (isSupplierCreatedOrder && order.dealerId) {
+
       await Dealer.findByIdAndUpdate(
         order.dealerId,
         {
@@ -465,21 +469,23 @@ const confirmOrder = async (orderId, userId) => {
         { session }
       );
     }
- 
-    // Create transaction
-    await Transaction.create([
-      {
-        type: 'debit',
-        dealerId: order.dealerId,
-        amount: order.netAmount,
-        ref: {
-          refType: 'order',
-          refId: order._id,
-        },
-        description: `Order ${order.orderNumber} confirmed`,
-        createdBy: userId,
-      }
-    ], { session });
+
+    // Create transaction — dealer credit ledger entry, not applicable to b2c orders
+    if (order.dealerId) {
+      await Transaction.create([
+        {
+          type: 'debit',
+          dealerId: order.dealerId,
+          amount: order.netAmount,
+          ref: {
+            refType: 'order',
+            refId: order._id,
+          },
+          description: `Order ${order.orderNumber} confirmed`,
+          createdBy: userId,
+        }
+      ], { session });
+    }
  
     // Audit log
     await auditService.log(
@@ -610,15 +616,19 @@ const cancelOrder = async (orderId, reason, userId) => {
  
     if (wasConfirmed) {
       // Release inventory allocations and restore product-level currentStockQty
+      // (b2c/Buvvas items have no warehouseId/productId — nothing was allocated at confirm, skip)
       for (const item of items) {
-        await inventoryService.releaseAllocation(item.productId, item.warehouseId, item.quantity, session);
+        if (!item.productId) continue;
+        if (item.warehouseId) {
+          await inventoryService.releaseAllocation(item.productId, item.warehouseId, item.quantity, session);
+        }
         await Product.findByIdAndUpdate(
           item.productId,
           { $inc: { currentStockQty: item.quantity } },
           { session }
         );
       }
- 
+
       // Reverse creditUsed — only for supplier-created orders
       if (isSupplierCreatedOrder) {
         // const dealer = await Dealer.findById(order.dealerId).session(session).lean();
@@ -632,21 +642,23 @@ const cancelOrder = async (orderId, reason, userId) => {
           );
         }
       }
- 
+
       // Cancel invoice
       if (order.invoiceId) {
         await Invoice.findByIdAndUpdate(order.invoiceId, { status: 'cancelled' }, { session });
       }
- 
-      // Reverse transaction
-      await Transaction.create([{
-        type: 'credit',
-        dealerId: order.dealerId,
-        amount: order.netAmount,
-        ref: { refType: 'order', refId: order._id },
-        description: `Order ${order.orderNumber} cancelled`,
-        createdBy: userId,
-      }], { session });
+
+      // Reverse transaction — dealer credit ledger entry, not applicable to b2c orders
+      if (order.dealerId) {
+        await Transaction.create([{
+          type: 'credit',
+          dealerId: order.dealerId,
+          amount: order.netAmount,
+          ref: { refType: 'order', refId: order._id },
+          description: `Order ${order.orderNumber} cancelled`,
+          createdBy: userId,
+        }], { session });
+      }
     }
  
     const newStatus = order.status === 'pending' ? 'rejected' : 'cancelled';
@@ -673,8 +685,11 @@ const cancelOrder = async (orderId, reason, userId) => {
  
 const getOrderStats = async () => {
   const results = await Order.aggregate([
-    // Exclude D-BE-native orders that share the same collection
-    { $match: { orderNumber: { $not: { $regex: /^ORD-\d{13}-\d+$/ } } } },
+    // Both D-BE and S-BE share the same MongoDB `orders` collection. Only
+    // S-BE-native orderNumbers look like ORD-{8-digit date}-{seq} — D-BE's
+    // dealer orders (ORD-{13-digit timestamp}-{rand}) and ecommerce orders
+    // (WEB-{13-digit timestamp}-{rand}) are excluded by only matching this format.
+    { $match: { orderNumber: { $regex: /^ORD-\d{8}-\d+$/ } } },
     { $group: { _id: '$status', count: { $sum: 1 } } },
   ]);
   const counts = { draft: 0, confirmed: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0, total: 0 };
@@ -721,11 +736,12 @@ const getOrders = async (query = {}) => {
   const { page, limit, skip } = getPagination(query);
  
   // Both D-BE and S-BE share the same MongoDB `orders` collection.
-  // D-BE orders have orderNumber like ORD-{13-digit-timestamp}-{4-digits}.
-  // S-BE orders (webhook + manual) have orderNumber like ORD-{8-digit-date}-{seq}.
-  // Exclude D-BE-native documents so they never appear in the supplier order list.
+  // D-BE orders have orderNumber like ORD-{13-digit-timestamp}-{4-digits} (dealer)
+  // or WEB-{13-digit-timestamp}-{4-digits} (Buvvas Ecommerce).
+  // S-BE orders (webhook-linked + manual) always look like ORD-{8-digit-date}-{seq}.
+  // Only match that format so D-BE-native documents never appear twice.
   const match = {
-    orderNumber: { $not: /^ORD-\d{13}-\d+$/ },
+    orderNumber: /^ORD-\d{8}-\d+$/,
   };
  
   if (query.status) match.status = query.status;
