@@ -36,6 +36,7 @@ const settingsRoutes = require('./modules/settings/settings.routes');
 const roleRoutes = require('./modules/roles/role.routes');
 const marketingLeadRoutes = require('./modules/marketingLeads/marketingLead.routes');
 const { router: supportRoutes, whRouter: supportWebhookRoutes } = require('./modules/support/support.routes');
+const { router: enquiryRoutes, whRouter: enquiryWebhookRoutes } = require('./modules/websiteEnquiries/websiteEnquiry.routes');
 const warrantyRoutes = require('./modules/warranty/warranty.routes');
 const dispatchedUnitRoutes = require('./modules/dispatchedUnits/dispatchedUnit.routes');
 const quoteRoutes          = require('./modules/quotes/quote.routes');
@@ -125,6 +126,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // ✅ Register webhooks BEFORE mongoSanitize so payload isn't mutated
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/webhooks', supportWebhookRoutes);
+app.use('/api/webhooks', enquiryWebhookRoutes);
 
 // NoSQL injection sanitization
 app.use(mongoSanitize());
@@ -144,6 +146,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/support',  supportRoutes);
+app.use('/api/website-enquiries', enquiryRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);
