@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Users, Package, Boxes, ShoppingCart, Headphones,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
   UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText, ShieldCheck as WarrantyIcon,
+  MessageSquare,
 } from 'lucide-react';
 import { toggleSidebar } from '../../store/uiSlice';
 import { usePermission } from '../../routes/ProtectedRoute';
@@ -38,6 +39,7 @@ const NAV_ITEMS = [
   { to: '/rolemanagement', icon: ShieldCheck, label: 'Role Permissions', perm: 'users:manage' },
   { to: '/usermanagement', icon: Users, label: 'User Management', perm: 'users:manage' },
   { to: '/support', icon: Headphones, label: 'Support Tickets', perm: 'support:read' },
+  { to: '/website-enquiries', icon: MessageSquare, label: 'Website Enquiries', perm: 'enquiries:read' },
 ];
 
 const Sidebar = () => {
