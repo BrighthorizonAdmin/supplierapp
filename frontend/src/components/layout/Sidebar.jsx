@@ -40,6 +40,7 @@ const NAV_ITEMS = [
   { to: '/usermanagement', icon: Users, label: 'User Management', perm: 'users:manage' },
   { to: '/support', icon: Headphones, label: 'Support Tickets', perm: 'support:read' },
   { to: '/website-enquiries', icon: MessageSquare, label: 'Website Enquiries', perm: 'enquiries:read' },
+  { to: '/blog', icon: FileText, label: 'Blog', perm: 'blog:read' },
 ];
 
 const Sidebar = () => {

@@ -14,6 +14,9 @@ const STATUS_COLOR = {
 const SOURCE_LABEL = {
   support_page: 'Support Page',
   get_quote_page: 'Get a Quote',
+  consultation_form: 'Free Consultation',
+  partner_form: 'Channel Partner',
+  dealer_application: 'Dealer Application',
   other: 'Other',
 };
 
@@ -36,7 +39,7 @@ export default function WebsiteEnquiryListPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Website Enquiries</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Messages submitted from the Buvvas website's Support and Get a Quote forms</p>
+          <p className="text-sm text-gray-500 mt-0.5">Messages submitted from the Buvvas website's Support, Get a Quote & Free Consultation forms</p>
         </div>
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2 text-center">
           <p className="text-xl font-bold text-yellow-700">{meta?.newCount ?? '—'}</p>
@@ -60,6 +63,9 @@ export default function WebsiteEnquiryListPage() {
           <option value="">All Sources</option>
           <option value="support_page">Support Page</option>
           <option value="get_quote_page">Get a Quote</option>
+          <option value="consultation_form">Free Consultation</option>
+          <option value="partner_form">Channel Partner</option>
+          <option value="dealer_application">Dealer Application</option>
         </select>
         <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           value={filters.status} onChange={e => setFilter('status', e.target.value)}>

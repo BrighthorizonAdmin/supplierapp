@@ -65,6 +65,10 @@ const ALL_PERMISSIONS = [
   // Website Enquiries
   { key: 'enquiries:read',      label: 'View Website Enquiries',   group: 'Website Enquiries' },
   { key: 'enquiries:write',     label: 'Manage Website Enquiries', group: 'Website Enquiries' },
+
+  // Blog
+  { key: 'blog:read',           label: 'View Blog Posts',          group: 'Blog' },
+  { key: 'blog:write',          label: 'Manage Blog Posts',        group: 'Blog' },
 ];
 
 /**
@@ -95,6 +99,7 @@ const DEFAULT_ROLES = [
       'payments:read', 'payments:write', 'invoices:read', 'invoices:write',
       'notifications:read', 'audit:read', 'finance:read', 'admin:read', 'admin:write',
       'support:read', 'support:write', 'enquiries:read', 'enquiries:write',
+      'blog:read', 'blog:write',
     ],
     isSystem: true,
   },

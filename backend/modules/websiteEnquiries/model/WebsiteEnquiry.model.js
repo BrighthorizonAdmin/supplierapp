@@ -9,7 +9,7 @@ const websiteEnquirySchema = new mongoose.Schema({
   email:        { type: String, trim: true },
   businessType: { type: String, trim: true },
   message:      { type: String, trim: true },
-  source:       { type: String, enum: ['support_page', 'get_quote_page', 'other'], default: 'other' },
+  source:       { type: String, enum: ['support_page', 'get_quote_page', 'consultation_form', 'partner_form', 'dealer_application', 'other'], default: 'other' },
 
   status: {
     type: String,

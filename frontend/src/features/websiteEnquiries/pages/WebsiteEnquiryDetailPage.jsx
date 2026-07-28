@@ -17,6 +17,9 @@ const BADGE = {
 const SOURCE_LABEL = {
   support_page: 'Support Page',
   get_quote_page: 'Get a Quote',
+  consultation_form: 'Free Consultation',
+  partner_form: 'Channel Partner',
+  dealer_application: 'Dealer Application',
   other: 'Other',
 };
 

@@ -23,6 +23,7 @@ import warrantyReducer from '../features/warranty/warrantySlice';
 import quoteReducer from '../features/quotes/quoteSlice';
 import hsnReducer from '../features/hsn/hsnSlice';
 import challanReducer from '../features/deliveryChallan/deliveryChallanSlice';
+import blogReducer from '../features/blog/blogSlice';
 
 
 const store = configureStore({
@@ -51,6 +52,7 @@ const store = configureStore({
     quotes: quoteReducer,
     hsn:   hsnReducer,
     challans: challanReducer,
+    blog: blogReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),
