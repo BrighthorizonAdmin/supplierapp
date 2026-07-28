@@ -40,6 +40,8 @@ import SupportDetailPage from '../features/support/pages/SupportDetailPage';
 import SupportListPage from '../features/support/pages/SupportListPage';
 import WebsiteEnquiryListPage from '../features/websiteEnquiries/pages/WebsiteEnquiryListPage';
 import WebsiteEnquiryDetailPage from '../features/websiteEnquiries/pages/WebsiteEnquiryDetailPage';
+import BlogListPage from '../features/blog/pages/BlogListPage';
+import BlogFormPage from '../features/blog/pages/BlogFormPage';
 import WarrantyListPage from '../features/warranty/pages/WarrantyListPage';
 import WarrantyDetailPage from '../features/warranty/pages/WarrantyDetailPage';
 import WarrantyLookupPage from '../features/warranty/pages/WarrantyLookupPage';
@@ -232,6 +234,21 @@ const AppRouter = () => {
           <Route path="website-enquiries/:id" element={
             <ProtectedRoute permission="enquiries:read">
               <WebsiteEnquiryDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="blog" element={
+            <ProtectedRoute permission="blog:read">
+              <BlogListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="blog/new" element={
+            <ProtectedRoute permission="blog:write">
+              <BlogFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="blog/:id/edit" element={
+            <ProtectedRoute permission="blog:write">
+              <BlogFormPage />
             </ProtectedRoute>
           } />
           <Route path="warranty" element={

@@ -42,6 +42,7 @@ const dispatchedUnitRoutes = require('./modules/dispatchedUnits/dispatchedUnit.r
 const quoteRoutes          = require('./modules/quotes/quote.routes');
 const categoryRoutes       = require('./modules/categories/category.routes');
 const challanRoutes        = require('./modules/deliveryChallan/deliveryChallan.routes');
+const blogRoutes           = require('./modules/blog/blog.routes');
 
 const app = express();
 
@@ -147,6 +148,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/support',  supportRoutes);
 app.use('/api/website-enquiries', enquiryRoutes);
+app.use('/api/blog', blogRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);
