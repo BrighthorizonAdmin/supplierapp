@@ -529,6 +529,11 @@ const confirmOrder = async (orderId, userId) => {
       const inv = await Invoice.create([{
         orderId:     order._id,
         dealerId:    order.dealerId,
+        // Ecommerce (Buvvas website) orders have no dealer — bill the end
+        // customer directly as a b2c invoice instead of defaulting to b2b.
+        invoiceType: order.orderType === 'b2c' ? 'b2c' : 'b2b',
+        partyName:   order.orderType === 'b2c' ? (order.customerName || '') : undefined,
+        partyPhone:  order.orderType === 'b2c' ? (order.customerPhone || '') : undefined,
         lineItems:   invoiceLineItems,
         subtotal:    order.subtotal,
         taxAmount:   order.taxAmount,
@@ -969,6 +974,9 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
         deliveredInvoice = await Invoice.create({
           orderId:      order._id,
           dealerId:     order.dealerId,
+          invoiceType:  order.orderType === 'b2c' ? 'b2c' : 'b2b',
+          partyName:    order.orderType === 'b2c' ? (order.customerName || '') : undefined,
+          partyPhone:   order.orderType === 'b2c' ? (order.customerPhone || '') : undefined,
           lineItems:    invoiceLineItems,
           subtotal:     order.subtotal,
           taxAmount:    order.taxAmount,
