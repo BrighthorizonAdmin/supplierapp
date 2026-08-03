@@ -463,9 +463,9 @@ const OrderDetailPage = () => {
 <div class="grid2">
 <div>
 <div class="section-title">Customer Details</div>
-<div class="label">Name</div><div class="value">${order.dealerId?.businessName || order.dealerId?.name || '—'}</div>
-<div class="label">Email</div><div class="value">${order.dealerId?.email || order.email || '—'}</div>
-<div class="label">Phone</div><div class="value">${order.dealerId?.phone || order.phone || '—'}</div>
+<div class="label">Name</div><div class="value">${order.customerName ||'—'}</div>
+<div class="label">Email</div><div class="value">${order.dealerId?.email || order.email || order.customerEmail || '—'}</div>
+<div class="label">Phone</div><div class="value">${order.dealerId?.phone || order.phone || order.customerPhone || '—'}</div>
 <div class="label">Shipping Address</div>
 <div class="value">${[order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode, order.deliveryAddress?.country].filter(Boolean).join(', ') || order.dealerId?.address || '—'}</div>
 </div>

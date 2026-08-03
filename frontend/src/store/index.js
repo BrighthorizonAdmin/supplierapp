@@ -18,10 +18,12 @@ import uiReducer from './uiSlice';
 import roleReducer from '../features/usermanagement/roleSlice';
 import userReducer from '../features/usermanagement/userSlice';
 import supportReducer from '../features/support/supportSlice';
+import websiteEnquiryReducer from '../features/websiteEnquiries/websiteEnquirySlice';
 import warrantyReducer from '../features/warranty/warrantySlice';
 import quoteReducer from '../features/quotes/quoteSlice';
 import hsnReducer from '../features/hsn/hsnSlice';
 import challanReducer from '../features/deliveryChallan/deliveryChallanSlice';
+import blogReducer from '../features/blog/blogSlice';
 
 
 const store = configureStore({
@@ -45,10 +47,12 @@ const store = configureStore({
     roles:roleReducer,
     users: userReducer,
     support: supportReducer,
+    websiteEnquiries: websiteEnquiryReducer,
     warranty: warrantyReducer,
     quotes: quoteReducer,
     hsn:   hsnReducer,
     challans: challanReducer,
+    blog: blogReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

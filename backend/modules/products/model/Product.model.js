@@ -89,6 +89,13 @@ const productSchema = new mongoose.Schema(
       type: Number,
       min: [0, 'MRP cannot be negative'],
     },
+    // Separate customer-facing price for the public Buvvas Ecommerce storefront.
+    // Distinct from basePrice, which is the dealer (B2B) price — dealer-side
+    // pricing/order flows must keep using basePrice/pricingTiers, not this.
+    buvvasPrice: {
+      type: Number,
+      min: [0, 'Buvvas price cannot be negative'],
+    },
     pricingTiers: {
       standard: { type: Number, min: 0 },
       silver:   { type: Number, min: 0 },

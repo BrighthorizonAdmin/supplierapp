@@ -979,4 +979,110 @@ router.post('/dealer-quote-deleted', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/ecommerce-order
+// Called by D-BE (backend 1) whenever a customer places an order on the
+// Buvvas Ecommerce storefront. No dealer is involved — writes into the SAME
+// Order collection dealer orders use (orderType:'b2c', no dealerId), so it
+// shows up in the existing Order Management screen next to B2B orders.
+// Mirrors the /dealer-order handler above but skips dealer resolution.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/ecommerce-order', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      console.warn('[Webhook] Unauthorized ecommerce-order attempt from:', req.ip);
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const {
+      dbeOrderId, orderNumber,
+      customerName, customerEmail, customerPhone,
+      deliveryAddress, items, subtotal, taxAmount, netAmount,
+      paymentMethod, paymentStatus, shippingCost,
+    } = req.body;
+
+    if (!dbeOrderId) {
+      return res.status(400).json({ success: false, message: 'dbeOrderId required' });
+    }
+
+    const Order = require('../orders/model/Order.model');
+    const { generateCode } = require('../../utils/autoCode');
+
+    const embeddedItems = (items || []).map(item => ({
+      productId: item.productId || undefined,
+      sku: item.sku || '',
+      name: item.name || '',
+      image: item.image || '',
+      unitPrice: Number(item.unitPrice || item.basePrice || 0),
+      quantity: Number(item.quantity || 0),
+      lineTotal: Number(item.lineTotal || 0),
+    }));
+
+    // Same upsert-only-on-insert pattern as /dealer-order — see the comment
+    // there for why $set and $setOnInsert must not be mixed in one upsert.
+    const supplierOrderNumber = await generateCode(Order, 'ORD', 'orderNumber', 'yyyyMMdd');
+
+    const order = await Order.findOneAndUpdate(
+      { dbeOrderId },
+      {
+        $setOnInsert: {
+          orderNumber: supplierOrderNumber,
+          orderType: 'b2c',
+          status: 'pending',
+          dbeOrderId,
+          dealerOrderNumber: orderNumber,
+          customerName: customerName || '',
+          customerEmail: customerEmail || '',
+          customerPhone: customerPhone || '',
+          items: embeddedItems,
+          subtotal: Number(subtotal || 0),
+          taxAmount: Number(taxAmount || 0),
+          netAmount: Number(netAmount || 0),
+          shippingCost: Number(shippingCost || 0),
+          paymentMethod: paymentMethod || '',
+          paymentStatus: paymentStatus || '',
+          deliveryAddress: deliveryAddress || {},
+          notes: `Buvvas Ecommerce order: ${orderNumber}`,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    console.log(`[Webhook] Ecommerce order synced: ${order.orderNumber} (dbeOrderId=${dbeOrderId})`);
+
+    // Notify all active admins + push real-time event, same as warranty claims
+    try {
+      const User = require('../auth/model/User.model');
+      const { emitToAll } = require('../../websocket/socket');
+      const { ECOMMERCE_NEW_ORDER } = require('../../websocket/events');
+      const admins = await User.find({ isActive: true }).select('_id').lean();
+      const itemCount = Array.isArray(items) ? items.length : 0;
+      for (const admin of admins) {
+        await notificationService.create({
+          recipientId: admin._id,
+          title: `New Buvvas Order: ${order.orderNumber}`,
+          message: `${customerName || 'A customer'} placed an order for ${itemCount} item(s) worth ₹${netAmount} via Buvvas Ecommerce`,
+          type: 'order',
+          relatedEntity: { entityType: 'Order', entityId: order._id },
+        });
+      }
+      emitToAll(ECOMMERCE_NEW_ORDER, {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        customerName,
+        netAmount,
+      });
+      console.log(`[Webhook] ecommerce-order — notified ${admins.length} admin(s)`);
+    } catch (notifErr) {
+      console.error('[Webhook] ecommerce-order notification failed:', notifErr.message);
+    }
+
+    return res.status(201).json({ success: true, data: order });
+  } catch (err) {
+    console.error('[Webhook] ecommerce-order error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
 module.exports = router;

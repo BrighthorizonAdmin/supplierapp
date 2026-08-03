@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { formatDistanceToNow, format } from 'date-fns';
-import { MapPin, Calendar, Hash, FileText, CheckCircle, AlertCircle, AlertTriangle } from 'lucide-react';
+import { MapPin, Calendar, Hash, FileText, CheckCircle, AlertCircle, AlertTriangle, Globe, Smartphone, HelpCircle } from 'lucide-react';
 import { fetchDealers, approveDealer, rejectDealer, requestDealerUpdate } from '../dealerSlice';
 import Modal from '../../../components/ui/Modal';
 import api from '../../../services/api';
@@ -84,6 +84,28 @@ const STATUS_LABELS = {
   active: 'Approved',
   rejected: 'Rejected',
   'updates-required': 'Updates Required',
+};
+
+const SOURCE_LABELS = {
+  buvvas_website: 'Buvvas Website',
+  dealer_app: 'Dealer App',
+  other: 'Other / Unknown',
+};
+
+const SOURCE_ICONS = {
+  buvvas_website: Globe,
+  dealer_app: Smartphone,
+  other: HelpCircle,
+};
+
+const SourceBadge = ({ source, className = '' }) => {
+  const Icon = SOURCE_ICONS[source] || HelpCircle;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${source === 'buvvas_website' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200'} ${className}`}>
+      <Icon size={11} />
+      {SOURCE_LABELS[source] || 'Other / Unknown'}
+    </span>
+  );
 };
 
 const StatusPill = ({ status }) => (
@@ -353,7 +375,10 @@ const DealerOnboardingPage = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{dealer.ownerName || '—'}</p>
+                      <p className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1.5">
+                        {dealer.ownerName || '—'}
+                        {(() => { const SrcIcon = SOURCE_ICONS[dealer.source] || HelpCircle; return <SrcIcon size={12} className="text-slate-400 flex-shrink-0" title={SOURCE_LABELS[dealer.source] || 'Other / Unknown'} /> })()}
+                      </p>
                       <span className="text-xs text-slate-400 flex-shrink-0">{timeAgo(dealer.createdAt)}</span>
                     </div>
                     <p className="text-xs text-slate-500 truncate mb-1.5">{dealer.businessName}</p>
@@ -386,7 +411,10 @@ const DealerOnboardingPage = () => {
 
               {/* Header row */}
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900">{selected.businessName}</h2>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-xl font-bold text-slate-900">{selected.businessName}</h2>
+                  <SourceBadge source={selected.source} />
+                </div>
                 <div className="flex items-center gap-3">
                   <StatusBadgeOutline status={selected.status} />
                   {selected.status !== 'active' && selected.status !== 'rejected' && (
@@ -461,6 +489,14 @@ const DealerOnboardingPage = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Applicant's note about their current business */}
+              {selected.applicantNote && (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-2">Applicant's Note</h3>
+                  <p className="text-sm text-slate-600 leading-relaxed">{selected.applicantNote}</p>
+                </div>
+              )}
 
               {/* ── CASE 1: Update Requested — waiting for dealer to fix (status = updates-required) ── */}
               {isAwaitingUpdate && (

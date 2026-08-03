@@ -15,4 +15,6 @@ module.exports = {
   INVOICE_OVERDUE: 'invoice:overdue',
   WARRANTY_NEW_CLAIM: 'warranty:new_claim',
   WARRANTY_STATUS_UPDATED: 'warranty:status_updated',
+  ECOMMERCE_NEW_ORDER: 'ecommerce:new_order',
+  ENQUIRY_NEW: 'enquiry:new',
 };
