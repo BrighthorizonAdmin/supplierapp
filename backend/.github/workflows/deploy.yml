@@ -1,0 +1,56 @@
+name: Deploy Supplier to Development
+ 
+on:
+  push:
+    branches:
+      - Develop
+ 
+jobs:
+  deploy:
+    name: Deploy to Development Instance
+    runs-on: ubuntu-latest
+ 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.GCP_DEV_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.GCP_DEV_HOST }} >> ~/.ssh/known_hosts
+ 
+      - name: Deploy to Development
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.GCP_DEV_USERNAME }}@${{ secrets.GCP_DEV_HOST }} << 'EOF'
+            set -e
+ 
+            echo "==> Navigating to project directory"
+            cd ~/supplier-app/supplierapp
+ 
+            echo "==> Pulling latest changes from Develop"
+            git fetch origin Develop
+            git reset --hard origin/Develop
+ 
+            echo "==> Installing backend dependencies"
+            cd backend
+            npm install --production
+ 
+            echo "==> Installing frontend dependencies and building"
+            cd ../frontend
+            npm install
+            npm run build
+ 
+            echo "==> Restarting server with PM2"
+            cd ../backend
+            pm2 restart supplier-dev || pm2 start server.js --name "supplier-dev"
+            pm2 save
+ 
+            echo "==> Reloading Nginx"
+            sudo systemctl reload nginx
+ 
+            echo "==> Development Deployment complete!"
+          EOF
+ 
