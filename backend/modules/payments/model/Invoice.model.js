@@ -48,7 +48,8 @@ const invoiceSchema = new mongoose.Schema({
 
   invoiceType: {
     type: String,
-    enum: ['b2b', 'retail'],
+    // b2b: supplier -> dealer. retail: dealer -> customer. b2c: supplier -> customer (Buvvas Ecommerce).
+    enum: ['b2b', 'retail', 'b2c'],
     default: 'b2b',
   },
 
