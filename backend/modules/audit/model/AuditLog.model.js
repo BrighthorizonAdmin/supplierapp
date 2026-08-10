@@ -5,7 +5,7 @@ const auditLogSchema = new mongoose.Schema(
     entity: {
       type: String,
       enum: {
-        values: ['dealer', 'order', 'payment', 'return', 'product', 'inventory', 'user', 'invoice', 'warehouse', 'retailOrder', 'marketingLead'],
+        values: ['dealer', 'order', 'payment', 'return', 'product', 'inventory', 'user', 'invoice', 'warehouse', 'retailOrder', 'marketingLead', 'flashSale'],
         message: '{VALUE} is not a valid entity type',
       },
       required: [true, 'Entity type is required'],

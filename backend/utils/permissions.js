@@ -69,6 +69,10 @@ const ALL_PERMISSIONS = [
   // Blog
   { key: 'blog:read',           label: 'View Blog Posts',          group: 'Blog' },
   { key: 'blog:write',          label: 'Manage Blog Posts',        group: 'Blog' },
+
+  // Flash Sale
+  { key: 'flashsale:read',      label: 'View Flash Sales',         group: 'Flash Sale' },
+  { key: 'flashsale:write',     label: 'Manage Flash Sales',       group: 'Flash Sale' },
 ];
 
 /**
@@ -99,7 +103,7 @@ const DEFAULT_ROLES = [
       'payments:read', 'payments:write', 'invoices:read', 'invoices:write',
       'notifications:read', 'audit:read', 'finance:read', 'admin:read', 'admin:write',
       'support:read', 'support:write', 'enquiries:read', 'enquiries:write',
-      'blog:read', 'blog:write',
+      'blog:read', 'blog:write', 'flashsale:read', 'flashsale:write',
     ],
     isSystem: true,
   },

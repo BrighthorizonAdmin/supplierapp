@@ -24,6 +24,7 @@ import quoteReducer from '../features/quotes/quoteSlice';
 import hsnReducer from '../features/hsn/hsnSlice';
 import challanReducer from '../features/deliveryChallan/deliveryChallanSlice';
 import blogReducer from '../features/blog/blogSlice';
+import flashSaleReducer from '../features/flashSale/flashSaleSlice';
 
 
 const store = configureStore({
@@ -53,6 +54,7 @@ const store = configureStore({
     hsn:   hsnReducer,
     challans: challanReducer,
     blog: blogReducer,
+    flashSale: flashSaleReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

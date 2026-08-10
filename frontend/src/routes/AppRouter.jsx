@@ -17,6 +17,8 @@ import InventoryPage from '../features/inventory/pages/InventoryPage';
 import InventoryDetailsPage from '../features/inventory/pages/InventoryDetailsPage';
 import ProductListPage from '../features/products/pages/ProductListPage';
 import ProductFormPage from '../features/products/pages/ProductFormPage';
+import FlashSaleListPage from '../features/flashSale/pages/FlashSaleListPage';
+import FlashSaleFormPage from '../features/flashSale/pages/FlashSaleFormPage';
 import OrderListPage from '../features/orders/pages/OrderListPage';
 import OrderDetailPage from '../features/orders/pages/OrderDetailPage';
 import RetailOrderListPage from '../features/retail/pages/RetailOrderListPage';
@@ -118,6 +120,21 @@ const AppRouter = () => {
           <Route path="products/:id/edit" element={
             <ProtectedRoute permission="products:write">
               <ProductFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="flash-sales" element={
+            <ProtectedRoute permission="flashsale:read">
+              <FlashSaleListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="flash-sales/new" element={
+            <ProtectedRoute permission="flashsale:write">
+              <FlashSaleFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="flash-sales/:id/edit" element={
+            <ProtectedRoute permission="flashsale:write">
+              <FlashSaleFormPage />
             </ProtectedRoute>
           } />
           <Route path="orders" element={
