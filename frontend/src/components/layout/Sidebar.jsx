@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Package, Boxes, ShoppingCart, Headphones,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
   UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText, ShieldCheck as WarrantyIcon,
-  MessageSquare,
+  MessageSquare, Zap,
 } from 'lucide-react';
 import { toggleSidebar } from '../../store/uiSlice';
 import { usePermission } from '../../routes/ProtectedRoute';
@@ -25,6 +25,7 @@ const NAV_ITEMS = [
   { to: '/onboarding', icon: UserPlus, label: 'Onboarding', perm: 'dealer:read' },
   { to: '/dealers', icon: Users, label: 'Dealer Management', perm: 'dealer:read', end: false },
   { to: '/products', icon: Package, label: 'Product Catalog', perm: 'products:read' },
+  { to: '/flash-sales', icon: Zap, label: 'Flash Sale', perm: 'flashsale:read' },
   { to: '/hsn-codes', icon: Tag, label: 'HSN Codes', perm: 'products:read' },
   { to: '/inventory', icon: Boxes, label: 'Inventory', perm: 'inventory:read' },
   { to: '/orders', icon: ShoppingCart, label: 'Orders', perm: 'orders:read' },

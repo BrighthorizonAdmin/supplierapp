@@ -43,6 +43,7 @@ const quoteRoutes          = require('./modules/quotes/quote.routes');
 const categoryRoutes       = require('./modules/categories/category.routes');
 const challanRoutes        = require('./modules/deliveryChallan/deliveryChallan.routes');
 const blogRoutes           = require('./modules/blog/blog.routes');
+const flashSaleRoutes      = require('./modules/flashSale/flashSale.routes');
 
 const app = express();
 
@@ -153,6 +154,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/flash-sales', flashSaleRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/orders', orderRoutes);

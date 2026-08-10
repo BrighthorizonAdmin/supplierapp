@@ -76,6 +76,19 @@ const orderSchema = new mongoose.Schema(
       default: 0,
       min: [0, 'Discount cannot be negative'],
     },
+    // Set only for b2c (Buvvas Ecommerce) orders that got a flash-sale discount.
+    discountPercent: {
+      type: Number,
+      default: 0,
+    },
+    flashSaleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FlashSale',
+    },
+    flashSaleApplied: {
+      type: Boolean,
+      default: false,
+    },
     taxAmount: {
       type: Number,
       default: 0,
@@ -144,6 +157,10 @@ const orderSchema = new mongoose.Schema(
     trackingId: { type: String },
     carrier: { type: String },
     timeline: [timelineEventSchema],
+    // Idempotency guard: set the first (and only) time this order's
+    // confirmation deducts Product.currentStockQty, so repeat/duplicate
+    // confirm calls (double-click, retry, race) never deduct stock twice.
+    stockDeductedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
