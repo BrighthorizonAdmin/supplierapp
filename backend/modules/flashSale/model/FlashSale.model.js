@@ -8,7 +8,7 @@ const flashSaleSchema = new mongoose.Schema(
       trim: true,
       maxlength: [200, 'Title cannot exceed 200 characters'], 
     },
-    discountPercent: {
+    discountPercent: { 
       type: Number,
       required: [true, 'Discount percent is required'],
       min: [1, 'Discount percent must be at least 1'],
