@@ -1000,6 +1000,7 @@ router.post('/ecommerce-order', async (req, res) => {
       customerName, customerEmail, customerPhone,
       deliveryAddress, items, subtotal, taxAmount, netAmount,
       paymentMethod, paymentStatus, shippingCost,
+      discountAmount, discountPercent, flashSaleId, flashSaleApplied,
     } = req.body;
 
     if (!dbeOrderId) {
@@ -1037,6 +1038,10 @@ router.post('/ecommerce-order', async (req, res) => {
           customerPhone: customerPhone || '',
           items: embeddedItems,
           subtotal: Number(subtotal || 0),
+          discountAmount: Number(discountAmount || 0),
+          discountPercent: Number(discountPercent || 0),
+          flashSaleId: flashSaleId || undefined,
+          flashSaleApplied: Boolean(flashSaleApplied),
           taxAmount: Number(taxAmount || 0),
           netAmount: Number(netAmount || 0),
           shippingCost: Number(shippingCost || 0),

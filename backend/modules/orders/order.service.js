@@ -438,20 +438,39 @@ const confirmOrder = async (orderId, userId) => {
     await order.save({ session });
  
     // ==========================================
-    // REMOVED DUPLICATE STOCK DEDUCTION
+    // STOCK DEDUCTION — idempotency guard
     // ==========================================
-    // THIS BLOCK WAS CAUSING DOUBLE DECREMENT
-    //
-    for (const item of items) {
-      const qty = Number(item.quantity) || 0;
-      const pid = item.productId;
-   
-      if (pid && qty > 0) {
-        await Product.findByIdAndUpdate(
-          pid,
-          { $inc: { currentStockQty: -qty } },
-          { session, returnDocument: 'after' }
-        );
+    // Claim this order's stock deduction exactly once via an atomic
+    // conditional update on stockDeductedAt. Any duplicate/concurrent
+    // confirm call for the same order sees it already claimed and skips
+    // deduction (prevents double-click / race duplicate decrements).
+    const stockClaim = await Order.findOneAndUpdate(
+      { _id: orderId, stockDeductedAt: null },
+      { $set: { stockDeductedAt: new Date() } },
+      { session }
+    );
+
+    // Website (b2c) orders are also confirmed on the dealer side via the
+    // notifyDealerOrderStatus webhook below — the dealer backend reliably
+    // deducts this same shared Product.currentStockQty for b2c orders, so
+    // we must not deduct it again here or it gets deducted twice.
+    // b2b (dealer-app) orders keep the local deduction below, matching
+    // their previous working behavior — the dealer backend's own webhook
+    // deduction currently fails for b2b orders before it reaches its
+    // stock-deduction code (unrelated pre-existing dealer-side bug), so
+    // it must not be relied on for b2b until that's fixed on their side.
+    if (stockClaim && order.orderType !== 'b2c') {
+      for (const item of items) {
+        const qty = Number(item.quantity) || 0;
+        const pid = item.productId;
+
+        if (pid && qty > 0) {
+          await Product.findByIdAndUpdate(
+            pid,
+            { $inc: { currentStockQty: -qty } },
+            { session, returnDocument: 'after' }
+          );
+        }
       }
     }
     // ==========================================
@@ -1050,24 +1069,37 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
       : await OrderItem.find({ orderId: order._id }).lean();
  
     console.log(`[updateOrderStatus] confirmed order=${orderId} items=${items.length}`);
- 
-    for (const item of items) {
-      const pid = item.productId;
-      const qty = Number(item.quantity) || 0;
-      if (!pid || qty <= 0) continue;
-      console.log(`[updateOrderStatus] deducting qty=${qty} from productId=${pid}`);
-      try {
-        const updated = await Product.findByIdAndUpdate(
-          pid,
-          [{ $set: { currentStockQty: { $max: [0, { $subtract: ['$currentStockQty', qty] }] } } }],
-          { new: true }
-        );
-        console.log(`[updateOrderStatus] product=${pid} newStockQty=${updated?.currentStockQty ?? 'NOT FOUND'}`);
-      } catch (stockErr) {
-        console.error(`[updateOrderStatus] stock deduction failed for product ${pid}:`, stockErr.message);
+
+    // Idempotency guard — same as confirmOrder(): claim the deduction
+    // exactly once per order (shared stockDeductedAt field), and skip
+    // entirely for website (b2c) orders since the dealer backend reliably
+    // deducts this same shared Product.currentStockQty via webhook for
+    // those. b2b (dealer-app) orders keep the local deduction — see the
+    // matching comment in confirmOrder() for why.
+    const stockClaim = await Order.findOneAndUpdate(
+      { _id: orderId, stockDeductedAt: null },
+      { $set: { stockDeductedAt: new Date() } }
+    );
+
+    if (stockClaim && order.orderType !== 'b2c') {
+      for (const item of items) {
+        const pid = item.productId;
+        const qty = Number(item.quantity) || 0;
+        if (!pid || qty <= 0) continue;
+        console.log(`[updateOrderStatus] deducting qty=${qty} from productId=${pid}`);
+        try {
+          const updated = await Product.findByIdAndUpdate(
+            pid,
+            [{ $set: { currentStockQty: { $max: [0, { $subtract: ['$currentStockQty', qty] }] } } }],
+            { new: true }
+          );
+          console.log(`[updateOrderStatus] product=${pid} newStockQty=${updated?.currentStockQty ?? 'NOT FOUND'}`);
+        } catch (stockErr) {
+          console.error(`[updateOrderStatus] stock deduction failed for product ${pid}:`, stockErr.message);
+        }
       }
     }
- 
+
     pushStockStatusAfterConfirm(items, order.orderNumber);
   }
  
