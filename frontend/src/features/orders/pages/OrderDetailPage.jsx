@@ -606,6 +606,11 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
   const discount = order.discountAmount || 0;
   const total = order.netAmount || (subtotal + tax + shipping - discount);
   const dealer = order.dealerId || {};
+  // b2c (Buvvas Ecommerce) orders have no dealerId — customer identity lives
+  // directly on the order instead, same fallback the print template below uses.
+  const customerName = dealer.businessName || dealer.name || order.customerName || '—';
+  const customerEmail = dealer.email || order.customerEmail || '';
+  const customerPhone = dealer.phone || order.customerPhone || '';
   const addr = order.deliveryAddress || {};
   const timeline = order.timeline || [];
 
@@ -769,9 +774,9 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
             </div>
             <div className="px-5 py-4 space-y-3">
               <div>
-                <p className="font-semibold text-slate-900">{dealer.businessName || dealer.name || '—'}</p>
-                {dealer.email && <p className="text-sm text-slate-500 mt-0.5">{dealer.email}</p>}
-                {dealer.phone && <p className="text-sm text-slate-500">{dealer.phone}</p>}
+                <p className="font-semibold text-slate-900">{customerName}</p>
+                {customerEmail && <p className="text-sm text-slate-500 mt-0.5">{customerEmail}</p>}
+                {customerPhone && <p className="text-sm text-slate-500">{customerPhone}</p>}
               </div>
               {(addr.fullAddress || addr.city) && (
                 <div className="pt-3 border-t border-slate-100">

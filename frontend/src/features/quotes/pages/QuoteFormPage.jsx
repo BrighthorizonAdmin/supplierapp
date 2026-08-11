@@ -623,6 +623,14 @@ export default function QuoteFormPage() {
     setItems((prev) => {
       const n = [...prev];
       let it = { ...n[idx], [field]: val };
+      // Quantity can't exceed available stock — the "add product" picker
+      // already enforces this via +/- buttons, but this table's free-text
+      // quantity field didn't, so it silently let quantities past stock through.
+      if (field === 'quantity') {
+        const product = products.find((p) => p._id === it.productId);
+        const maxQty = product?.currentStockQty ?? Infinity;
+        it.quantity = Math.min(Math.max(1, toNum(val)), maxQty);
+      }
       // If qty or price changed and a % discount exists, recalculate flat discount
       if ((field === 'quantity' || field === 'unitPrice') && toNum(it.discountPercent) > 0) {
         const base = toNum(it.quantity) * toNum(it.unitPrice);
@@ -631,7 +639,7 @@ export default function QuoteFormPage() {
       n[idx] = calcItem(it);
       return n;
     });
-  }, []);
+  }, [products]);
 
   const updateItemDiscount = useCallback((idx, field, val) => {
     setItems((prev) => {
@@ -1084,6 +1092,7 @@ export default function QuoteFormPage() {
                       <td className="px-3 py-3">
                         <div className="flex items-center justify-center gap-1">
                           <input type="number" min="1"
+                            max={products.find((p) => p._id === item.productId)?.currentStockQty ?? undefined}
                             className="w-12 text-sm text-center outline-none bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-400 text-gray-800 transition-colors"
                             value={item.quantity}
                             onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
