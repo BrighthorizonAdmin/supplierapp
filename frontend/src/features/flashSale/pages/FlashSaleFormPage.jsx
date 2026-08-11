@@ -51,11 +51,17 @@ const FlashSaleFormPage = () => {
   }, [selected, isEdit, reset]);
 
   const onSubmit = async (data) => {
+    // The datetime-local inputs give back a plain "no timezone" string
+    // (e.g. "2026-08-10T16:05"), which a server running in a different
+    // timezone than the browser would misinterpret as its own local time.
+    // Converting to an ISO string here bakes in an explicit UTC offset, so
+    // the moment means the same thing no matter where the backend runs.
+    const toUtcIso = (localDateTimeStr) => localDateTimeStr ? new Date(localDateTimeStr).toISOString() : null;
     const payload = {
       title: data.title,
       discountPercent: Number(data.discountPercent),
-      startDate: data.startDate,
-      endDate: data.endDate || null,
+      startDate: toUtcIso(data.startDate),
+      endDate: toUtcIso(data.endDate),
       isEnabled: data.isEnabled,
       scope: data.scope,
       productIds: data.scope === 'selected' ? data.productIds : [],

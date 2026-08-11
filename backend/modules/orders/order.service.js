@@ -553,6 +553,9 @@ const confirmOrder = async (orderId, userId) => {
         invoiceType: order.orderType === 'b2c' ? 'b2c' : 'b2b',
         partyName:   order.orderType === 'b2c' ? (order.customerName || '') : undefined,
         partyPhone:  order.orderType === 'b2c' ? (order.customerPhone || '') : undefined,
+        partyAddress: order.orderType === 'b2c'
+          ? [order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode].filter(Boolean).join(', ')
+          : undefined,
         lineItems:   invoiceLineItems,
         subtotal:    order.subtotal,
         taxAmount:   order.taxAmount,
@@ -996,6 +999,9 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
           invoiceType:  order.orderType === 'b2c' ? 'b2c' : 'b2b',
           partyName:    order.orderType === 'b2c' ? (order.customerName || '') : undefined,
           partyPhone:   order.orderType === 'b2c' ? (order.customerPhone || '') : undefined,
+          partyAddress: order.orderType === 'b2c'
+            ? [order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode].filter(Boolean).join(', ')
+            : undefined,
           lineItems:    invoiceLineItems,
           subtotal:     order.subtotal,
           taxAmount:    order.taxAmount,
