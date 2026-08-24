@@ -137,7 +137,7 @@ const AppRouter = () => {
             </ProtectedRoute>
           } />
           <Route path="invoices" element={
-            <ProtectedRoute permission="invoices:read'">
+            <ProtectedRoute permission="invoices:read">
               <InvoiceListPage />
             </ProtectedRoute>
           } />
