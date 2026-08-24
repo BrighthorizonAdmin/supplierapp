@@ -92,20 +92,27 @@ const withResolvedDocs = (dealer) => {
 };
 
 const syncToDealerApp = async (applicationId, action, payload = {}) => {
-  if (!applicationId) return;
   try {
     const body = { action, ...payload };
-    console.log('[DealerSync] Sending to D-BE:', JSON.stringify(body));  // ADD THIS
-    await axios.patch(
-      `${DEALER_API_URL}/api/dealership/supplier/review/${applicationId}`,
-      body,
-      {
-        headers: {
-          'x-api-key': process.env.DEALER_WEBHOOK_SECRET,
-        },
-      }
-    );
-    console.log(`[DealerSync] Synced ${action} for ${applicationId}`);
+    console.log('[DealerSync] Sending to D-BE:', JSON.stringify(body));
+    if (applicationId) {
+      await axios.patch(
+        `${DEALER_API_URL}/api/dealership/supplier/review/${applicationId}`,
+        body,
+        { headers: { 'x-api-key': process.env.DEALER_WEBHOOK_SECRET } }
+      );
+      console.log(`[DealerSync] Synced ${action} for applicationId ${applicationId}`);
+    } else if (payload.dealerEmail) {
+      // Fallback for supplier-created dealers that have no applicationId
+      await axios.patch(
+        `${DEALER_API_URL}/api/dealership/supplier/sync-dealer`,
+        body,
+        { headers: { 'x-api-key': process.env.DEALER_WEBHOOK_SECRET } }
+      );
+      console.log(`[DealerSync] Synced ${action} for email ${payload.dealerEmail}`);
+    } else {
+      console.warn('[DealerSync] Skipped — no applicationId or dealerEmail');
+    }
   } catch (err) {
     console.error('[DealerSync] Failed:', err.response?.data || err.message);
   }
@@ -115,12 +122,17 @@ const createDealer = async (data, userId) => {
   const password = generateRandomPassword();
   const shouldAutoApprove = data.autoApprove || data.status === 'active';
 
+  const resolvedPaymentTerms = data.paymentTerms || data.netPayments || '';
+  const netTermsMatch = resolvedPaymentTerms.match(/Net\s+(\d+)\s+Days?/i);
+
   const dealerData = {
     ...data,
     onboardedBy: data.onboardedBy || userId,
     creditLimit: Number(data.creditLimit) || 0,
     pricingTier: data.pricingTier || 'standard',
-    paymentTerms: data.paymentTerms || data.netPayments || '',
+    paymentTerms: resolvedPaymentTerms,
+    netTermsEnabled: netTermsMatch ? true : false,
+    creditPeriodDays: netTermsMatch ? parseInt(netTermsMatch[1], 10) : (data.creditPeriodDays || 30),
     status: shouldAutoApprove ? 'active' : data.status || 'pending',
     kycStatus: shouldAutoApprove ? 'verified' : data.kycStatus || 'pending',
     approvedBy: shouldAutoApprove ? userId : data.approvedBy,
@@ -280,15 +292,19 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms,
   // Generate password BEFORE save so the pre-save hook hashes it
   const randomPassword = generateRandomPassword();
 
-  dealer.status = 'active';
-  dealer.kycStatus = 'verified';
+  const netTermsMatch = (paymentTerms || '').match(/Net\s+(\d+)\s+Days?/i);
+
+  dealer.status       = 'active';
+  dealer.kycStatus    = 'verified';
   dealer.creditLimit  = creditLimit || 0;
   dealer.pricingTier  = pricingTier || 'standard';
   dealer.paymentTerms = paymentTerms || '';
+  dealer.netTermsEnabled  = !!netTermsMatch;
+  dealer.creditPeriodDays = netTermsMatch ? parseInt(netTermsMatch[1], 10) : dealer.creditPeriodDays;
   dealer.onboardedBy  = onboardedBy || '';
-  dealer.approvedBy = userId;
-  dealer.approvedAt = new Date();
-  dealer.password = randomPassword; // pre-save hook will hash this
+  dealer.approvedBy   = userId;
+  dealer.approvedAt   = new Date();
+  dealer.password     = randomPassword; // pre-save hook will hash this
 
   await dealer.save();
 
@@ -328,6 +344,7 @@ const approveDealer = async (dealerId, { creditLimit, pricingTier, paymentTerms,
     creditLimit:  creditLimit || 0,
     paymentTerms: paymentTerms || '',
     onboardedBy:  onboardedBy || '',
+    dealerEmail:  dealer.email,
   });
 
   // Return plain object; tempPassword is exposed once here (not stored in response elsewhere)

@@ -119,6 +119,8 @@ const dealerSchema = new mongoose.Schema(
       default: 0,
       min: [0, 'Credit used cannot be negative'],
     },
+    netTermsEnabled: { type: Boolean, default: false },
+    creditPeriodDays: { type: Number, default: 30 },
     pricingTier: {
       type: String,
       enum: {
