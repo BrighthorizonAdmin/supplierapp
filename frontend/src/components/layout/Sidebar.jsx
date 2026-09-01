@@ -74,7 +74,7 @@ const Sidebar = () => {
         </div>
         {sidebarOpen && (
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-black truncate leading-tight">Company Name</p>
+            <p className="text-sm font-bold text-black truncate leading-tight">Buvvas</p>
             <p className="text-xs text-blue-600 truncate leading-tight">{`Supplier ${Array.isArray(user.role) ? user.role.join(', ') : user.role} Portal`}</p>
           </div>
         )}
