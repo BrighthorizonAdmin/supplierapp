@@ -12,7 +12,7 @@ import { fetchProducts } from '../../products/productSlice';
 import Pagination from '../../../components/ui/Pagination';
 import { format } from 'date-fns';
 import api from '../../../services/api';
- 
+
 const fmtNum = (n) => {
   if (!n && n !== 0) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -20,9 +20,9 @@ const fmtNum = (n) => {
   return n.toLocaleString('en-IN');
 };
 const fmtCurrency = (n) => (n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—');
- 
+
 const DONUT_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
- 
+
 const stockStatus = (item) => {
   const cur = item.currentStockQty ?? 0;
   const open = item.openingStockQty ?? 0;
@@ -30,28 +30,28 @@ const stockStatus = (item) => {
   if (open > 0 && cur <= open * 0.25) return 'low stock';
   return 'in stock';
 };
- 
+
 const StockChip = ({ item }) => {
   const s = stockStatus(item);
   if (s === 'out-of-stock') return <span className="badge-red">Out of Stock</span>;
   if (s === 'low stock') return <span className="badge-yellow">Low Stock</span>;
   return <span className="badge-green">In-Stock</span>;
 };
- 
+
 const forecastLabel = (item) => {
   const s = stockStatus(item);
   if (s === 'out of stock') return 'Replenishment Required';
   if (s === 'low stock') return 'Projected to Spike – order soon';
   return 'Stable Demand – next 30 days';
 };
- 
+
 const STOCK_TABS = [
   { id: '', label: 'All Items' },
   { id: 'low-stock', label: 'Low Stock' },
   { id: 'high-stock', label: 'High Stock' },
   { id: 'out-of-stock', label: 'Out of Stock' },
 ];
- 
+
 const StatCard = ({ label, value, sub, subIcon: SubIcon, icon: Icon, iconBg, badge, badgeCls }) => (
   <div className="card p-4 flex items-start justify-between gap-3">
     <div className="flex-1 min-w-0">
@@ -71,7 +71,7 @@ const StatCard = ({ label, value, sub, subIcon: SubIcon, icon: Icon, iconBg, bad
     </div>
   </div>
 );
- 
+
 const DonutTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -81,26 +81,26 @@ const DonutTooltip = ({ active, payload }) => {
     </div>
   );
 };
- 
+
 const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
   const { list: products } = useSelector((s) => s.product);
   const [productSearch, setProductSearch] = useState('');
   const [form, setForm] = useState({ productId: '', warehouseId: '', quantity: '', type: 'add' });
   const [touched, setTouched] = useState(false);
- 
+
   const filtered = products.filter((p) =>
     !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.sku || '').toLowerCase().includes(productSearch.toLowerCase())
   );
- 
+
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
- 
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setTouched(true);
     if (!form.productId || !form.warehouseId || !form.quantity) return;
     onSubmit(form);
   };
- 
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -170,17 +170,17 @@ const AddStockModal = ({ warehouses, onClose, onSubmit, saving }) => {
     </div>
   );
 };
- 
+
 const TagInput = ({ tags, onChange }) => {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
- 
+
   const normalizeTag = (raw) => ({
     value: raw.trim().toUpperCase(),
     date: format(new Date(), 'dd MMM yyyy'),
     dateISO: new Date().toISOString(),
   });
- 
+
   const addTag = (raw) => {
     const v = raw.trim().toUpperCase();
     if (!v) return;
@@ -188,22 +188,27 @@ const TagInput = ({ tags, onChange }) => {
     if (tags.includes(v)) { toast.error(`"${v}" already added`); return; }
     onChange([...tags, v]);
   };
- 
+
   const removeTag = (i) => onChange(tags.filter((_, idx) => idx !== i));
- 
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(inputValue); }
   };
- 
+
   const handleChange = (e) => {
     const v = e.target.value;
     if (v.endsWith(',')) addTag(v.slice(0, -1));
     else setInputValue(v);
   };
- 
+
   const handlePaste = (e) => {
     e.preventDefault();
     const parts = e.clipboardData.getData('text').split(/[,\n\r\t]+/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length <= 1) {
+      // Single value — fill the input so user can review before pressing Enter
+      setInputValue(parts[0] || '');
+      return;
+    }
     const next = [...tags];
     parts.forEach((p) => {
       const value = p.toUpperCase();
@@ -214,7 +219,7 @@ const TagInput = ({ tags, onChange }) => {
     onChange(next);
     setInputValue('');
   };
- 
+
   return (
     <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100" onClick={() => inputRef.current?.focus()}>
@@ -230,7 +235,7 @@ const TagInput = ({ tags, onChange }) => {
         />
         <Tag size={15} className="text-slate-400 flex-shrink-0" />
       </div>
- 
+
       {tags.length > 0 && (
         <div className="p-3 space-y-3 max-h-52 overflow-y-auto">
           {tags.map((tag, i) => {
@@ -249,7 +254,7 @@ const TagInput = ({ tags, onChange }) => {
           })}
         </div>
       )}
- 
+
       <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100 bg-slate-50">
         <span className="text-xs text-slate-500">{tags.length} serial{tags.length !== 1 ? 's' : ''} added</span>
         {tags.length > 0 && (
@@ -262,16 +267,16 @@ const TagInput = ({ tags, onChange }) => {
     </div>
   );
 };
- 
+
 const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
-  const prod           = item.productId || {};
+  const prod = item.productId || {};
   const origOpeningQty = item.openingStockQty ?? 0;
-  const origCurrentQty = item.currentStockQty  ?? 0;
- 
-  const [tags,         setTags]        = useState([]);
+  const origCurrentQty = item.currentStockQty ?? 0;
+
+  const [tags, setTags] = useState([]);
   const [loadingExist, setLoadingExist] = useState(true);
   const [existingCount, setExistingCount] = useState(0);
- 
+
   useEffect(() => {
     if (!prod._id) { setLoadingExist(false); return; }
     api.get(`/dispatched-units/in-stock?productId=${prod._id}`)
@@ -279,29 +284,29 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
       .catch(() => setExistingCount(0))
       .finally(() => setLoadingExist(false));
   }, [prod._id]);
- 
+
   // total serials after save = existing already in DB + new ones entered now
   const newOpeningQty = origOpeningQty + tags.length;
-  const delta         = tags.length;
+  const delta = tags.length;
   const newCurrentQty = origCurrentQty + tags.length;
- 
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (tags.length === 0) { onClose(); return; }
     const result = await onSubmit({
-      productId:           prod._id,
-      warehouseId:         item.warehouseId?._id || null,
-      openingStockQty:     newOpeningQty,
+      productId: prod._id,
+      warehouseId: item.warehouseId?._id || null,
+      openingStockQty: newOpeningQty,
       openingStockChanged: newOpeningQty !== origOpeningQty,
       // send array of objects so backend can store per-serial dates
-      serialNumbers:       tags.map((tag) => (typeof tag === 'string'
+      serialNumbers: tags.map((tag) => (typeof tag === 'string'
         ? { serialNumber: tag, dispatchedAt: new Date().toISOString() }
         : { serialNumber: tag.value, dispatchedAt: tag.dateISO || new Date().toISOString() })),
-      productName:         prod.name,
+      productName: prod.name,
     });
     if (result === false) setTags([]);
   };
- 
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -310,7 +315,7 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
- 
+
           {/* Product */}
           <div>
             <label className="label">Product</label>
@@ -318,14 +323,15 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
               {prod.name || '—'}
             </p>
           </div>
- 
+
           {/* Stock quantity preview */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Opening Stock', orig: origOpeningQty, next: newOpeningQty },
-              { label: 'Current Stock', orig: origCurrentQty, next: newCurrentQty },
-            ].map(({ label, orig, next }) => {
-              const changed = tags.length > 0 && next !== orig;
+              // { label: 'Opening Stock', orig: origOpeningQty, next: newOpeningQty, showDelta: true },
+              { label: 'Current Stock', orig: origCurrentQty, next: newCurrentQty, showDelta: true },
+              { label: 'New Stock', orig: tags.length, next: tags.length, showDelta: false },
+            ].map(({ label, orig, next, showDelta }) => {
+              const changed = showDelta && tags.length > 0 && next !== orig;
               const up = next > orig;
               return (
                 <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
@@ -337,7 +343,7 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
                         → {next}
                       </span>
                     )}
-                    {tags.length > 0 && next === orig && (
+                    {showDelta && tags.length > 0 && next === orig && (
                       <span className="text-xs text-slate-400">no change</span>
                     )}
                   </div>
@@ -357,7 +363,7 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
               )}
             </p>
           )}
- 
+
           {/* Serial Numbers */}
           <div>
             <label className="label mb-1">Serial Numbers</label>
@@ -377,7 +383,7 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
               </p>
             )}
           </div>
- 
+
           <div className="flex gap-3 justify-end pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
             <button type="submit" disabled={saving || loadingExist} className="btn-primary disabled:opacity-40">
@@ -389,7 +395,7 @@ const EditStockModal = ({ item, onClose, onSubmit, saving }) => {
     </div>
   );
 };
- 
+
 const InventoryPage = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -423,18 +429,18 @@ const InventoryPage = () => {
       setRowSerialState(prev => ({ ...prev, [id]: { loaded: true, loading: false, serials: [] } }));
     }
   };
- 
+
   useEffect(() => {
     const id = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
     return () => clearTimeout(id);
   }, [searchInput]);
- 
+
   useEffect(() => {
     dispatch(fetchInventoryStats());
     dispatch(fetchWarehouses());
     dispatch(fetchProducts({ limit: 200 }));
   }, [dispatch]);
- 
+
   useEffect(() => {
     const params = { page, limit: 20 };
     if (stockTab) params.status = stockTab;
@@ -443,12 +449,12 @@ const InventoryPage = () => {
     if (category) params.category = category;
     dispatch(fetchInventory(params));
   }, [dispatch, page, stockTab, warehouseId, search, category]);
- 
+
   const categories = useMemo(
     () => [...new Set(products?.map((p) => p?.category)?.filter(Boolean))]?.sort(),
     [products]
   );
- 
+
   const donutData = stats ? [
     { name: 'In Stock', value: stats.distribution?.inStock || 0 },
     { name: 'Low Stock', value: stats.distribution?.lowStock || 0 },
@@ -458,9 +464,9 @@ const InventoryPage = () => {
   const forecastPct = stats?.totalSKUs
     ? Math.round((stats.fastMovingCount / stats.totalSKUs) * 100)
     : 0;
- 
+
   const switchTab = (id) => { setStockTab(id); setPage(1); };
- 
+
   const handleAdjustStock = async (form) => {
     setAdjusting(true);
     const res = await dispatch(adjustStock({ productId: form.productId, warehouseId: form.warehouseId, quantity: Number(form.quantity), type: form.type }));
@@ -470,17 +476,17 @@ const InventoryPage = () => {
       dispatch(fetchInventoryStats());
     }
   };
- 
+
   const handleEditStock = async (form) => {
     setEditSaving(true);
- 
+
     // Step 1 — update opening stock only when no serial numbers are being added.
     // When serials are present, Step 2 (editStockWithSerials) handles the qty via $inc.
     // Running both would double-count on success and prematurely increment on serial failure.
     if (form.openingStockChanged && form.serialNumbers.length === 0) {
       const res = await dispatch(updateOpeningStock({
-        productId:       form.productId,
-        warehouseId:     form.warehouseId,
+        productId: form.productId,
+        warehouseId: form.warehouseId,
         openingStockQty: form.openingStockQty,
       }));
       if (res.error) {
@@ -489,27 +495,27 @@ const InventoryPage = () => {
         return;
       }
     }
- 
+
     // Step 2 — register serial numbers if any
     if (form.serialNumbers.length > 0) {
       const res = await dispatch(editStockWithSerials({
-        productId:     form.productId,
-        warehouseId:   form.warehouseId,
+        productId: form.productId,
+        warehouseId: form.warehouseId,
         stockQuantity: form.serialNumbers.length,
         serialNumbers: form.serialNumbers,
-        productName:   form.productName,
+        productName: form.productName,
       }));
       if (res.error) {
         const payload = res.payload;
         toast.error(
           typeof payload === 'string' ? payload
-          : payload?.message || res.error.message || 'Failed to register serial numbers'
+            : payload?.message || res.error.message || 'Failed to register serial numbers'
         );
         setEditSaving(false);
         return false;
       }
     }
- 
+
     setEditSaving(false);
     setEditItem(null);
     const params = { page, limit: 20 };
@@ -520,7 +526,7 @@ const InventoryPage = () => {
     dispatch(fetchInventory(params));
     dispatch(fetchInventoryStats());
   };
- 
+
   const handleExport = () => {
     if (!list.length) return;
     const headers = ['Product', 'SKU', 'Category', 'Warehouse', 'Available', 'Allocated', 'Total', 'Unit Price', 'Status'];
@@ -546,7 +552,7 @@ const InventoryPage = () => {
     a.click();
     URL.revokeObjectURL(url);
   };
- 
+
   return (
     <div className="space-y-5">
       {showModal && (
@@ -565,17 +571,17 @@ const InventoryPage = () => {
           saving={editSaving}
         />
       )}
- 
+
       {/* ── Top section: donut + stat cards, equal height ── */}
       {/* FIX 1: items-stretch so the donut card grows to match the stat-cards grid height */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-stretch">
- 
+
         {/* Donut chart card — h-full makes it fill the row height */}
         <div className="card p-5 lg:col-span-2 flex flex-col items-center h-full">
           <p className="text-xs font-bold text-slate-600 tracking-widest uppercase mb-3">
             Inventory Distribution
           </p>
- 
+
           {totalItems === 0 ? (
             <div className="flex items-center justify-center flex-1 text-slate-400 text-sm">No data</div>
           ) : (
@@ -598,7 +604,7 @@ const InventoryPage = () => {
               </ResponsiveContainer>
             </div>
           )}
- 
+
           {/* Legend pushed to bottom */}
           <div className="flex items-center gap-5 mt-auto pt-3">
             {[
@@ -613,7 +619,7 @@ const InventoryPage = () => {
             ))}
           </div>
         </div>
- 
+
         {/* 6 stat cards */}
         <div className="lg:col-span-3 grid grid-cols-2 gap-3 content-start">
           <StatCard
@@ -668,12 +674,12 @@ const InventoryPage = () => {
           />
         </div>
       </div>
- 
+
       {/* ── Table card ── */}
       <div className="card overflow-hidden">
- 
+
         <div className="flex items-center px-4 py-3 gap-4 w-full border-b border-slate-100">
- 
+
           {/* Search */}
           <div className="relative flex-shrink-0">
             <Search
@@ -688,7 +694,7 @@ const InventoryPage = () => {
               className="input pl-8 py-2 text-sm w-64"
             />
           </div>
- 
+
           {/* Tabs */}
           <div className="flex items-center border-b border-slate-100 overflow-x-auto">
             {STOCK_TABS.map((tab) => (
@@ -704,10 +710,10 @@ const InventoryPage = () => {
               </button>
             ))}
           </div>
- 
+
           {/* Push right side */}
           <div className="ml-auto flex items-center gap-3">
- 
+
             {/* Category */}
             <div className="relative">
               <select
@@ -719,18 +725,18 @@ const InventoryPage = () => {
                 <option value="" disabled hidden>
                   Select Category
                 </option>
- 
+
                 {categories.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
- 
+
               {/* Dropdown icon */}
               <ChevronDown
                 size={12}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
               />
- 
+
               {/* Clear icon */}
               {category && (
                 <button
@@ -741,7 +747,7 @@ const InventoryPage = () => {
                 </button>
               )}
             </div>
- 
+
             {/* Export */}
             <button
               onClick={handleExport}
@@ -749,15 +755,15 @@ const InventoryPage = () => {
             >
               <Download size={13} /> Export
             </button>
- 
+
           </div>
         </div>
- 
+
         {/* Table header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
           <p className="text-sm font-semibold text-slate-800">Stock Details</p>
         </div>
- 
+
         {/* Table */}
         {loading ? (
           <div className="flex items-center justify-center h-48">
@@ -768,7 +774,7 @@ const InventoryPage = () => {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  {['PRODUCT / SKU', 'LOCATION', 'AVAILABLE', 'ALLOCATED', 'TOTAL', 'UNIT PRICE', 'STOCK STATUS', 'ACTION'].map((h) => (
+                  {['PRODUCT / SKU', /* 'LOCATION', */ 'AVAILABLE', 'ALLOCATED', 'TOTAL', 'UNIT PRICE', 'STOCK STATUS', 'ACTION'].map((h) => (
                     <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -778,7 +784,7 @@ const InventoryPage = () => {
               <tbody className="divide-y divide-slate-100">
                 {list.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-14 text-center text-slate-400">
+                    <td colSpan={7} className="px-4 py-14 text-center text-slate-400">
                       No inventory records found
                     </td>
                   </tr>
@@ -800,10 +806,10 @@ const InventoryPage = () => {
                           {prod.category ? ` | Category: ${prod.category}` : ''}
                         </p>
                       </td>
-                      <td className="px-4 py-3.5">
+                      {/* <td className="px-4 py-3.5">
                         <p className="text-slate-700 leading-snug">{wh.name || '—'}</p>
                         <p className="text-xs text-slate-400 mt-0.5">{loc || wh.code || ''}</p>
-                      </td>
+                      </td> */}
                       <td className="px-4 py-3.5">
                         <div
                           className="relative inline-block"
@@ -847,11 +853,11 @@ const InventoryPage = () => {
             </table>
           </div>
         )}
- 
+
         <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
     </div>
   );
 };
- 
+
 export default InventoryPage;

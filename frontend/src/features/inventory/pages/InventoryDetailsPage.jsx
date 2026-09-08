@@ -4,12 +4,12 @@ import { useSelector } from 'react-redux';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import api from '../../../services/api';
-
+ 
 const InventoryDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-
+ 
   const currentUser = useSelector((s) => s.auth.user);
   console.log(currentUser)
   const isSuperAdmin = Array.isArray(currentUser?.role)
@@ -19,24 +19,27 @@ console.log(isSuperAdmin)
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-
+ 
   // Soft-delete state
   const [selectedIds, setSelectedIds] = useState([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
-
+ 
+  // Serial number search
+  const [serialSearch, setSerialSearch] = useState('');
+ 
   useEffect(() => {
     let mounted = true;
     const fetchDetails = async () => {
       try {
         const inventoryData = location.state?.inventory;
         if (!inventoryData) throw new Error('No inventory data provided');
-
+ 
         const prodId = (inventoryData.productId && inventoryData.productId._id)
           ? inventoryData.productId._id
           : inventoryData.productId;
-
+ 
         let serials = [];
         if (prodId) {
           const response = await api.get(`/dispatched-units/All-Serials?productId=${prodId}`);
@@ -50,7 +53,7 @@ console.log(isSuperAdmin)
             status: u.status,
           }));
         }
-
+ 
         if (!mounted) return;
         setData({ ...inventoryData, serials });
         setError(null);
@@ -64,13 +67,13 @@ console.log(isSuperAdmin)
     fetchDetails();
     return () => { mounted = false; };
   }, [id, location.state]);
-
+ 
   const toggleSelect = (serialId) => {
     setSelectedIds((prev) =>
       prev.includes(serialId) ? prev.filter((x) => x !== serialId) : [...prev, serialId]
     );
   };
-
+ 
   const toggleSelectAll = () => {
     const eligible = (data?.serials || []).filter((s) => s.status === 'in_stock' && s._id);
     if (selectedIds.length === eligible.length) {
@@ -79,7 +82,7 @@ console.log(isSuperAdmin)
       setSelectedIds(eligible.map((s) => s._id));
     }
   };
-
+ 
   const handleSoftDelete = async () => {
     if (selectedIds.length === 0) return;
     setDeleteLoading(true);
@@ -104,11 +107,11 @@ console.log(isSuperAdmin)
       setDeleteLoading(false);
     }
   };
-
+ 
   if (loading) return <div className="p-6">Loading...</div>;
   if (error) return <div className="p-6 text-red-600">{error}</div>;
   if (!data) return <div className="p-6">No data found</div>;
-
+ 
   const prod = data.productId || {};
   const availableQty = Math.max(0, data.currentStockQty || 0);
   const stockValue = prod.basePrice ? prod.basePrice * availableQty : null;
@@ -117,18 +120,21 @@ console.log(isSuperAdmin)
   const purchasePrice = prod.purchasePrice ?? prod.basePrice ?? 0;
   const gstRate = prod.taxRate != null ? `${prod.taxRate}%` : '—';
   const showOnline = prod.showOnline ? 'Yes' : 'No';
-
+ 
   const formatValue = (value) => {
     if (value == null || value === '') return '—';
     if (typeof value === 'number') return `₹${value.toLocaleString('en-IN')}`;
     return value;
   };
-
+ 
   const formatDateOrDash = (value) => (value ? format(new Date(value), 'dd MMM yyyy') : '—');
-
-  const eligibleSerials = (data.serials || []).filter((s) => s.status === 'in_stock' && s._id);
+ 
+  const filteredSerials = (data.serials || []).filter((s) =>
+    !serialSearch || s.serialNumber?.toLowerCase().includes(serialSearch.toLowerCase())
+  );
+  const eligibleSerials = filteredSerials.filter((s) => s.status === 'in_stock' && s._id);
   const allSelected = eligibleSerials.length > 0 && selectedIds.length === eligibleSerials.length;
-
+ 
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -139,7 +145,7 @@ console.log(isSuperAdmin)
         </div>
         <div />
       </div>
-
+ 
       <div className="grid gap-4 lg:grid-cols-2 mb-6">
         {/* General Details */}
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
@@ -199,7 +205,7 @@ console.log(isSuperAdmin)
             </div>
           </div>
         </div>
-
+ 
         {/* Pricing Details */}
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
@@ -243,12 +249,21 @@ console.log(isSuperAdmin)
           </div>
         </div>
       </div>
-
+ 
       {/* Serial Numbers */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
           <p className="text-medium font-medium text-slate-700 tracking-[0.2em]">Serial Numbers</p>
-
+ 
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="text"
+              placeholder="Search serial number..."
+              value={serialSearch}
+              onChange={(e) => setSerialSearch(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent w-56"
+            />
+ 
           {isSuperAdmin && selectedIds.length > 0 && (
             <button
               onClick={() => setShowDeleteModal(true)}
@@ -260,8 +275,9 @@ console.log(isSuperAdmin)
               Delete Selected ({selectedIds.length})
             </button>
           )}
+          </div>
         </div>
-
+ 
         {data.serials && data.serials.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm text-left">
@@ -285,7 +301,13 @@ console.log(isSuperAdmin)
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.serials.map((serial, index) => {
+                {filteredSerials.length === 0 ? (
+                  <tr>
+                    <td colSpan={isSuperAdmin ? 5 : 4} className="px-4 py-8 text-center text-sm text-slate-400">
+                      No serials match your search
+                    </td>
+                  </tr>
+                ) : filteredSerials.map((serial, index) => {
                   const isEligible = serial.status === 'in_stock' && serial._id;
                   const isChecked = selectedIds.includes(serial._id);
                   return (
@@ -336,7 +358,7 @@ console.log(isSuperAdmin)
           <div className="py-8 text-center text-sm text-slate-500">No serials registered</div>
         )}
       </div>
-
+ 
       {/* Soft Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -352,11 +374,11 @@ console.log(isSuperAdmin)
                 <p className="text-sm text-slate-500">This action will soft-delete {selectedIds.length} serial number(s)</p>
               </div>
             </div>
-
+ 
             <div className="bg-slate-50 rounded-lg p-3 mb-4 text-sm text-slate-600">
               Stock will be automatically reduced by <strong>{selectedIds.length}</strong> unit(s). Deleted serials can be restored later.
             </div>
-
+ 
             <div className="mb-5">
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Reason <span className="text-slate-400 font-normal">(optional)</span>
@@ -369,7 +391,7 @@ console.log(isSuperAdmin)
                 className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
               />
             </div>
-
+ 
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => { setShowDeleteModal(false); setDeleteReason(''); }}
@@ -398,5 +420,5 @@ console.log(isSuperAdmin)
     </div>
   );
 };
-
+ 
 export default InventoryDetailsPage;

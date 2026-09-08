@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchFinanceStats, fetchRevenueSummary, fetchPaymentReport } from '../financeSlice';
 import {
@@ -6,15 +6,29 @@ import {
 } from 'recharts';
 import {
   Download, Calendar, CheckCircle, Clock, AlertCircle,
-  MoreVertical, TrendingUp,
+  MoreVertical, TrendingUp, ChevronDown,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, subDays, subMonths, subYears } from 'date-fns';
 import api from '../../../services/api';
-
+ 
+const PERIODS = [
+  { label: 'Last 30 Days', value: '30d' },
+  { label: 'Last 90 Days', value: '90d' },
+  { label: 'Last Year',    value: '1y'  },
+];
+ 
+const getPeriodDates = (value) => {
+  const to   = new Date();
+  const from = value === '90d' ? subDays(to, 90)
+             : value === '1y'  ? subYears(to, 1)
+             : subDays(to, 30);
+  return { startDate: from.toISOString(), endDate: to.toISOString() };
+};
+ 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt  = (v) => `₹${(v || 0).toLocaleString('en-IN')}`;
 const fmtL = (v) => `₹${((v || 0) / 100000).toFixed(2)}L`;
-
+ 
 // ─── Chart tooltip ────────────────────────────────────────────────────────────
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -29,42 +43,98 @@ const ChartTooltip = ({ active, payload, label }) => {
     </div>
   );
 };
-
+ 
 // ─── Main page ────────────────────────────────────────────────────────────────
 const FinancePage = () => {
   const dispatch = useDispatch();
   const { stats, revenue, paymentReport } = useSelector((s) => s.finance);
-
+ 
   const [chartView,    setChartView]    = useState('month');
   const [transactions, setTransactions] = useState([]);
   const [txnLoading,   setTxnLoading]   = useState(false);
   const [txnPage,      setTxnPage]      = useState(1);
   const [txnTotal,     setTxnTotal]     = useState(0);
+  const [period,       setPeriod]       = useState('30d');
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false);
+  const [exporting,    setExporting]    = useState(false);
+  const periodMenuRef = useRef(null);
   const TXN_LIMIT = 10;
-
+ 
+  const periodLabel = PERIODS.find((p) => p.value === period)?.label || 'Last 30 Days';
+ 
+  // Close dropdown on outside click
   useEffect(() => {
+    const handler = (e) => {
+      if (periodMenuRef.current && !periodMenuRef.current.contains(e.target)) {
+        setShowPeriodMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+ 
+  // Re-fetch everything when period changes
+  useEffect(() => {
+    const { startDate, endDate } = getPeriodDates(period);
     dispatch(fetchFinanceStats());
-    dispatch(fetchRevenueSummary({ groupBy: 'month' }));
-    dispatch(fetchPaymentReport());
-  }, [dispatch]);
-
-  // Fetch recent payments as transactions (payments endpoint is the source of truth)
+    dispatch(fetchRevenueSummary({ groupBy: 'month', startDate, endDate }));
+    dispatch(fetchPaymentReport({ startDate, endDate }));
+    setTxnPage(1);
+  }, [dispatch, period]);
+ 
+  // Fetch transactions for current page + period
   useEffect(() => {
+    const { startDate, endDate } = getPeriodDates(period);
     setTxnLoading(true);
-    api.get('/payments', { params: { limit: TXN_LIMIT, page: txnPage } })
+    api.get('/payments', { params: { limit: TXN_LIMIT, page: txnPage, startDate, endDate } })
       .then((res) => {
         setTransactions(res.data.data || []);
         setTxnTotal(res.data.pagination?.total || 0);
       })
       .catch(() => setTransactions([]))
       .finally(() => setTxnLoading(false));
-  }, [txnPage]);
-
+  }, [txnPage, period]);
+ 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const { startDate, endDate } = getPeriodDates(period);
+      const res = await api.get('/payments', { params: { limit: 1000, page: 1, startDate, endDate } });
+      const rows = res.data.data || [];
+ 
+      const headers = ['Transaction ID', 'Date', 'Dealer', 'Invoice', 'Method', 'Amount', 'Status'];
+      const csvRows = [
+        headers.join(','),
+        ...rows.map((t) => [
+          t.paymentNumber || t._id?.slice(-8) || '',
+          t.createdAt ? format(new Date(t.createdAt), 'dd MMM yyyy') : '',
+          `"${t.dealerId?.businessName || ''}"`,
+          t.invoiceId?.invoiceNumber || '',
+          t.method || '',
+          t.amount || 0,
+          t.status || '',
+        ].join(',')),
+      ];
+ 
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `finance-${period}-${format(new Date(), 'yyyyMMdd')}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silent
+    } finally {
+      setExporting(false);
+    }
+  };
+ 
   // Derive payment status rows from available data
   const paidTotal   = paymentReport.reduce((a, r) => a + (r.total || 0), 0);
   const paidCount   = paymentReport.reduce((a, r) => a + (r.count || 0), 0);
   const outstanding = Math.max((stats?.totalRevenue || 0) - paidTotal, 0);
-
+ 
   const paymentRows = [
     {
       label: 'Paid',
@@ -94,26 +164,51 @@ const FinancePage = () => {
       amountCls: 'text-red-600',
     },
   ];
-
+ 
   return (
     <div className="space-y-5">
-
+ 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Finance Overview</h1>
         <div className="flex items-center gap-2">
-          <button className="btn-secondary flex items-center gap-2 text-sm py-2 px-3">
-            <Calendar size={14} /> Last 30 Days
-          </button>
-          <button className="btn-secondary flex items-center gap-2 text-sm py-2 px-3">
-            <Download size={14} /> Export
+          {/* Period filter dropdown */}
+          <div className="relative" ref={periodMenuRef}>
+            <button
+              onClick={() => setShowPeriodMenu((v) => !v)}
+              className="btn-secondary flex items-center gap-2 text-sm py-2 px-3"
+            >
+              <Calendar size={14} /> {periodLabel} <ChevronDown size={12} />
+            </button>
+            {showPeriodMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 min-w-[150px]">
+                {PERIODS.map((p) => (
+                  <button
+                    key={p.value}
+                    onClick={() => { setPeriod(p.value); setShowPeriodMenu(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 first:rounded-t-xl last:rounded-b-xl ${period === p.value ? 'font-semibold text-primary-600' : 'text-slate-700'}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+ 
+          {/* Export CSV */}
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="btn-secondary flex items-center gap-2 text-sm py-2 px-3 disabled:opacity-50"
+          >
+            <Download size={14} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
         </div>
       </div>
-
+ 
       {/* ── KPI cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-
+ 
         {/* 1 – Total Revenue (highlighted card) */}
         <div className="bg-primary-600 rounded-2xl p-5 text-white shadow-sm">
           <p className="text-[10px] font-bold uppercase tracking-widest text-primary-200 mb-2">
@@ -127,7 +222,7 @@ const FinancePage = () => {
             <span>+14.2% vs last month</span>
           </div>
         </div>
-
+ 
         {/* 2 – Outstanding */}
         <div className="card p-5">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
@@ -141,7 +236,7 @@ const FinancePage = () => {
             <span>+8.3% Pending</span>
           </div>
         </div>
-
+ 
         {/* 3 – Paid This Month */}
         <div className="card p-5">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
@@ -155,7 +250,7 @@ const FinancePage = () => {
             <span>+11.8% vs last month</span>
           </div>
         </div>
-
+ 
         {/* 4 – Credit Available */}
         <div className="card p-5">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
@@ -167,10 +262,10 @@ const FinancePage = () => {
           <p className="text-xs text-slate-400">Limit unchanged</p>
         </div>
       </div>
-
+ 
       {/* ── Cash Flow + Payment Status ── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-
+ 
         {/* Cash Flow chart */}
         <div className="card p-5 lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
@@ -213,7 +308,7 @@ const FinancePage = () => {
             </BarChart>
           </ResponsiveContainer>
         </div>
-
+ 
         {/* Payment Status */}
         <div className="card p-5 lg:col-span-2">
           <div className="mb-4">
@@ -239,7 +334,7 @@ const FinancePage = () => {
           </div>
         </div>
       </div>
-
+ 
       {/* ── Recent Transactions ── */}
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -248,7 +343,7 @@ const FinancePage = () => {
             View All
           </button>
         </div>
-
+ 
         {txnLoading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
@@ -279,19 +374,19 @@ const FinancePage = () => {
                   const statusKey = (txn.status || '').toLowerCase();
                   return (
                     <tr key={txn._id} className="hover:bg-slate-50 transition-colors">
-
+ 
                       {/* Transaction ID */}
                       <td className="px-5 py-3.5">
                         <span className="font-mono text-xs font-semibold text-slate-700">
                           {txn.paymentNumber || `#${txn._id?.slice(-8)}`}
                         </span>
                       </td>
-
+ 
                       {/* Date */}
                       <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
                         {txn.createdAt ? format(new Date(txn.createdAt), 'dd MMM yyyy') : '—'}
                       </td>
-
+ 
                       {/* Description */}
                       <td className="px-5 py-3.5">
                         <p className="font-medium text-slate-800">{txn.dealerId?.businessName || '—'}</p>
@@ -299,19 +394,19 @@ const FinancePage = () => {
                           <p className="text-xs text-slate-400 mt-0.5">Invoice: {txn.invoiceId.invoiceNumber}</p>
                         )}
                       </td>
-
+ 
                       {/* Type (method) */}
                       <td className="px-5 py-3.5">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize bg-blue-100 text-blue-700">
                           {txn.method || 'payment'}
                         </span>
                       </td>
-
+ 
                       {/* Amount */}
                       <td className="px-5 py-3.5 font-semibold text-slate-800 whitespace-nowrap">
                         {fmt(txn.amount)}
                       </td>
-
+ 
                       {/* Status */}
                       <td className="px-5 py-3.5">
                         <span className={`text-xs font-semibold ${
@@ -325,7 +420,7 @@ const FinancePage = () => {
                             : '—'}
                         </span>
                       </td>
-
+ 
                       {/* Actions */}
                       <td className="px-5 py-3.5">
                         <button className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
@@ -339,7 +434,7 @@ const FinancePage = () => {
             </table>
           </div>
         )}
-
+ 
         {/* Pagination footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
           <p className="text-xs text-slate-500">
@@ -364,9 +459,9 @@ const FinancePage = () => {
           </div>
         </div>
       </div>
-
+ 
     </div>
   );
 };
-
+ 
 export default FinancePage;
