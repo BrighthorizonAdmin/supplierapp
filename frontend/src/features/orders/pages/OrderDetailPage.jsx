@@ -635,28 +635,27 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
   return (
     <div>
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-start gap-3">
-          <button onClick={() => navigate('/orders')} className="p-2 hover:bg-slate-100 rounded-lg mt-0.5">
-            <ArrowLeft size={20} />
-          </button>
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-slate-900">{order.orderNumber}</h1>
-            {order.dealerOrderNumber && (
-              <p className="text-xs text-slate-400 mt-0.5">
-                Dealer Order: <span className="font-medium text-slate-600">{order.dealerOrderNumber}</span>
-              </p>
-            )}
-            <p className="text-sm text-slate-500 mt-0.5">
-              Placed on {format(new Date(order.createdAt), 'MMM dd, yyyy')}
+      <div className="grid grid-cols-[1fr_auto_1.5fr] items-start gap-3 mb-6">
+        <button onClick={() => navigate('/orders')} className="justify-self-start p-2 hover:bg-slate-100 rounded-lg mt-0.5">
+          <ArrowLeft size={20} />
+        </button>
+
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-slate-900">{order.orderNumber}</h1>
+          {order.dealerOrderNumber && (
+            <p className="text-xs text-slate-400 mt-0.5">
+              Dealer Order: <span className="font-medium text-slate-600">{order.dealerOrderNumber}</span>
             </p>
-            <span className={`inline-flex items-center mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold capitalize ${statusColor}`}>
-              {order.status?.replace(/_/g, ' ')}
-            </span>
-          </div>
+          )}
+          <p className="text-sm text-slate-500 mt-0.5">
+            Placed on {format(new Date(order.createdAt), 'MMM dd, yyyy')}
+          </p>
+          <span className={`inline-flex items-center mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold capitalize ${statusColor}`}>
+            {order.status?.replace(/_/g, ' ')}
+          </span>
         </div>
 
-        <div className="flex gap-2 items-center">
+        <div className="justify-self-end flex gap-2 items-center">
           {['draft', 'pending'].includes(order.status) && (
             <>
               <button onClick={() => dispatch(confirmOrder(id))} disabled={loading} className="btn-primary flex items-center gap-1.5 text-sm">
