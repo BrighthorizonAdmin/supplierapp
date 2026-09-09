@@ -187,98 +187,178 @@ const updateRetailOrderStatus = async (orderId, status, userId) => {
   return order;
 };
 
-const getRetailAnalytics = async () => {
+const getRetailAnalytics = async ({ startDate, endDate } = {}) => {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // ── Month KPIs ──
-  const [monthAgg = {}] = await RetailOrder.aggregate([
-    { $match: { createdAt: { $gte: monthStart } } },
-    { $group: { _id: null, revenue: { $sum: '$totalAmount' }, orders: { $sum: 1 } } },
-  ]);
-  const monthRevenue  = monthAgg.revenue || 0;
-  const monthOrders   = monthAgg.orders  || 0;
-  const avgOrderValue = monthOrders > 0 ? Math.round(monthRevenue / monthOrders) : 0;
+  const periodStart = startDate ? new Date(startDate) : monthStart;
+  const periodEnd   = endDate   ? new Date(endDate)   : now;
 
-  // ── Delivery rate (all-time) ──
-  const [deliveryAgg = {}] = await RetailOrder.aggregate([
-    { $group: { _id: null, total: { $sum: 1 }, delivered: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } } } },
-  ]);
-  const deliveryRate = deliveryAgg.total > 0
-    ? parseFloat(((deliveryAgg.delivered / deliveryAgg.total) * 100).toFixed(1))
-    : 0;
-
-  // ── Monthly retail revenue trend (last 6 months) ──
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
   sixMonthsAgo.setDate(1);
   sixMonthsAgo.setHours(0, 0, 0, 0);
 
-  const retailTrend = await RetailOrder.aggregate([
-    { $match: { createdAt: { $gte: sixMonthsAgo } } },
-    {
-      $group: {
-        _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
-        retail: { $sum: '$totalAmount' },
+  // ── Run all aggregations in parallel (native RetailOrders + dealer-synced Invoices) ──
+  const [
+    nativeKpi,
+    invoiceKpi,
+    nativeDelivery,
+    invoiceDelivery,
+    nativeTrend,
+    invoiceTrend,
+    nativeChannels,
+    invoiceChannels,
+    nativeTopDealers,
+    invoiceTopDealers,
+    nativeCustomers,
+    invoiceCustomers,
+  ] = await Promise.all([
+    // KPI: native orders in period
+    RetailOrder.aggregate([
+      { $match: { createdAt: { $gte: periodStart, $lte: periodEnd } } },
+      { $group: { _id: null, revenue: { $sum: '$totalAmount' }, orders: { $sum: 1 } } },
+    ]),
+    // KPI: synced invoices in period (use invoiceDate, fall back to createdAt)
+    Invoice.aggregate([
+      { $match: { invoiceType: 'retail', dbeInvoiceId: { $ne: null }, invoiceDate: { $gte: periodStart, $lte: periodEnd } } },
+      { $group: { _id: null, revenue: { $sum: '$totalAmount' }, orders: { $sum: 1 } } },
+    ]),
+    // Delivery: native all-time
+    RetailOrder.aggregate([
+      { $group: { _id: null, total: { $sum: 1 }, delivered: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } } } },
+    ]),
+    // Delivery: synced invoices are always "delivered"
+    Invoice.aggregate([
+      { $match: { invoiceType: 'retail', dbeInvoiceId: { $ne: null } } },
+      { $group: { _id: null, total: { $sum: 1 } } },
+    ]),
+    // Trend: native last 6 months
+    RetailOrder.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      { $group: { _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } }, retail: { $sum: '$totalAmount' } } },
+      { $sort: { '_id.year': 1, '_id.month': 1 } },
+    ]),
+    // Trend: synced invoices last 6 months
+    Invoice.aggregate([
+      { $match: { invoiceType: 'retail', dbeInvoiceId: { $ne: null }, invoiceDate: { $gte: sixMonthsAgo } } },
+      { $group: { _id: { year: { $year: '$invoiceDate' }, month: { $month: '$invoiceDate' } }, retail: { $sum: '$totalAmount' } } },
+      { $sort: { '_id.year': 1, '_id.month': 1 } },
+    ]),
+    // Channels: native
+    RetailOrder.aggregate([
+      { $group: { _id: '$paymentMethod', amount: { $sum: '$totalAmount' } } },
+    ]),
+    // Channels: synced invoices (paymentMode field)
+    Invoice.aggregate([
+      { $match: { invoiceType: 'retail', dbeInvoiceId: { $ne: null } } },
+      { $group: { _id: '$paymentMode', amount: { $sum: '$totalAmount' } } },
+    ]),
+    // Top dealers: native
+    RetailOrder.aggregate([
+      { $group: { _id: '$dealerId', revenue: { $sum: '$totalAmount' }, orders: { $sum: 1 } } },
+      { $lookup: { from: 'dealers', localField: '_id', foreignField: '_id', as: 'dealer' } },
+      { $unwind: { path: '$dealer', preserveNullAndEmptyArrays: true } },
+    ]),
+    // Top dealers: synced invoices
+    Invoice.aggregate([
+      { $match: { invoiceType: 'retail', dbeInvoiceId: { $ne: null } } },
+      { $group: { _id: '$dealerId', revenue: { $sum: '$totalAmount' }, orders: { $sum: 1 } } },
+      { $lookup: { from: 'dealers', localField: '_id', foreignField: '_id', as: 'dealer' } },
+      { $unwind: { path: '$dealer', preserveNullAndEmptyArrays: true } },
+    ]),
+    // Customers: native
+    RetailOrder.aggregate([
+      { $group: { _id: '$customerPhone', orderCount: { $sum: 1 } } },
+    ]),
+    // Customers: synced invoices (phone embedded in notes: "Name | Phone")
+    Invoice.aggregate([
+      { $match: { invoiceType: 'retail', dbeInvoiceId: { $ne: null } } },
+      {
+        $addFields: {
+          _phone: {
+            $trim: { input: { $arrayElemAt: [{ $split: [{ $arrayElemAt: [{ $split: ['$notes', ' | '] }, 1] }, ' '] }, 0] } },
+          },
+        },
       },
-    },
-    { $sort: { '_id.year': 1, '_id.month': 1 } },
+      { $group: { _id: '$_phone', orderCount: { $sum: 1 } } },
+    ]),
   ]);
 
-  const trend = retailTrend.map((r) => ({
-    date: `${r._id.year}-${String(r._id.month).padStart(2, '0')}`,
-    retail: r.retail,
-  }));
+  // ── Merge KPIs ──
+  const totalRevenue = (nativeKpi[0]?.revenue || 0) + (invoiceKpi[0]?.revenue || 0);
+  const totalOrders  = (nativeKpi[0]?.orders  || 0) + (invoiceKpi[0]?.orders  || 0);
+  const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
 
-  // ── Payment method / channel breakdown ──
-  const channelAgg = await RetailOrder.aggregate([
-    { $group: { _id: '$paymentMethod', amount: { $sum: '$totalAmount' } } },
-    { $sort: { amount: -1 } },
-  ]);
+  // ── Delivery rate ──
+  const nativeDel = nativeDelivery[0] || {};
+  const syncedDelTotal = invoiceDelivery[0]?.total || 0;
+  const allTotal     = (nativeDel.total || 0) + syncedDelTotal;
+  const allDelivered = (nativeDel.delivered || 0) + syncedDelTotal; // synced are always delivered
+  const deliveryRate = allTotal > 0
+    ? parseFloat(((allDelivered / allTotal) * 100).toFixed(1))
+    : 0;
+
+  // ── Merge trend (sum by year-month key) ──
+  const trendMap = {};
+  const addToTrend = (rows) => rows.forEach((r) => {
+    const key = `${r._id.year}-${String(r._id.month).padStart(2, '0')}`;
+    trendMap[key] = (trendMap[key] || 0) + r.retail;
+  });
+  addToTrend(nativeTrend);
+  addToTrend(invoiceTrend);
+  const trend = Object.entries(trendMap)
+    .map(([date, retail]) => ({ date, retail }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // ── Merge channels ──
   const CHANNEL_LABELS = {
-    cash: 'Walk-in Store',
-    card: 'Online Store',
-    upi: 'Online Store',
-    credit: 'Market Place',
-    'bank-transfer': 'Net Banking',
+    cash: 'Walk-in Store', card: 'Online Store', upi: 'Online Store',
+    credit: 'Market Place', 'bank-transfer': 'Net Banking',
   };
-  // Merge channels that share the same label
   const channelMap = {};
-  channelAgg.forEach(({ _id, amount }) => {
-    const label = CHANNEL_LABELS[_id] || _id;
+  [...nativeChannels, ...invoiceChannels].forEach(({ _id, amount }) => {
+    const label = CHANNEL_LABELS[(_id || '').toLowerCase()] || (_id || 'Other');
     channelMap[label] = (channelMap[label] || 0) + amount;
   });
   const channels = Object.entries(channelMap)
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount);
 
-  // ── Top dealers by retail revenue ──
-  const topDealersAgg = await RetailOrder.aggregate([
-    { $group: { _id: '$dealerId', revenue: { $sum: '$totalAmount' }, orders: { $sum: 1 } } },
-    { $sort: { revenue: -1 } },
-    { $limit: 8 },
-    { $lookup: { from: 'dealers', localField: '_id', foreignField: '_id', as: 'dealer' } },
-    { $unwind: { path: '$dealer', preserveNullAndEmptyArrays: true } },
-  ]);
+  // ── Merge top dealers ──
+  const dealerMap = {};
+  [...nativeTopDealers, ...invoiceTopDealers].forEach((d) => {
+    const key = String(d._id);
+    if (!dealerMap[key]) {
+      dealerMap[key] = { dealer: d.dealer, revenue: 0, orders: 0 };
+    }
+    dealerMap[key].revenue += d.revenue;
+    dealerMap[key].orders  += d.orders;
+  });
   const STATUS_MAP = { active: 'Active', pending: 'Pending', suspended: 'Review', rejected: 'Review' };
-  const topDealers = topDealersAgg.map((d, i) => ({
-    rank:    String(i + 1).padStart(2, '0'),
-    name:    d.dealer?.businessName || 'Unknown',
-    orders:  d.orders,
-    revenue: d.revenue,
-    status:  STATUS_MAP[d.dealer?.status] || 'Active',
-  }));
+  const topDealers = Object.values(dealerMap)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 8)
+    .map((d, i) => ({
+      rank:    String(i + 1).padStart(2, '0'),
+      name:    d.dealer?.businessName || 'Unknown',
+      orders:  d.orders,
+      revenue: d.revenue,
+      status:  STATUS_MAP[d.dealer?.status] || 'Active',
+    }));
 
-  // ── Customer insights ──
-  const customerAgg = await RetailOrder.aggregate([
-    { $group: { _id: '$customerPhone', orderCount: { $sum: 1 } } },
-  ]);
-  const totalCustomers  = customerAgg.length;
-  const repeatBuyers    = customerAgg.filter((c) => c.orderCount > 1).length;
+  // ── Merge customer insights ──
+  const customerMap = {};
+  [...nativeCustomers, ...invoiceCustomers].forEach(({ _id, orderCount }) => {
+    if (_id) customerMap[_id] = (customerMap[_id] || 0) + orderCount;
+  });
+  const allCustomers = Object.entries(customerMap);
+  const totalCustomers  = allCustomers.length;
+  const repeatBuyers    = allCustomers.filter(([, c]) => c > 1).length;
   const repeatBuyerPct  = totalCustomers > 0 ? Math.round((repeatBuyers / totalCustomers) * 100) : 0;
 
   return {
-    kpis: { monthRevenue, monthOrders, avgOrderValue, deliveryRate },
+    kpis: { monthRevenue: totalRevenue, monthOrders: totalOrders, avgOrderValue, deliveryRate },
     trend,
     channels,
     topDealers,

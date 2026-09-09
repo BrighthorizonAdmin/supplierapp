@@ -43,9 +43,9 @@ export const fetchAnalyticsDeliveredOrders = createAsyncThunk('audit/analyticsDe
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
-export const fetchRetailAnalytics = createAsyncThunk('audit/retailAnalytics', async (_, { rejectWithValue }) => {
+export const fetchRetailAnalytics = createAsyncThunk('audit/retailAnalytics', async (params, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/retail-orders/analytics');
+    const { data } = await api.get('/retail-orders/analytics', { params });
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
