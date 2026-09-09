@@ -8,9 +8,9 @@ export const fetchAuditLogs = createAsyncThunk('audit/fetchAll', async (params, 
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
 
-export const fetchAnalyticsKPIs = createAsyncThunk('audit/analyticsKPIs', async (_, { rejectWithValue }) => {
+export const fetchAnalyticsKPIs = createAsyncThunk('audit/analyticsKPIs', async (params, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/dashboard/kpis');
+    const { data } = await api.get('/dashboard/kpis', { params });
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
