@@ -3,7 +3,8 @@ const asyncHandler = require('../../utils/asyncHandler');
 const { success } = require('../../utils/response');
 
 const getKPIs = asyncHandler(async (req, res) => {
-  const kpis = await dashboardService.getKPIs();
+  const { startDate, endDate } = req.query;
+  const kpis = await dashboardService.getKPIs({ startDate, endDate });
   return success(res, kpis, 'Dashboard KPIs fetched');
 });
 
