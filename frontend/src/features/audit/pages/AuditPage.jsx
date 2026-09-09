@@ -101,6 +101,7 @@ const AuditPage = () => {
     const mapped = period === '1y' ? 'year' : 'month';
     dispatch(setChartPeriod(mapped));
     dispatch(fetchAnalyticsKPIs(getPeriodDates(period)));
+    dispatch(fetchRetailAnalytics(getPeriodDates(period)));
     dispatch(fetchAnalyticsDeliveredOrders());
   }, [dispatch, period]);
 
@@ -142,10 +143,10 @@ const AuditPage = () => {
   };
 
   useEffect(() => {
-    if (activeTab === 'retail' && !retailAnalytics) {
-      dispatch(fetchRetailAnalytics());
+    if (activeTab === 'retail') {
+      dispatch(fetchRetailAnalytics(getPeriodDates(period)));
     }
-  }, [dispatch, activeTab, retailAnalytics]);
+  }, [dispatch, activeTab]);
 
   useEffect(() => {
     dispatch(fetchAnalyticsSalesChart(chartPeriod));
