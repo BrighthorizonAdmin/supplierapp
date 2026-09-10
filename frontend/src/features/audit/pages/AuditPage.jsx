@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
@@ -49,9 +50,15 @@ const getStockStatus = (item) => {
   return 'In-Stock';
 };
 
-const toMonthLabel = (dateStr = '') => {
-  const month = parseInt(dateStr.split('-')[1], 10);
-  return MONTH_LABELS[month - 1] || dateStr;
+const toChartLabel = (dateStr = '', period = 'year') => {
+  if (period === 'year') {
+    // dateStr is "2024-09" — show month name
+    const month = parseInt(dateStr.split('-')[1], 10);
+    return MONTH_LABELS[month - 1] || dateStr;
+  }
+  // month/week: dateStr is "2024-09-01" — show day number
+  const parts = dateStr.split('-');
+  return parts[2] ? parseInt(parts[2], 10).toString() : dateStr;
 };
 
 const STORE_STATUS_CLS = {
@@ -66,6 +73,7 @@ const CHANNEL_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ef4444'];
 // ── Component ────────────────────────────────────────────────────────────────
 const AuditPage = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const {
     analyticsKPIs,
     analyticsSalesChart,
@@ -165,11 +173,11 @@ const AuditPage = () => {
 
   const chartData = useMemo(() =>
     (analyticsSalesChart || []).map((item) => ({
-      month:   toMonthLabel(item.date),
+      month:   toChartLabel(item.date, chartPeriod),
       revenue: item.revenue,
       orders:  item.orders,
     })),
-  [analyticsSalesChart]);
+  [analyticsSalesChart, chartPeriod]);
 
   const salesMix = invStats ? [
     { name: 'In-Stock',     value: invStats.inStockCount,     color: '#22c55e' },
@@ -216,11 +224,11 @@ const AuditPage = () => {
       (retailAnalytics?.trend || []).map((t) => [t.date, t.retail])
     );
     return (analyticsSalesChart || []).map((item) => ({
-      month:  toMonthLabel(item.date),
+      month:  toChartLabel(item.date, chartPeriod),
       dealer: item.revenue,
       retail: retailTrendMap[item.date] || 0,
     }));
-  }, [analyticsSalesChart, retailAnalytics]);
+  }, [analyticsSalesChart, retailAnalytics, chartPeriod]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -403,7 +411,7 @@ const AuditPage = () => {
                   <p className="font-semibold text-slate-800">Product Inventory</p>
                   <p className="text-xs text-slate-400">Recent inventory levels by product</p>
                 </div>
-                <button className="flex items-center gap-1 text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50">
+                <button onClick={() => navigate('/inventory')} className="flex items-center gap-1 text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50">
                   View <ChevronDown size={11} />
                 </button>
               </div>

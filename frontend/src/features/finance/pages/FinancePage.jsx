@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { fetchFinanceStats, fetchRevenueSummary, fetchPaymentReport } from '../financeSlice';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -47,6 +48,7 @@ const ChartTooltip = ({ active, payload, label }) => {
 // ─── Main page ────────────────────────────────────────────────────────────────
 const FinancePage = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { stats, revenue, paymentReport } = useSelector((s) => s.finance);
  
   const [chartView,    setChartView]    = useState('month');
@@ -73,14 +75,14 @@ const FinancePage = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
  
-  // Re-fetch everything when period changes
+  // Re-fetch everything when period or chart view changes
   useEffect(() => {
     const { startDate, endDate } = getPeriodDates(period);
-    dispatch(fetchFinanceStats());
-    dispatch(fetchRevenueSummary({ groupBy: 'month', startDate, endDate }));
+    dispatch(fetchFinanceStats({ startDate, endDate }));
+    dispatch(fetchRevenueSummary({ groupBy: chartView, startDate, endDate }));
     dispatch(fetchPaymentReport({ startDate, endDate }));
     setTxnPage(1);
-  }, [dispatch, period]);
+  }, [dispatch, period, chartView]);
  
   // Fetch transactions for current page + period
   useEffect(() => {
@@ -339,7 +341,7 @@ const FinancePage = () => {
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <h2 className="font-semibold text-slate-900">Recent Transactions</h2>
-          <button className="text-sm font-medium text-primary-600 hover:underline">
+          <button className="text-sm font-medium text-primary-600 hover:underline" onClick={() => navigate('/payments')}>
             View All
           </button>
         </div>
@@ -353,7 +355,7 @@ const FinancePage = () => {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  {['Transaction ID','Date','Description','Type','Amount','Status','Actions'].map((h) => (
+                  {['Transaction ID','Date',/* 'Description', */'Type','Amount','Status'/* ,'Actions' */].map((h) => (
                     <th
                       key={h}
                       className="px-5 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap"
@@ -388,12 +390,12 @@ const FinancePage = () => {
                       </td>
  
                       {/* Description */}
-                      <td className="px-5 py-3.5">
+                      {/* <td className="px-5 py-3.5">
                         <p className="font-medium text-slate-800">{txn.dealerId?.businessName || '—'}</p>
                         {txn.invoiceId?.invoiceNumber && (
                           <p className="text-xs text-slate-400 mt-0.5">Invoice: {txn.invoiceId.invoiceNumber}</p>
                         )}
-                      </td>
+                      </td> */}
  
                       {/* Type (method) */}
                       <td className="px-5 py-3.5">
@@ -422,11 +424,11 @@ const FinancePage = () => {
                       </td>
  
                       {/* Actions */}
-                      <td className="px-5 py-3.5">
+                      {/* <td className="px-5 py-3.5">
                         <button className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
                           <MoreVertical size={15} />
                         </button>
-                      </td>
+                      </td> */}
                     </tr>
                   );
                 })}
