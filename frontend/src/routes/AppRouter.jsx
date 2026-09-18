@@ -55,6 +55,7 @@ import DeliveryChallanFormPage from '../features/deliveryChallan/pages/DeliveryC
 import DeliveryChallanPrintPage from '../features/deliveryChallan/pages/DeliveryChallanPrintPage';
 import AddNewDealerPage from '../features/dealer/pages/AddNewDealerPage';
 import HsnPage from '../features/hsn/pages/HsnPage';
+import LedgerPage from '../features/ledger/pages/LedgerPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -155,6 +156,13 @@ const AppRouter = () => {
           <Route path="payments" element={
             <ProtectedRoute permission="payments:read">
               <PaymentListPage />
+            </ProtectedRoute>
+          } />
+          {/* Ledger — outstanding dues for pending/partial dealer orders.
+              Gated on payments:read for now; swap to a dedicated ledger:read later. */}
+          <Route path="ledger" element={
+            <ProtectedRoute permission="payments:read">
+              <LedgerPage />
             </ProtectedRoute>
           } />
           <Route path="invoices" element={
