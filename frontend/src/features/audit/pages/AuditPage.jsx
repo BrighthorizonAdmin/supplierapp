@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import { Calendar, Download, TrendingUp, TrendingDown, ChevronDown } from 'lucide-react';
+import { format, subDays, subYears } from 'date-fns';
+import api from '../../../services/api';
 import {
   fetchAnalyticsKPIs,
   fetchAnalyticsSalesChart,
@@ -14,6 +17,20 @@ import {
   fetchRetailAnalytics,
   setChartPeriod,
 } from '../auditSlice';
+
+const PERIODS = [
+  { label: 'Last 30 Days', value: '30d' },
+  { label: 'Last 90 Days', value: '90d' },
+  { label: 'Last Year',    value: '1y'  },
+];
+
+const getPeriodDates = (value) => {
+  const to   = new Date();
+  const from = value === '90d' ? subDays(to, 90)
+             : value === '1y'  ? subYears(to, 1)
+             : subDays(to, 30);
+  return { startDate: from.toISOString(), endDate: to.toISOString() };
+};
 
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -33,9 +50,15 @@ const getStockStatus = (item) => {
   return 'In-Stock';
 };
 
-const toMonthLabel = (dateStr = '') => {
-  const month = parseInt(dateStr.split('-')[1], 10);
-  return MONTH_LABELS[month - 1] || dateStr;
+const toChartLabel = (dateStr = '', period = 'year') => {
+  if (period === 'year') {
+    // dateStr is "2024-09" — show month name
+    const month = parseInt(dateStr.split('-')[1], 10);
+    return MONTH_LABELS[month - 1] || dateStr;
+  }
+  // month/week: dateStr is "2024-09-01" — show day number
+  const parts = dateStr.split('-');
+  return parts[2] ? parseInt(parts[2], 10).toString() : dateStr;
 };
 
 const STORE_STATUS_CLS = {
@@ -50,6 +73,7 @@ const CHANNEL_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ef4444'];
 // ── Component ────────────────────────────────────────────────────────────────
 const AuditPage = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const {
     analyticsKPIs,
     analyticsSalesChart,
@@ -63,19 +87,74 @@ const AuditPage = () => {
   } = useSelector((s) => s.audit);
 
   const [activeTab, setActiveTab] = useState('dealer');
+  const [period, setPeriod] = useState('30d');
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const periodMenuRef = useRef(null);
+
+  const periodLabel = PERIODS.find((p) => p.value === period)?.label || 'Last 30 Days';
+
+  // Close period dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (periodMenuRef.current && !periodMenuRef.current.contains(e.target))
+        setShowPeriodMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // When period changes, map to chartPeriod and re-fetch
+  useEffect(() => {
+    const mapped = period === '1y' ? 'year' : 'month';
+    dispatch(setChartPeriod(mapped));
+    dispatch(fetchAnalyticsKPIs(getPeriodDates(period)));
+    dispatch(fetchRetailAnalytics(getPeriodDates(period)));
+    dispatch(fetchAnalyticsDeliveredOrders());
+  }, [dispatch, period]);
 
   useEffect(() => {
-    dispatch(fetchAnalyticsKPIs());
     dispatch(fetchAnalyticsInventoryStats());
     dispatch(fetchAnalyticsTopProducts());
-    dispatch(fetchAnalyticsDeliveredOrders());
   }, [dispatch]);
 
-  useEffect(() => {
-    if (activeTab === 'retail' && !retailAnalytics) {
-      dispatch(fetchRetailAnalytics());
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const { startDate } = getPeriodDates(period);
+      const headers = ['Rank', 'Product', 'Category', 'Units On Hand', 'Est. Value (INR)', 'Status'];
+      const csvRows = [
+        `Analytics Report - ${periodLabel} (${format(new Date(startDate), 'dd MMM yyyy')} to ${format(new Date(), 'dd MMM yyyy')})`,
+        '',
+        `Total Revenue (Month),${fmtINR(monthRevenue)}`,
+        `Active Orders,${activeOrders}`,
+        `Avg Order Value,${fmtINR(avgOrderValue)}`,
+        `Delivered Orders,${delivered}`,
+        `On-Time Rate,${onTimeRate !== '—' ? onTimeRate + '%' : '—'}`,
+        '',
+        'Product Inventory',
+        headers.join(','),
+        ...topProducts.map((p) => [p.rank, `"${p.name}"`, `"${p.cat}"`, p.units, p.revenue, p.status].join(',')),
+      ];
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `analytics-${period}-${format(new Date(), 'yyyyMMdd')}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silent
+    } finally {
+      setExporting(false);
     }
-  }, [dispatch, activeTab, retailAnalytics]);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'retail') {
+      dispatch(fetchRetailAnalytics(getPeriodDates(period)));
+    }
+  }, [dispatch, activeTab]);
 
   useEffect(() => {
     dispatch(fetchAnalyticsSalesChart(chartPeriod));
@@ -94,11 +173,11 @@ const AuditPage = () => {
 
   const chartData = useMemo(() =>
     (analyticsSalesChart || []).map((item) => ({
-      month:   toMonthLabel(item.date),
+      month:   toChartLabel(item.date, chartPeriod),
       revenue: item.revenue,
       orders:  item.orders,
     })),
-  [analyticsSalesChart]);
+  [analyticsSalesChart, chartPeriod]);
 
   const salesMix = invStats ? [
     { name: 'In-Stock',     value: invStats.inStockCount,     color: '#22c55e' },
@@ -145,11 +224,11 @@ const AuditPage = () => {
       (retailAnalytics?.trend || []).map((t) => [t.date, t.retail])
     );
     return (analyticsSalesChart || []).map((item) => ({
-      month:  toMonthLabel(item.date),
+      month:  toChartLabel(item.date, chartPeriod),
       dealer: item.revenue,
       retail: retailTrendMap[item.date] || 0,
     }));
-  }, [analyticsSalesChart, retailAnalytics]);
+  }, [analyticsSalesChart, retailAnalytics, chartPeriod]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -178,11 +257,33 @@ const AuditPage = () => {
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-600">
-            <Calendar size={14} /> Last 30 Days
-          </button>
-          <button className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-600">
-            <Download size={14} /> Export
+          <div className="relative" ref={periodMenuRef}>
+            <button
+              onClick={() => setShowPeriodMenu((v) => !v)}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-600"
+            >
+              <Calendar size={14} /> {periodLabel} <ChevronDown size={12} />
+            </button>
+            {showPeriodMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 min-w-[140px]">
+                {PERIODS.map((p) => (
+                  <button
+                    key={p.value}
+                    onClick={() => { setPeriod(p.value); setShowPeriodMenu(false); }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${period === p.value ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-50"
+          >
+            <Download size={14} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
         </div>
       </div>
@@ -310,7 +411,7 @@ const AuditPage = () => {
                   <p className="font-semibold text-slate-800">Product Inventory</p>
                   <p className="text-xs text-slate-400">Recent inventory levels by product</p>
                 </div>
-                <button className="flex items-center gap-1 text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50">
+                <button onClick={() => navigate('/inventory')} className="flex items-center gap-1 text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50">
                   View <ChevronDown size={11} />
                 </button>
               </div>

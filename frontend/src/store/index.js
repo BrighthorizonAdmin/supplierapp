@@ -25,6 +25,7 @@ import hsnReducer from '../features/hsn/hsnSlice';
 import challanReducer from '../features/deliveryChallan/deliveryChallanSlice';
 import blogReducer from '../features/blog/blogSlice';
 import flashSaleReducer from '../features/flashSale/flashSaleSlice';
+import ledgerReducer from '../features/ledger/ledgerSlice';
 
 
 const store = configureStore({
@@ -55,6 +56,7 @@ const store = configureStore({
     challans: challanReducer,
     blog: blogReducer,
     flashSale: flashSaleReducer,
+    ledger: ledgerReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

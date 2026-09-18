@@ -3,7 +3,8 @@ const asyncHandler = require('../../utils/asyncHandler');
 const { success, paginated } = require('../../utils/response');
 
 const getRetailAnalytics = asyncHandler(async (req, res) => {
-  const data = await retailOrderService.getRetailAnalytics();
+  const { startDate, endDate } = req.query;
+  const data = await retailOrderService.getRetailAnalytics({ startDate, endDate });
   return success(res, data, 'Retail analytics fetched');
 });
 

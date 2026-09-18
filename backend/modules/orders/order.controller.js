@@ -42,4 +42,9 @@ const saveOrderSerials = asyncHandler(async (req, res) => {
   return success(res, result, 'Serial numbers saved');
 });
 
-module.exports = { createOrder, getOrders, getOrderStats, getOrderById, confirmOrder, cancelOrder, updateOrderStatus, saveOrderSerials };
+const getOrderTracking = asyncHandler(async (req, res) => {
+  const tracking = await orderService.getOrderTracking(req.params.id);
+  return success(res, tracking, 'Tracking info fetched');
+});
+
+module.exports = { createOrder, getOrders, getOrderStats, getOrderById, confirmOrder, cancelOrder, updateOrderStatus, saveOrderSerials, getOrderTracking };

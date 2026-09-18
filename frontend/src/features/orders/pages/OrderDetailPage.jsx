@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOrderById, confirmOrder, cancelOrder, clearSelected } from '../orderSlice';
-import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Truck, MapPin, CreditCard, CheckCheck, Hash, Save, ChevronDown, Check } from 'lucide-react';
+import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Truck, MapPin, CreditCard, CheckCheck, Hash, Save, ChevronDown, Check, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
@@ -84,16 +84,6 @@ const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
         })}
       </div>
 
-      {/* Serial numbers reminder banner — shown when confirmed and serials not yet entered */}
-      {order.status === 'confirmed' && !serialsComplete && (
-        <div className="mt-5 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
-          <Hash size={15} className="mt-0.5 shrink-0 text-amber-500" />
-          <span>
-            <strong>Action required:</strong> Enter/Scan serial numbers for all items below before marking this order as Shipped.
-          </span>
-        </div>
-      )}
-
       {order.status === 'delivered' && (
         <div className="mt-5 flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">
           <CheckCircle size={15} className="mt-0.5 shrink-0 text-green-600" />
@@ -109,6 +99,7 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
   const [selections, setSelections] = useState({});  // { idx: ['SN001', 'SN002'] }
   const [serialOptions, setSerialOptions] = useState({});  // { productId: ['SN001', ...] }
   const [openDropdown,  setOpenDropdown]  = useState(null);
+  const [searchTerms,   setSearchTerms]   = useState({});  // { idx: 'search text' }
   const [saving,        setSaving]        = useState(false);
   const [saved,         setSaved]         = useState(false);
   const [errors,        setErrors]        = useState({});
@@ -286,9 +277,10 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
               >
                 <button
                   type="button"
-                  onClick={() =>
-                    setOpenDropdown(openDropdown === i ? null : i)
-                  }
+                  onClick={() => {
+                    setOpenDropdown(openDropdown === i ? null : i);
+                    setSearchTerms(p => ({ ...p, [i]: '' }));
+                  }}
                   disabled={order.status === "delivered"}
                   className={`w-full text-left text-sm border rounded-lg px-3 py-2 transition-colors flex items-center justify-between ${errors[i]
                       ? "border-red-400 bg-red-50"
@@ -334,6 +326,22 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
               overflow-y-auto
             "
                   >
+                    {!loadingOpts && options.length > 0 && (
+                      <div className="sticky top-0 bg-white border-b border-slate-100 px-2 py-2">
+                        <div className="relative">
+                          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            autoFocus
+                            value={searchTerms[i] || ''}
+                            onChange={(e) => setSearchTerms(p => ({ ...p, [i]: e.target.value }))}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Search serial number…"
+                            className="w-full text-sm border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 outline-none focus:border-blue-400"
+                          />
+                        </div>
+                      </div>
+                    )}
                     {loadingOpts ? (
                       <p className="px-3 py-3 text-sm text-slate-400">
                         Loading serial numbers…
@@ -342,8 +350,16 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
                       <p className="px-3 py-3 text-sm text-slate-400">
                         No in-stock serial numbers found for this product
                       </p>
+                    ) : options.filter((sn) =>
+                        sn.toLowerCase().includes((searchTerms[i] || '').toLowerCase())
+                      ).length === 0 ? (
+                      <p className="px-3 py-3 text-sm text-slate-400">
+                        No serial numbers match "{searchTerms[i]}"
+                      </p>
                     ) : (
-                      options.map((sn) => {
+                      options.filter((sn) =>
+                        sn.toLowerCase().includes((searchTerms[i] || '').toLowerCase())
+                      ).map((sn) => {
                         const isSelected = selected.includes(sn);
                         const isDisabled =
                           !isSelected && selected.length >= qty;
@@ -626,28 +642,27 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
   return (
     <div>
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-start gap-3">
-          <button onClick={() => navigate('/orders')} className="p-2 hover:bg-slate-100 rounded-lg mt-0.5">
-            <ArrowLeft size={20} />
-          </button>
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-slate-900">{order.orderNumber}</h1>
-            {order.dealerOrderNumber && (
-              <p className="text-xs text-slate-400 mt-0.5">
-                Dealer Order: <span className="font-medium text-slate-600">{order.dealerOrderNumber}</span>
-              </p>
-            )}
-            <p className="text-sm text-slate-500 mt-0.5">
-              Placed on {format(new Date(order.createdAt), 'MMM dd, yyyy')}
+      <div className="grid grid-cols-[1fr_auto_1.5fr] items-start gap-3 mb-6">
+        <button onClick={() => navigate('/orders')} className="justify-self-start p-2 hover:bg-slate-100 rounded-lg mt-0.5">
+          <ArrowLeft size={20} />
+        </button>
+
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-slate-900">{order.orderNumber}</h1>
+          {order.dealerOrderNumber && (
+            <p className="text-xs text-slate-400 mt-0.5">
+              Dealer Order: <span className="font-medium text-slate-600">{order.dealerOrderNumber}</span>
             </p>
-            <span className={`inline-flex items-center mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold capitalize ${statusColor}`}>
-              {order.status?.replace(/_/g, ' ')}
-            </span>
-          </div>
+          )}
+          <p className="text-sm text-slate-500 mt-0.5">
+            Placed on {format(new Date(order.createdAt), 'MMM dd, yyyy')}
+          </p>
+          <span className={`inline-flex items-center mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold capitalize ${statusColor}`}>
+            {order.status?.replace(/_/g, ' ')}
+          </span>
         </div>
 
-        <div className="flex gap-2 items-center">
+        <div className="justify-self-end flex gap-2 items-center">
           {['draft', 'pending'].includes(order.status) && (
             <>
               <button onClick={() => dispatch(confirmOrder(id))} disabled={loading} className="btn-primary flex items-center gap-1.5 text-sm">
@@ -727,6 +742,16 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
               </div>
             </div>
           </div>
+
+          {/* Serial numbers reminder banner — shown when confirmed and serials not yet entered */}
+          {order.status === 'confirmed' && !serialsComplete && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+              <Hash size={15} className="mt-0.5 shrink-0 text-amber-500" />
+              <span>
+                <strong>Action required:</strong> Enter/Scan serial numbers for all items below before marking this order as Shipped.
+              </span>
+            </div>
+          )}
 
           {/* Serial Numbers — shown after order is confirmed */}
           <SerialNumberSection order={order} onSerialsComplete={setSerialsComplete} />

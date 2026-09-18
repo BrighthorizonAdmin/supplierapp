@@ -55,15 +55,19 @@ const buildRevenueAgg = (dateFilter) => Transaction.aggregate([
   },
 ]);
 
-const getKPIs = async () => {
+const getKPIs = async ({ startDate, endDate } = {}) => {
   const now = new Date();
   const monthStart    = new Date(now.getFullYear(), now.getMonth(), 1);
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const yearStart     = new Date(now.getFullYear(), 0, 1);
   const prevYearStart = new Date(now.getFullYear() - 1, 0, 1);
   const prevYearEnd   = new Date(now.getFullYear(), 0, 1);
-  // Orders older than 3 days that are still processing/shipped = delayed
   const threeDaysAgo  = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+  // If a custom date range is provided, use it for revenue + order counts
+  const periodStart = startDate ? new Date(startDate) : monthStart;
+  const periodEnd   = endDate   ? new Date(endDate)   : now;
+  const periodFilter = { $gte: periodStart, $lte: periodEnd };
 
   const [
     totalDealers,
@@ -91,13 +95,20 @@ const getKPIs = async () => {
     Dealer.countDocuments(),
     Dealer.countDocuments({ status: 'active' }),
     Dealer.countDocuments({ status: 'pending' }),
-    Order.countDocuments({ status: { $in: ['confirmed', 'processing', 'shipped'] } }),
+    // When a period filter is set, count orders created in that range; otherwise count currently-active orders
+    startDate
+      ? Order.countDocuments({
+          orderNumber: { $not: /^ORD-\d{13}-\d+$/ },
+          status: { $nin: ['cancelled', 'rejected', 'refunded', 'returned'] },
+          createdAt: periodFilter,
+        })
+      : Order.countDocuments({ status: { $in: ['confirmed', 'processing', 'shipped'] } }),
     Order.countDocuments({ orderNumber: { $not: /^ORD-\d{13}-\d+$/ }, status: { $nin: ['cancelled', 'rejected', 'refunded', 'returned'] } }),
     Order.countDocuments({
       status: { $in: ['processing', 'shipped'] },
       updatedAt: { $lt: threeDaysAgo },
     }),
-    buildRevenueAgg({ $gte: monthStart }),
+    buildRevenueAgg(periodFilter),
     buildRevenueAgg({ $gte: prevMonthStart, $lt: monthStart }),
     buildRevenueAgg({ $gte: yearStart }),
     buildRevenueAgg({ $gte: prevYearStart, $lt: prevYearEnd }),

@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Package, Boxes, ShoppingCart, Headphones,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
   UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText, ShieldCheck as WarrantyIcon,
-  MessageSquare, Zap,
+  MessageSquare, Zap, BookText,
 } from 'lucide-react';
 import { toggleSidebar } from '../../store/uiSlice';
 import { usePermission } from '../../routes/ProtectedRoute';
@@ -31,6 +31,7 @@ const NAV_ITEMS = [
   { to: '/orders', icon: ShoppingCart, label: 'Orders', perm: 'orders:read' },
   { to: '/finance', icon: TrendingUp, label: 'Finances', perm: 'finance:read' },
   { to: '/payments', icon: CreditCard, label: 'Payments & Credits', perm: 'payments:read' },
+  { to: '/ledger', icon: BookText, label: 'Ledger', perm: 'payments:read' },
   { group: 'sales', icon: Tag, label: 'Sales', perm: 'invoices:read', children: SALES_CHILDREN },
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
   { to: '/exchanges', icon: RotateCcw, label: 'Exchanges', perm: 'returns:read' },
@@ -78,7 +79,7 @@ const Sidebar = () => {
         </div>
         {sidebarOpen && (
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-black truncate leading-tight">Company Name</p>
+            <p className="text-sm font-bold text-black truncate leading-tight">Buvvas</p>
             <p className="text-xs text-blue-600 truncate leading-tight">{`Supplier ${Array.isArray(user.role) ? user.role.join(', ') : user.role} Portal`}</p>
           </div>
         )}

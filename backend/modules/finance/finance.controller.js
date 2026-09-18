@@ -8,7 +8,7 @@ const getRevenueSummary = asyncHandler(async (req, res) => {
 });
 
 const getOverallStats = asyncHandler(async (req, res) => {
-  const stats = await financeService.getOverallStats();
+  const stats = await financeService.getOverallStats(req.query);
   return success(res, stats, 'Finance stats fetched');
 });
 

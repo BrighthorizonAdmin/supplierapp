@@ -1,9 +1,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
 
-export const fetchFinanceStats = createAsyncThunk('finance/stats', async (_, { rejectWithValue }) => {
+export const fetchFinanceStats = createAsyncThunk('finance/stats', async (params, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/finance/stats');
+    const { data } = await api.get('/finance/stats', { params });
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });

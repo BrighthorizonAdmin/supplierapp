@@ -879,7 +879,25 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
  
   const before = { status: order.status };
   order.status = status;
-  if (status === 'shipped') order.shippedAt = new Date();
+  if (status === 'shipped') {
+    order.shippedAt = new Date();
+    // Auto-create Nimbus Post shipment if credentials are set and AWB not already assigned
+    if (process.env.NIMBUSPOST_EMAIL && !order.trackingId) {
+      try {
+        const npService = require('../nimbuspost/nimbuspost.service');
+        const shipment = await npService.createShipment(order);
+        if (shipment?.awb_number) {
+          order.trackingId = String(shipment.awb_number);
+          order.carrier = shipment.courier_name || 'NimbusPost';
+          extraFields.trackingId = order.trackingId;
+          extraFields.carrier = order.carrier;
+          console.log(`[NimbusPost] Shipment created for ${order.orderNumber} — AWB: ${order.trackingId}`);
+        }
+      } catch (npErr) {
+        console.error(`[NimbusPost] Shipment creation failed for ${order.orderNumber}:`, npErr.message, npErr.response?.data || '');
+      }
+    }
+  }
   if (status === 'delivered') order.deliveredAt = new Date();
   if (extraFields.trackingId) order.trackingId = extraFields.trackingId;
   if (extraFields.carrier) order.carrier = extraFields.carrier;
@@ -1139,5 +1157,32 @@ const saveOrderSerials = async (orderId, lineSerials) => {
   return { orderId, savedCount: allSerials.length };
 };
 
-module.exports = { createOrder, confirmOrder, cancelOrder, getOrders, getOrderStats, getOrderById, updateOrderStatus, saveOrderSerials };
+const getOrderTracking = async (orderId) => {
+  const order = await Order.findById(orderId).select('orderNumber trackingId carrier status shippedAt deliveredAt timeline').lean();
+  if (!order) throw new AppError('Order not found', 404);
+
+  const result = {
+    orderNumber:  order.orderNumber,
+    status:       order.status,
+    trackingId:   order.trackingId  || null,
+    carrier:      order.carrier     || null,
+    shippedAt:    order.shippedAt   || null,
+    deliveredAt:  order.deliveredAt || null,
+    timeline:     order.timeline    || [],
+    liveTracking: null,
+  };
+
+  if (order.trackingId && process.env.NIMBUSPOST_EMAIL) {
+    try {
+      const npService = require('../nimbuspost/nimbuspost.service');
+      result.liveTracking = await npService.trackShipment(order.trackingId);
+    } catch (err) {
+      console.error(`[NimbusPost] Track failed for AWB ${order.trackingId}:`, err.message);
+    }
+  }
+
+  return result;
+};
+
+module.exports = { createOrder, confirmOrder, cancelOrder, getOrders, getOrderStats, getOrderById, updateOrderStatus, saveOrderSerials, getOrderTracking };
  

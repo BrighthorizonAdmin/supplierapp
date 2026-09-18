@@ -12,7 +12,7 @@ const getRevenueSummary = async ({ startDate, endDate, groupBy = 'month' } = {})
     if (endDate) match.createdAt.$lte = new Date(endDate);
   }
 
-  const groupFormat = groupBy === 'day' ? '%Y-%m-%d' : groupBy === 'week' ? '%G-W%V' : '%Y-%m';
+  const groupFormat = groupBy === 'day' ? '%Y-%m-%d' : groupBy === 'year' ? '%Y' : groupBy === 'week' ? '%G-W%V' : '%Y-%m';
 
   const revenue = await Transaction.aggregate([
     { $match: match },
@@ -49,21 +49,29 @@ const getRevenueSummary = async ({ startDate, endDate, groupBy = 'month' } = {})
   }));
 };
 
-const getOverallStats = async () => {
+const getOverallStats = async ({ startDate, endDate } = {}) => {
+  const dateFilter = {};
+  if (startDate || endDate) {
+    dateFilter.createdAt = {};
+    if (startDate) dateFilter.createdAt.$gte = new Date(startDate);
+    if (endDate)   dateFilter.createdAt.$lte = new Date(endDate);
+  }
+
   const [revenueResult, refundResult, overdueInvoices, pendingPayments] = await Promise.all([
     Transaction.aggregate([
-      { $match: { type: 'debit', 'ref.refType': 'order' } },
+      { $match: { type: 'debit', 'ref.refType': 'order', ...dateFilter } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
     Transaction.aggregate([
-      { $match: { 'ref.refType': 'return' } },
+      { $match: { 'ref.refType': 'return', ...dateFilter } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
     Invoice.countDocuments({
       status: { $in: ['issued', 'partial'] },
       dueDate: { $lt: new Date() },
+      ...(Object.keys(dateFilter).length ? dateFilter : {}),
     }),
-    Payment.countDocuments({ status: 'pending' }),
+    Payment.countDocuments({ status: 'pending', ...dateFilter }),
   ]);
 
   const totalRevenue = revenueResult[0]?.total || 0;
