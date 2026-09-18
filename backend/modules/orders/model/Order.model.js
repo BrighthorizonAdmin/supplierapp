@@ -39,16 +39,20 @@ const orderSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    // Required for dealer (b2b) orders. Not set for Buvvas Ecommerce (b2c) orders.
     dealerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Dealer',
-      required: [true, 'Dealer is required'],
     },
     orderType: {
       type: String,
       enum: { values: ['b2b', 'b2c'], message: '{VALUE} is not a valid order type' },
       default: 'b2b',
     },
+    // Set for b2c (Buvvas Ecommerce) orders, which have no Dealer account.
+    customerName:  { type: String, trim: true },
+    customerEmail: { type: String, lowercase: true, trim: true },
+    customerPhone: { type: String, trim: true },
     status: {
       type: String,
       enum: {
@@ -71,6 +75,19 @@ const orderSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: [0, 'Discount cannot be negative'],
+    },
+    // Set only for b2c (Buvvas Ecommerce) orders that got a flash-sale discount.
+    discountPercent: {
+      type: Number,
+      default: 0,
+    },
+    flashSaleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FlashSale',
+    },
+    flashSaleApplied: {
+      type: Boolean,
+      default: false,
     },
     taxAmount: {
       type: Number,
@@ -140,6 +157,10 @@ const orderSchema = new mongoose.Schema(
     trackingId: { type: String },
     carrier: { type: String },
     timeline: [timelineEventSchema],
+    // Idempotency guard: set the first (and only) time this order's
+    // confirmation deducts Product.currentStockQty, so repeat/duplicate
+    // confirm calls (double-click, retry, race) never deduct stock twice.
+    stockDeductedAt: { type: Date, default: null },
   },
   {
     timestamps: true,

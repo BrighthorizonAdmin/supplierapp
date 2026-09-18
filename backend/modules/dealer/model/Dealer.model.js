@@ -157,6 +157,17 @@ const dealerSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Free-text note the applicant submitted about their current business
+    applicantNote: {
+      type: String,
+      trim: true,
+    },
+    // Where this application came from — the dealer app or the Buvvas ecommerce site
+    source: {
+      type: String,
+      enum: ['dealer_app', 'buvvas_website', 'other'],
+      default: 'other',
+    },
     applicationId: {        
       type: String,
       trim: true,

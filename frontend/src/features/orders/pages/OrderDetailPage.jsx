@@ -479,9 +479,9 @@ const OrderDetailPage = () => {
 <div class="grid2">
 <div>
 <div class="section-title">Customer Details</div>
-<div class="label">Name</div><div class="value">${order.dealerId?.businessName || order.dealerId?.name || '—'}</div>
-<div class="label">Email</div><div class="value">${order.dealerId?.email || order.email || '—'}</div>
-<div class="label">Phone</div><div class="value">${order.dealerId?.phone || order.phone || '—'}</div>
+<div class="label">Name</div><div class="value">${order.customerName ||'—'}</div>
+<div class="label">Email</div><div class="value">${order.dealerId?.email || order.email || order.customerEmail || '—'}</div>
+<div class="label">Phone</div><div class="value">${order.dealerId?.phone || order.phone || order.customerPhone || '—'}</div>
 <div class="label">Shipping Address</div>
 <div class="value">${[order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode, order.deliveryAddress?.country].filter(Boolean).join(', ') || order.dealerId?.address || '—'}</div>
 </div>
@@ -524,7 +524,8 @@ const OrderDetailPage = () => {
 <tr><td style="color:#666">Subtotal</td><td>₹${(order.subtotal || 0).toLocaleString('en-IN')}</td></tr>
 <tr><td style="color:#666">Tax</td><td>₹${(order.taxAmount || 0).toLocaleString('en-IN')}</td></tr>
 <tr><td style="color:#666">Shipping</td><td>₹${(order.shippingAmount || 0).toLocaleString('en-IN')}</td></tr>
-<tr class="total-final"><td>Total</td><td>₹${(order.netAmount || (order.subtotal || 0) + (order.taxAmount || 0) + (order.shippingAmount || 0)).toLocaleString('en-IN')}</td></tr>
+${(order.discountAmount || 0) > 0 ? `<tr><td style="color:#666">Flash sale discount${order.discountPercent ? ` (${order.discountPercent}%)` : ''}</td><td>-₹${order.discountAmount.toLocaleString('en-IN')}</td></tr>` : ''}
+<tr class="total-final"><td>Total</td><td>₹${(order.netAmount || (order.subtotal || 0) + (order.taxAmount || 0) + (order.shippingAmount || 0) - (order.discountAmount || 0)).toLocaleString('en-IN')}</td></tr>
 </tbody>
 </table>
 </div>
@@ -618,7 +619,8 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
   const subtotal = order.subtotal || 0;
   const tax = order.taxAmount || 0;
   const shipping = order.shippingCost || 0;
-  const total = order.netAmount || (subtotal + tax + shipping);
+  const discount = order.discountAmount || 0;
+  const total = order.netAmount || (subtotal + tax + shipping - discount);
   const dealer = order.dealerId || {};
   const addr = order.deliveryAddress || {};
   const timeline = order.timeline || [];
@@ -723,6 +725,12 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
               </div>
               {shipping > 0 && (
                 <div className="flex justify-between text-sm text-slate-600"><span>Shipping</span><span>{fmt(shipping)}</span></div>
+              )}
+              {discount > 0 && (
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span>Flash sale discount{order.flashSaleApplied && order.discountPercent ? ` (${order.discountPercent}%)` : ''}</span>
+                  <span>-{fmt(discount)}</span>
+                </div>
               )}
               <div className="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-200 text-base">
                 <span>Total</span><span>{fmt(total)}</span>
