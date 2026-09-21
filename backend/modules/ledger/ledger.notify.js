@@ -121,6 +121,33 @@ const pushDealerAppNotification = async ({ dealerId, title, message, data = {} }
 };
 
 /**
+ * Tell a dealer that the supplier moved the due date of one of their orders.
+ * In-app only. Deliberately carries no supplier remarks — those are internal
+ * notes and are stripped from everything the dealer sees.
+ *
+ * @param {object} p.row              the order's ledger row AFTER the change
+ * @param {Date}   p.previousDueDate  the effective due date BEFORE the change
+ */
+const notifyDueDateChanged = async ({ row, previousDueDate }) => {
+  // The dealer knows the order by their own (dealer-app) number, not the supplier copy's.
+  const orderNo = row.dealerOrderNumber || row.orderNumber;
+  await pushDealerAppNotification({
+    dealerId: row.dealerId,
+    title: 'Payment due date updated',
+    message:
+      `Order ${orderNo}: your remaining ${inr(row.outstanding)} is now due by ${fmtDate(row.dueDate)} ` +
+      `(previously ${fmtDate(previousDueDate)}).`,
+    data: {
+      event: 'due-date-changed',
+      orderNumbers: [orderNo],
+      totalOutstanding: row.outstanding,
+      dueDate: row.dueDate,
+      previousDueDate,
+    },
+  });
+};
+
+/**
  * Notify one dealer about their outstanding ledger rows.
  * channel: 'app' | 'email' | 'both'
  * Returns { app: {ok}, email: {ok, error}, message, totalOutstanding }.
@@ -166,4 +193,4 @@ const notifyDealer = async ({ dealer, rows, channel = 'both' }) => {
   return result;
 };
 
-module.exports = { notifyDealer, buildSummary };
+module.exports = { notifyDealer, notifyDueDateChanged, buildSummary };
