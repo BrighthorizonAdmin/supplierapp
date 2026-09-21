@@ -4,7 +4,7 @@ const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const { buildLedgerRows, groupByDealer, summarise } = require('./ledger.aggregator');
 const { toCsv, toXlsx } = require('./ledger.export');
-const { notifyDealer } = require('./ledger.notify');
+const { notifyDealer, notifyDueDateChanged } = require('./ledger.notify');
 const { proofUrl } = require('./ledger.upload');
 
 const coll = (name) => mongoose.connection.collection(name);
@@ -12,10 +12,19 @@ const oid = (v) => new mongoose.Types.ObjectId(String(v));
 
 /* ────────────────────────────── read / list ────────────────────────────── */
 
+// Fully-paid orders are hidden from the main outstanding list. They are pulled in
+// for the "Cleared" view (status=cleared) and the "All transactions" view
+// (includeSettled=true), which also carries fully-paid cash orders.
+const wantsSettled = (query = {}) =>
+  query.status === 'cleared' || String(query.includeSettled) === 'true';
+
 const applyRowFilters = (rows, query = {}) => {
   let out = rows;
   if (query.status === 'pending' || query.status === 'partial' || query.status === 'cleared') {
     out = out.filter((r) => r.status === query.status);
+  }
+  if (query.paymentType === 'credit' || query.paymentType === 'cash') {
+    out = out.filter((r) => r.paymentType === query.paymentType);
   }
   if (String(query.overdue) === 'true') out = out.filter((r) => r.overdue);
   if (query.search) {
@@ -37,15 +46,12 @@ const applyRowFilters = (rows, query = {}) => {
  * groups (one card per dealer), not individual orders.
  */
 const getLedger = async (query = {}) => {
-  // A "Cleared" view (query.status === 'cleared') needs settled rows, which
-  // buildLedgerRows excludes by default so the main outstanding list stays
-  // clean. Everything else (pending/partial/all) is unaffected.
   const rows = applyRowFilters(
     await buildLedgerRows({
       dealerId: query.dealerId,
       startDate: query.startDate,
       endDate: query.endDate,
-      includeSettled: query.status === 'cleared',
+      includeSettled: wantsSettled(query),
     }),
     query
   );
@@ -67,7 +73,7 @@ const getSummary = async (query = {}) => {
       dealerId: query.dealerId,
       startDate: query.startDate,
       endDate: query.endDate,
-      includeSettled: query.status === 'cleared',
+      includeSettled: wantsSettled(query),
     }),
     query
   );
@@ -116,6 +122,12 @@ const addManualPayment = async (orderId, body, file, user) => {
   if (!Number.isFinite(amount) || amount <= 0) throw new AppError('A positive amount is required', 400);
   if (!body.paidOn) throw new AppError('paidOn (payment date) is required', 400);
 
+  // Nothing left to collect on a fully-paid order — another payment would only push
+  // "paid" past the order total. (Deleting a wrong entry is still allowed, see
+  // deleteManualPayment.) Enforced here as well as in the UI so it can't be bypassed.
+  const current = await getOrderLedger(orderId);
+  if (current.settled) throw new AppError('This order is already fully paid — no further payment can be recorded', 409);
+
   const entry = await ensureEntry(orderId, user);
   entry.manualPayments.push({
     amount,
@@ -142,7 +154,15 @@ const deleteManualPayment = async (orderId, paymentId) => {
   return getOrderLedger(orderId);
 };
 
+// Calendar-day key so a save that leaves the due date on the same day is not "a change".
+const dayKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+
 const patchEntry = async (orderId, body, user) => {
+  // Effective due date BEFORE the change, so the dealer can be told what it moved from.
+  // (Failure here just means no notification — it must not block the save itself.)
+  const before =
+    body.expectedClearanceDate !== undefined ? await getOrderLedger(orderId).catch(() => null) : null;
+
   const entry = await ensureEntry(orderId, user);
   if (body.expectedClearanceDate !== undefined) {
     entry.expectedClearanceDate = body.expectedClearanceDate
@@ -151,7 +171,20 @@ const patchEntry = async (orderId, body, user) => {
   }
   if (body.remarks !== undefined) entry.remarks = String(body.remarks);
   await entry.save();
-  return getOrderLedger(orderId);
+  const row = await getOrderLedger(orderId);
+
+  // Heads-up to the dealer when the due date actually moved. Skipped for remarks-only
+  // saves (same effective date) and for fully-paid orders (no due date left to change).
+  // Best-effort: a failed notification must not fail the save.
+  if (before && !row.settled && dayKey(before.dueDate) !== dayKey(row.dueDate)) {
+    try {
+      await notifyDueDateChanged({ row, previousDueDate: before.dueDate });
+    } catch (err) {
+      console.error('[ledger] due-date notification failed:', err.message);
+    }
+  }
+
+  return row;
 };
 
 const addScreenshot = async (orderId, body, file, user) => {
@@ -190,8 +223,8 @@ const exportLedger = async (query = {}) => {
     endDate: query.endDate,
     // A single-order export should still work right after that order is fully
     // settled (e.g. downloading the receipt for the payment you just recorded),
-    // and a "Cleared" history export needs settled rows too.
-    includeSettled: scope === 'order' || query.status === 'cleared',
+    // and the "Cleared" / "All transactions" exports need settled rows too.
+    includeSettled: scope === 'order' || wantsSettled(query),
   });
   rows = applyRowFilters(rows, query);
 

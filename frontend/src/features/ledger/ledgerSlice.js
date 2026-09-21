@@ -124,6 +124,19 @@ export const notifyDealer = createAsyncThunk(
   }
 );
 
+// The export is requested with responseType:'blob', so an error body ({ message })
+// arrives as a Blob too — read it back so the user sees the server's real reason
+// (e.g. "Nothing to export for the given selection") instead of a generic failure.
+const exportErrorMessage = async (err) => {
+  try {
+    const body = err.response?.data;
+    if (body instanceof Blob) return JSON.parse(await body.text()).message || 'Download failed';
+  } catch {
+    // body wasn't JSON — fall through
+  }
+  return err.response?.data?.message || 'Download failed';
+};
+
 /* Download helper (not a thunk — streams a file) */
 export const downloadLedger = async ({ scope = 'all', format = 'csv', dealerId, orderId, ...rest }) => {
   try {
@@ -141,7 +154,7 @@ export const downloadLedger = async ({ scope = 'all', format = 'csv', dealerId, 
     a.click();
     URL.revokeObjectURL(url);
   } catch (err) {
-    toast.error('Download failed');
+    toast.error(await exportErrorMessage(err));
   }
 };
 
@@ -151,7 +164,9 @@ const applyDetail = (state, row) => {
   if (!row) return;
   state.detail = row;
 
-  if (row.settled) {
+  // Views that list settled orders (Cleared / All transactions) keep the row and
+  // just update it in place; only the Outstanding list drops it.
+  if (row.settled && !state.showsSettled) {
     // Fully paid off — the main list excludes settled orders, so drop it from
     // the still-open group too instead of leaving a stale ₹0 row on screen
     // until the modal closes and triggers a full refetch.
@@ -189,6 +204,7 @@ const ledgerSlice = createSlice({
     groups: [],
     summary: null,
     pagination: null,
+    showsSettled: false, // true when the loaded list includes fully-paid orders
     detail: null,
     loading: false,
     detailLoading: false,
@@ -205,8 +221,9 @@ const ledgerSlice = createSlice({
     builder
       .addCase(fetchLedger.pending, (state) => { state.loading = true; state.error = null; })
       .addCase(fetchLedger.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
-      .addCase(fetchLedger.fulfilled, (state, { payload }) => {
+      .addCase(fetchLedger.fulfilled, (state, { payload, meta }) => {
         state.loading = false;
+        state.showsSettled = !!meta.arg?.includeSettled || meta.arg?.status === 'cleared';
         state.groups = payload.data || [];
         state.summary = payload.summary || null;
         state.pagination = payload.pagination || null;

@@ -36,6 +36,16 @@ const StatusPill = ({ status }) => (
   </span>
 );
 
+const TYPE_PILL = {
+  credit: 'bg-violet-100 text-violet-700 ring-1 ring-violet-200',
+  cash: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200',
+};
+const TypePill = ({ type }) => (
+  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${TYPE_PILL[type] || 'bg-slate-100 text-slate-600'}`}>
+    {type === 'credit' ? 'Credit' : 'Cash'}
+  </span>
+);
+
 const TL_META = {
   'split-paynow': { label: 'Split · pay now', dot: 'bg-violet-400' },
   gateway: { label: 'Online payment', dot: 'bg-emerald-400' },
@@ -107,10 +117,13 @@ const ManualPaymentForm = ({ orderId, onDone }) => {
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const field = 'mt-1 w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent';
+  // text-slate-900 / font-normal: these inputs sit inside a small grey, medium-weight <label>, so
+  // without them the typed value inherited the label's colour and weight and looked like the label.
+  const field = 'mt-1 w-full text-sm font-normal text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent';
 
   const submit = async (e) => {
     e.preventDefault();
+    if (!(Number(form.amount) > 0)) { toast.error('Enter an amount greater than 0'); return; }
     setBusy(true);
     const payload = { ...form };
     if (file) payload.screenshot = file;
@@ -126,8 +139,16 @@ const ManualPaymentForm = ({ orderId, onDone }) => {
   return (
     <form onSubmit={submit} className="grid sm:grid-cols-2 gap-3 bg-slate-50 rounded-xl p-4 border border-slate-200">
       <label className="text-xs font-medium text-slate-500">Amount *
-        <input type="number" step="0.01" min="0.01" required value={form.amount}
-          onChange={(e) => setForm({ ...form, amount: e.target.value })} className={field} placeholder="0.00" />
+        {/* Plain text entry (numeric keypad on phones) instead of type="number": a number input's value
+            can be changed by the mouse wheel / arrow keys, which silently altered the amount. */}
+        <input type="text" inputMode="decimal" required value={form.amount}
+          pattern="\d+\.?\d{0,2}|\.\d{1,2}" title="Enter an amount, e.g. 2130 or 2130.50"
+          onChange={(e) => {
+            // digits and a single decimal point only, max 2 decimals
+            const [int, ...rest] = e.target.value.replace(/[^\d.]/g, '').split('.');
+            setForm({ ...form, amount: rest.length ? `${int}.${rest.join('').slice(0, 2)}` : int });
+          }}
+          className={field} placeholder="0.00" />
       </label>
       <label className="text-xs font-medium text-slate-500">Paid on *
         <input type="date" required value={form.paidOn}
@@ -179,7 +200,9 @@ const DetailModal = ({ orderId, onClose }) => {
   }, [detail]);
 
   const r = detail;
-  const field = 'mt-1 w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent';
+  // text-slate-900 / font-normal: these inputs sit inside a small grey, medium-weight <label>, so
+  // without them the typed value inherited the label's colour and weight and looked like the label.
+  const field = 'mt-1 w-full text-sm font-normal text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent';
   const lastReminder = r?.ledger?.notifyLog?.length ? r.ledger.notifyLog[r.ledger.notifyLog.length - 1] : null;
 
   return (
@@ -193,19 +216,37 @@ const DetailModal = ({ orderId, onClose }) => {
         <div className="space-y-6">
           {/* headline band */}
           <div className="rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-red-50 to-white px-5 py-4">
-              <div>
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Outstanding</p>
-                <p className="text-3xl font-bold text-red-600 tabular-nums">{inr(r.outstanding)}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  of {inr(r.totalAmount)} · paid {inr(r.paidAmount)}
-                </p>
-              </div>
+            <div className={`flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r ${r.settled ? 'from-green-50' : 'from-red-50'} to-white px-5 py-4`}>
+              {r.settled ? (
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Paid in full</p>
+                  <p className="text-3xl font-bold text-green-600 tabular-nums">{inr(r.paidAmount)}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">order total {inr(r.totalAmount)} · balance {inr(0)}</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Outstanding</p>
+                  <p className="text-3xl font-bold text-red-600 tabular-nums">{inr(r.outstanding)}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    of {inr(r.totalAmount)} · paid {inr(r.paidAmount)}
+                  </p>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <StatusPill status={r.status} />
-                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${r.overdue ? 'bg-red-100 text-red-700 ring-1 ring-red-200' : 'bg-slate-100 text-slate-600'}`}>
-                  <CalendarClock size={11} /> {r.overdue ? `Overdue ${r.overdueDays}d` : `Due ${d(r.dueDate)}`}
-                </span>
+                {r.settled ? (
+                  // Only show a date that has actually happened: "Recorded on invoice" timeline entries are
+                  // dated with the invoice DUE date, which can be in the future for a paid-up order.
+                  r.lastPaymentDate && new Date(r.lastPaymentDate) <= new Date() && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700">
+                      <CheckCircle2 size={11} /> Cleared on {d(r.lastPaymentDate)}
+                    </span>
+                  )
+                ) : (
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${r.overdue ? 'bg-red-100 text-red-700 ring-1 ring-red-200' : 'bg-slate-100 text-slate-600'}`}>
+                    <CalendarClock size={11} /> {r.overdue ? `Overdue ${r.overdueDays}d` : `Due ${d(r.dueDate)}`}
+                  </span>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-200 border-t border-slate-200 text-sm">
@@ -277,8 +318,9 @@ const DetailModal = ({ orderId, onClose }) => {
           <section>
             <SectionTitle icon={Wallet}
               action={
-                <button onClick={() => setShowForm((v) => !v)}
-                  className="text-xs font-semibold text-primary-700 border border-primary-200 px-2.5 py-1 rounded-lg hover:bg-primary-50">
+                <button onClick={() => setShowForm((v) => !v)} disabled={r.settled}
+                  title={r.settled ? 'This order is fully paid — there is nothing left to record' : undefined}
+                  className="text-xs font-semibold text-primary-700 border border-primary-200 px-2.5 py-1 rounded-lg hover:bg-primary-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent">
                   {showForm ? 'Close' : '+ Add payment'}
                 </button>
               }>
@@ -288,7 +330,7 @@ const DetailModal = ({ orderId, onClose }) => {
               Online, invoice, split &amp; gateway payments appear in the timeline above automatically.
               Use this only for offline payments (cash, cheque, bank transfer) the system didn't capture — it stays out of the Payments module.
             </p>
-            {showForm && <ManualPaymentForm orderId={r.orderId} onDone={() => setShowForm(false)} />}
+            {showForm && !r.settled && <ManualPaymentForm orderId={r.orderId} onDone={() => setShowForm(false)} />}
             {(r.ledger?.manualPayments || []).length > 0 && (
               <ul className="mt-2 rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
                 {r.ledger.manualPayments.map((mp) => (
@@ -310,9 +352,12 @@ const DetailModal = ({ orderId, onClose }) => {
             )}
           </section>
 
-          {/* screenshots */}
+          {/* order-level attachments (not tied to a specific manual payment) */}
           <section>
-            <SectionTitle icon={ImagePlus}>Payment proof screenshots</SectionTitle>
+            <SectionTitle icon={ImagePlus}>Supporting documents</SectionTitle>
+            <p className="-mt-1 mb-2 text-xs text-slate-400">
+              Files for this order, not linked to a specific payment. To attach proof to one payment, use the file field when recording it above.
+            </p>
             <div className="flex flex-wrap gap-3">
               {(r.ledger?.proofScreenshots || []).map((s) => (
                 <div key={s._id} className="relative group">
@@ -343,15 +388,25 @@ const DetailModal = ({ orderId, onClose }) => {
             <div className="grid sm:grid-cols-2 gap-3">
               <label className="text-xs font-medium text-slate-500">
                 <span className="flex items-center gap-1"><CalendarClock size={12} /> Remaining amount due by (override)</span>
-                <input type="date" value={clearBy} onChange={(e) => setClearBy(e.target.value)} className={field} />
+                <input type="date" value={clearBy} onChange={(e) => setClearBy(e.target.value)} disabled={r.settled}
+                  className={`${field} disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed`} />
               </label>
               <label className="text-xs font-medium text-slate-500">Remarks
                 <input value={remarks} onChange={(e) => setRemarks(e.target.value)} className={field} placeholder="Internal note…" />
               </label>
             </div>
+            <p className="mt-2 text-xs text-slate-400">
+              {r.settled
+                ? 'This order is fully paid, so there is no remaining amount to set a due date for. Remarks can still be edited (internal, never shown to the dealer).'
+                : 'Changing the due date sends the dealer an in-app notification. Remarks are internal and never shown to the dealer.'}
+            </p>
             <div className="flex justify-end mt-3">
               <button
-                onClick={() => dispatch(patchLedgerEntry({ orderId: r.orderId, body: { expectedClearanceDate: clearBy || null, remarks } }))}
+                onClick={() => dispatch(patchLedgerEntry({
+                  orderId: r.orderId,
+                  // A cleared order has no due date to change — send remarks only.
+                  body: r.settled ? { remarks } : { expectedClearanceDate: clearBy || null, remarks },
+                }))}
                 className="px-4 py-2 text-sm font-semibold bg-slate-800 text-white rounded-lg hover:bg-slate-900">
                 Save changes
               </button>
@@ -371,8 +426,11 @@ const DetailModal = ({ orderId, onClose }) => {
                   {lastReminder.ok ? '' : ' · failed'}
                 </span>
               )}
-              <NotifyMenu label="Remind dealer (all dues)" tone="solid" direction="up"
-                onPick={(c) => dispatch(notifyDealer({ dealerId: r.dealerId, channel: c }))} />
+              {/* A reminder is about money owed — nothing to chase on a cleared order. */}
+              {!r.settled && (
+                <NotifyMenu label="Remind dealer (all dues)" tone="solid" direction="up"
+                  onPick={(c) => dispatch(notifyDealer({ dealerId: r.dealerId, channel: c }))} />
+              )}
             </div>
           </div>
         </div>
@@ -393,7 +451,7 @@ const MetaChip = ({ children, tone = 'slate' }) => {
   return <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${map[tone]}`}>{children}</span>;
 };
 
-const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding' }) => {
+const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding', exportParams }) => {
   const dispatch = useDispatch();
   const [open, setOpen] = useState(defaultOpen);
   const initials = (g.dealerName || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -427,6 +485,17 @@ const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding' }) => {
                 <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Collected</p>
                 <p className="font-bold text-green-600 tabular-nums leading-tight">{inr(g.totalPaid)}</p>
               </>
+            ) : view === 'all' ? (
+              <div className="flex items-center gap-5">
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Collected</p>
+                  <p className="font-bold text-green-600 tabular-nums leading-tight">{inr(g.totalPaid)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Outstanding</p>
+                  <p className="font-bold text-red-600 tabular-nums leading-tight">{inr(g.totalOutstanding)}</p>
+                </div>
+              </div>
             ) : (
               <>
                 <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Outstanding</p>
@@ -434,11 +503,11 @@ const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding' }) => {
               </>
             )}
           </div>
-          {view === 'outstanding' && (
+          {(view === 'outstanding' || (view === 'all' && g.totalOutstanding > 0)) && (
             <NotifyMenu label="Notify" onPick={(c) => dispatch(notifyDealer({ dealerId: g.dealerId, channel: c }))} />
           )}
-          <IconBtn icon={FileSpreadsheet} label="Excel" onClick={() => downloadLedger({ scope: 'dealer', dealerId: g.dealerId, format: 'xlsx' })} />
-          <IconBtn icon={FileText} label="CSV" onClick={() => downloadLedger({ scope: 'dealer', dealerId: g.dealerId, format: 'csv' })} />
+          <IconBtn icon={FileSpreadsheet} label="Excel" onClick={() => downloadLedger({ ...exportParams, scope: 'dealer', dealerId: g.dealerId, format: 'xlsx' })} />
+          <IconBtn icon={FileText} label="CSV" onClick={() => downloadLedger({ ...exportParams, scope: 'dealer', dealerId: g.dealerId, format: 'csv' })} />
         </div>
       </div>
 
@@ -449,6 +518,7 @@ const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding' }) => {
               <tr className="border-b border-slate-200 bg-white text-slate-500">
                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide">Order</th>
                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide">Date</th>
+                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide">Type</th>
                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide">Method</th>
                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-right">Total</th>
                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-right">Paid</th>
@@ -461,7 +531,6 @@ const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding' }) => {
                   </>
                 )}
                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide">Status</th>
-                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-right"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -472,6 +541,7 @@ const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding' }) => {
                     {o.source === 'dealer-app' && <span className="ml-1.5 text-[10px] text-primary-500 font-sans">app</span>}
                   </td>
                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{d(o.orderDate)}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap"><TypePill type={o.paymentType} /></td>
                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{o.paymentMethodLabel}</td>
                   <td className="px-4 py-2.5 text-right text-slate-700 tabular-nums whitespace-nowrap">{inr(o.totalAmount)}</td>
                   <td className="px-4 py-2.5 text-right text-slate-500 tabular-nums whitespace-nowrap">{inr(o.paidAmount)}</td>
@@ -479,18 +549,21 @@ const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding' }) => {
                     <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{d(o.lastPaymentDate)}</td>
                   ) : (
                     <>
-                      <td className="px-4 py-2.5 text-right font-semibold text-red-600 tabular-nums whitespace-nowrap">{inr(o.outstanding)}</td>
+                      <td className={`px-4 py-2.5 text-right tabular-nums whitespace-nowrap ${o.settled ? 'text-slate-400' : 'font-semibold text-red-600'}`}>{inr(o.outstanding)}</td>
                       <td className={`px-4 py-2.5 whitespace-nowrap ${o.overdue ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
-                        {d(o.dueDate)}{o.overdue ? ` · +${o.overdueDays}d` : ''}
+                        {o.settled ? '—' : `${d(o.dueDate)}${o.overdue ? ` · +${o.overdueDays}d` : ''}`}
                       </td>
                     </>
                   )}
-                  <td className="px-4 py-2.5"><StatusPill status={o.status} /></td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => onOpen(o.orderId)}
-                      className="text-xs font-semibold text-slate-600 border border-slate-200 px-2.5 py-1 rounded-md hover:bg-slate-50">
-                      Open
-                    </button>
+                  {/* Status pill and Open button share one cell so there's no wide empty gap between them */}
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <StatusPill status={o.status} />
+                      <button onClick={() => onOpen(o.orderId)}
+                        className="text-xs font-semibold text-slate-600 border border-slate-200 px-2.5 py-1 rounded-md hover:bg-slate-50">
+                        Open
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -507,7 +580,8 @@ const LedgerPage = () => {
   const dispatch = useDispatch();
   const { groups, summary, pagination, loading } = useSelector((s) => s.ledger);
 
-  const [view, setView] = useState('outstanding'); // 'outstanding' | 'cleared'
+  const [view, setView] = useState('outstanding'); // 'outstanding' | 'cleared' | 'all'
+  const [paymentType, setPaymentType] = useState(''); // '' (all) | 'credit' | 'cash'
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -523,6 +597,9 @@ const LedgerPage = () => {
   // status=cleared (which pulls in settled orders the outstanding list hides)
   // regardless of the Pending/Partial filter, which only applies to Outstanding.
   const effectiveStatus = view === 'cleared' ? 'cleared' : status;
+  // The "All transactions" tab additionally lists fully-paid orders (incl. cash
+  // paid up front) alongside the ones that still owe money.
+  const includeSettled = view === 'all';
 
   const notifyAll = async (channel) => {
     setNotifyingAll(true);
@@ -543,17 +620,24 @@ const LedgerPage = () => {
 
   useEffect(() => { setPage(1); }, [view]);
 
+  // The Status options differ per tab (e.g. "Cleared" only exists under All), so a
+  // status picked on one tab must not leak into another.
+  const switchView = (v) => { setView(v); setStatus(''); };
+
   useEffect(() => {
-    dispatch(fetchLedger({ page, limit: 20, search, status: effectiveStatus, overdue, startDate, endDate }));
-  }, [dispatch, page, search, effectiveStatus, overdue, startDate, endDate, openOrder]);
+    dispatch(fetchLedger({
+      page, limit: 20, search, status: effectiveStatus, includeSettled, paymentType,
+      overdue, startDate, endDate,
+    }));
+  }, [dispatch, page, search, effectiveStatus, includeSettled, paymentType, overdue, startDate, endDate, openOrder]);
 
   const hasFilters = status || overdue || startDate || endDate;
   const exportParams = useMemo(
-    () => ({ scope: 'all', status: effectiveStatus, overdue, startDate, endDate }),
-    [effectiveStatus, overdue, startDate, endDate]
+    () => ({ scope: 'all', status: effectiveStatus, includeSettled, paymentType, overdue, startDate, endDate }),
+    [effectiveStatus, includeSettled, paymentType, overdue, startDate, endDate]
   );
   const s = summary || {};
-  const field = 'text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent';
+  const field = 'text-sm font-normal text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent';
 
   return (
     <div className="space-y-6 pb-6">
@@ -564,6 +648,8 @@ const LedgerPage = () => {
           <p className="text-sm text-slate-500 mt-0.5">
             {view === 'cleared'
               ? 'History of dealer orders that have been fully paid off.'
+              : view === 'all'
+              ? 'Every dealer transaction — credit-based and cash paid, including fully paid orders.'
               : 'Outstanding payments for pending & partially-paid dealer orders.'}
           </p>
         </div>
@@ -579,19 +665,38 @@ const LedgerPage = () => {
         </div>
       </div>
 
-      {/* view tabs */}
-      <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-sm">
-        {[['outstanding', 'Outstanding'], ['cleared', 'Cleared']].map(([v, label]) => (
-          <button key={v} onClick={() => setView(v)}
-            className={`px-4 py-1.5 rounded-md font-semibold transition-colors ${view === v ? 'bg-primary-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
-            {label}
-          </button>
-        ))}
+      {/* view tabs + transaction-type filter */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-sm">
+          {[['outstanding', 'Outstanding'], ['cleared', 'Cleared'], ['all', 'All Transactions']].map(([v, label]) => (
+            <button key={v} onClick={() => switchView(v)}
+              className={`px-4 py-1.5 rounded-md font-semibold transition-colors ${view === v ? 'bg-primary-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-sm">
+          {[['', 'All types'], ['credit', 'Credit-based'], ['cash', 'Cash paid']].map(([v, label]) => (
+            <button key={v || 'all'} onClick={() => { setPaymentType(v); setPage(1); }}
+              className={`px-4 py-1.5 rounded-md font-semibold transition-colors ${paymentType === v ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {view === 'cleared' ? (
+        {view === 'all' ? (
+          <>
+            <KPICard title="Total Billed" value={inr(s.totalBilled || 0)} icon={IndianRupee} color="purple"
+              subtitle={`across ${s.orderCount || 0} order${(s.orderCount || 0) === 1 ? '' : 's'}`} />
+            <KPICard title="Total Collected" value={inr(s.totalPaid || 0)} icon={IndianRupee} color="green" />
+            <KPICard title="Outstanding" value={inr(s.totalOutstanding || 0)} icon={IndianRupee} color="red"
+              subtitle={(s.overdueOutstanding || 0) > 0 ? `${inr(s.overdueOutstanding)} past due` : 'nothing past due'} />
+            <KPICard title="Credit / Cash Orders" value={`${s.creditCount || 0} / ${s.cashCount || 0}`} icon={Layers3} color="blue" />
+          </>
+        ) : view === 'cleared' ? (
           <>
             <KPICard title="Total Collected" value={inr(s.totalPaid || 0)} icon={IndianRupee} color="green"
               subtitle={`across ${s.orderCount || 0} cleared order${(s.orderCount || 0) === 1 ? '' : 's'}`} />
@@ -620,45 +725,48 @@ const LedgerPage = () => {
               placeholder="Search dealer, order or invoice…"
               className="pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent w-72" />
           </div>
-          <button onClick={() => setFiltersOpen((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${hasFilters || filtersOpen ? 'border-primary-200 text-primary-700 bg-primary-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-            <Filter size={14} /> Filters{hasFilters ? ' · on' : ''}
-          </button>
-        </div>
-
-        {filtersOpen && (
-          <div className="flex flex-wrap items-end gap-4 px-4 py-3 border-b border-slate-100 bg-slate-50">
-            {view === 'outstanding' && (
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Status</label>
-                <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className={field}>
-                  <option value="">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="partial">Partial</option>
-                </select>
-              </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {filtersOpen && (
+              <>
+                {view !== 'cleared' && (
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                    Status
+                    <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className={field}>
+                      <option value="">All</option>
+                      <option value="pending">Pending</option>
+                      <option value="partial">Partial</option>
+                      {view === 'all' && <option value="cleared">Cleared</option>}
+                    </select>
+                  </label>
+                )}
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                  From
+                  <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPage(1); }} className={field} />
+                </label>
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                  To
+                  <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPage(1); }} className={field} />
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" checked={overdue} onChange={(e) => { setOverdue(e.target.checked); setPage(1); }}
+                    className="rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+                  Overdue only
+                </label>
+                {hasFilters && (
+                  <button onClick={() => { setStatus(''); setOverdue(false); setStartDate(''); setEndDate(''); setPage(1); }}
+                    className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700">
+                    <X size={12} /> Clear
+                  </button>
+                )}
+              </>
             )}
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
-              <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPage(1); }} className={field} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
-              <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPage(1); }} className={field} />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-600 pb-2">
-              <input type="checkbox" checked={overdue} onChange={(e) => { setOverdue(e.target.checked); setPage(1); }}
-                className="rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
-              Overdue only
-            </label>
-            {hasFilters && (
-              <button onClick={() => { setStatus(''); setOverdue(false); setStartDate(''); setEndDate(''); setPage(1); }}
-                className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 pb-2">
-                <X size={12} /> Clear
-              </button>
-            )}
+            {/* Last in the row so the button stays pinned at the right edge; the controls open to its left. */}
+            <button onClick={() => setFiltersOpen((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${hasFilters || filtersOpen ? 'border-primary-200 text-primary-700 bg-primary-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              <Filter size={14} /> Filters{hasFilters ? ' · on' : ''}
+            </button>
           </div>
-        )}
+        </div>
 
         {loading ? (
           <div className="flex items-center justify-center h-48">
@@ -668,13 +776,17 @@ const LedgerPage = () => {
           <div className="px-4 py-20 text-center">
             <CheckCircle2 size={28} className="mx-auto text-green-400" />
             <p className="mt-2 text-sm text-slate-400">
-              {view === 'cleared' ? 'No cleared orders in this range yet.' : 'No outstanding dues found.'}
+              {view === 'cleared'
+                ? 'No cleared orders in this range yet.'
+                : view === 'all'
+                ? 'No transactions found.'
+                : 'No outstanding dues found.'}
             </p>
           </div>
         ) : (
           <div className="p-4 space-y-3">
             {groups.map((g, i) => (
-              <DealerGroup key={g.dealerId} g={g} view={view} onOpen={setOpenOrder} defaultOpen={groups.length <= 3 || i === 0} />
+              <DealerGroup key={g.dealerId} g={g} view={view} exportParams={exportParams} onOpen={setOpenOrder} defaultOpen={groups.length <= 3 || i === 0} />
             ))}
           </div>
         )}

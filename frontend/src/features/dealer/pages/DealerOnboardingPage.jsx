@@ -8,7 +8,9 @@ import api from '../../../services/api';
 
 const STATUS_TABS = [
   { label: 'Pending', value: 'pending' },
-  { label: 'In Review', value: 'in-review' },
+  // Hidden: no dealer can have status 'in-review' (the Dealer model doesn't allow it), so this tab is always empty.
+  // Uncomment together with the In-Review toggle below if an 'in-review' status is ever added on the backend.
+  // { label: 'In Review', value: 'in-review' },
   { label: 'Approved', value: 'active' },
   { label: 'Rejected', value: 'rejected' },
   { label: 'Updates Required', value: 'updates-required' },
@@ -148,7 +150,8 @@ const DealerOnboardingPage = () => {
 
   const [activeTab, setActiveTab] = useState('pending');
   const [selected, setSelected] = useState(null);
-  const [inReview, setInReview] = useState(false);
+  // In-Review toggle state — uncomment with the toggle in the header (and the setInReview(false) on row click).
+  // const [inReview, setInReview] = useState(false);
   const [dealerDocs, setDealerDocs] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
 
@@ -366,8 +369,12 @@ const DealerOnboardingPage = () => {
               return (
                 <button
                   key={dealer._id}
-                  onClick={() => { setSelected(dealer); setInReview(false); }}
-                  className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-l-2 ${selected?._id === dealer._id ? 'border-blue-600 bg-blue-50/50' : 'border-transparent'
+                  // With the In-Review toggle enabled, use: onClick={() => { setSelected(dealer); setInReview(false); }}
+                  onClick={() => setSelected(dealer)}
+                  // `!` (important) on the LEFT border colour only: the parent's `divide-slate-100`
+                  // overrides border-color on every row except the first, which hid the blue line.
+                  // Left-only so the row's top divider line keeps its normal grey colour.
+                  className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-l-2 ${selected?._id === dealer._id ? '!border-l-blue-600 bg-blue-50/50' : '!border-l-transparent'
                     }`}
                 >
                   <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
@@ -417,6 +424,8 @@ const DealerOnboardingPage = () => {
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusBadgeOutline status={selected.status} />
+                  {/* In-Review toggle — hidden: it only flipped local UI state (never saved or sent anywhere).
+                      Uncomment together with the `inReview` state and the "In Review" tab if it's ever wired up.
                   {selected.status !== 'active' && selected.status !== 'rejected' && (
                     <label className="flex flex-col items-center gap-0.5 cursor-pointer select-none">
                       <div
@@ -430,6 +439,7 @@ const DealerOnboardingPage = () => {
                       <span className="text-[10px] text-slate-500">In-Review</span>
                     </label>
                   )}
+                  */}
                 </div>
               </div>
 

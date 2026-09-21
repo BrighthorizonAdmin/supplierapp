@@ -11,11 +11,17 @@ const fmtDate = (d) =>
 const COLUMNS = [
   { header: 'Dealer', key: 'dealerName', width: 26 },
   { header: 'Dealer Code', key: 'dealerCode', width: 14 },
+  { header: 'Owner Name', key: 'dealerOwnerName', width: 22 },
+  { header: 'Phone', key: 'dealerPhone', width: 16 },
+  { header: 'Email', key: 'dealerEmail', width: 28 },
+  { header: 'GST Number', key: 'dealerGst', width: 20 },
+  { header: 'Address', key: 'dealerAddress', width: 40 },
   { header: 'Order No', key: 'orderNumber', width: 18 },
   { header: 'Dealer Order No', key: 'dealerOrderNumber', width: 18 },
   { header: 'Order Date', key: 'orderDate', width: 14 },
   { header: 'Source', key: 'source', width: 12 },
   { header: 'Payment Method', key: 'paymentMethodLabel', width: 18 },
+  { header: 'Payment Type', key: 'paymentTypeLabel', width: 14 },
   { header: 'Status', key: 'status', width: 10 },
   { header: 'Order Total', key: 'totalAmount', width: 14 },
   { header: 'Paid', key: 'paidAmount', width: 14 },
@@ -30,11 +36,17 @@ const COLUMNS = [
 const toFlat = (r) => ({
   dealerName: r.dealerName,
   dealerCode: r.dealerCode,
+  dealerOwnerName: r.dealerOwnerName,
+  dealerPhone: r.dealerPhone,
+  dealerEmail: r.dealerEmail,
+  dealerGst: r.dealerGst,
+  dealerAddress: r.dealerAddress,
   orderNumber: r.orderNumber,
   dealerOrderNumber: r.dealerOrderNumber,
   orderDate: fmtDate(r.orderDate),
   source: r.source,
   paymentMethodLabel: r.paymentMethodLabel,
+  paymentTypeLabel: r.paymentType === 'credit' ? 'Credit' : 'Cash',
   status: r.status,
   totalAmount: r.totalAmount,
   paidAmount: r.paidAmount,
@@ -73,7 +85,7 @@ async function toXlsx(rows, { title = 'Ledger', includeTimeline = false } = {}) 
   wb.creator = 'Buvvas Supplier — Ledger';
   wb.created = new Date();
 
-  const ws = wb.addWorksheet('Outstanding');
+  const ws = wb.addWorksheet('Ledger');
   ws.columns = COLUMNS;
   ws.getRow(1).font = { bold: true };
   ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };

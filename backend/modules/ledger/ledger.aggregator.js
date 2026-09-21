@@ -9,8 +9,9 @@ const { addDays } = require('date-fns');
  * which app's Mongoose schema created them.
  *
  * A ledger row is produced for every dealer order that still has money owed
- * (status pending or partial). Fully-paid orders are excluded unless
- * includeSettled is passed.
+ * (status pending or partial). Fully-paid orders — including orders paid up
+ * front in cash — are excluded unless includeSettled is passed. Each row carries
+ * a paymentType ('credit' | 'cash') so callers can filter on it.
  */
 
 const coll = (name) => mongoose.connection.collection(name);
@@ -32,6 +33,27 @@ const METHOD_LABELS = {
   other: 'Other',
 };
 const methodLabel = (m) => METHOD_LABELS[m] || (m ? String(m) : '—');
+
+// "Credit-based" = the dealer was allowed to pay later: a net-terms order, or a
+// split order (which always leaves a credit portion at placement, even once that
+// portion is later paid off). Everything else is paid up front — cash / UPI /
+// card / bank transfer / COD — and is "cash".
+const paymentTypeOf = (order, isSplit) =>
+  isSplit || /^net-\d+$/i.test(String(order.paymentMethod || '')) ? 'credit' : 'cash';
+
+// The `dealers` collection is shared and written by BOTH apps with different field
+// names, so dealer docs are read raw and each detail below falls back to the
+// dealer-app (D-BE) name: dealerCode|dealerId, ownerName|name, phone|mobile,
+// gstNumber|gstin. Address is a sub-document on supplier-created dealers
+// (street/city/state/pincode) but flat top-level strings on dealer-app ones
+// (address = street, plus city / state / pinCode).
+const formatAddress = (dealer) => {
+  const a = dealer.address;
+  if (a && typeof a === 'object') {
+    return [a.street, a.city, a.state, a.pincode].filter(Boolean).join(', ');
+  }
+  return [a, dealer.city, dealer.state, dealer.pinCode || dealer.pincode].filter(Boolean).join(', ');
+};
 
 const isSbeInvoice = (inv) => typeof inv.totalAmount === 'number';
 const isDbeInvoice = (inv) => !isSbeInvoice(inv) && typeof inv.amount === 'number';
@@ -304,12 +326,16 @@ async function buildLedgerRows(opts = {}) {
 
       dealerId: order.dealerId,
       dealerName: dealer.businessName || dealer.ownerName || '—',
-      dealerCode: dealer.dealerCode || '',
+      dealerCode: String(dealer.dealerCode || dealer.dealerId || ''),
       dealerEmail: dealer.email || '',
-      dealerPhone: dealer.phone || '',
+      dealerPhone: String(dealer.phone || dealer.mobile || ''),
+      dealerOwnerName: dealer.ownerName || dealer.name || '',
+      dealerGst: dealer.gstNumber || dealer.gstin || '',
+      dealerAddress: formatAddress(dealer),
 
       paymentMethod: order.paymentMethod || '',
       paymentMethodLabel: methodLabel(order.paymentMethod),
+      paymentType: paymentTypeOf(order, isSplit),
       paymentStatusRaw: order.paymentStatus || '',
       isSplit,
       splitPayNowAmount: num(order.splitPayNowAmount),
@@ -409,6 +435,8 @@ function summarise(rows) {
     partialCount: rows.filter((r) => r.status === 'partial').length,
     pendingCount: rows.filter((r) => r.status === 'pending').length,
     clearedCount: rows.filter((r) => r.status === 'cleared').length,
+    creditCount: rows.filter((r) => r.paymentType === 'credit').length,
+    cashCount: rows.filter((r) => r.paymentType === 'cash').length,
     overdueCount: rows.filter((r) => r.overdue).length,
     overdueOutstanding: +rows.filter((r) => r.overdue).reduce((s, r) => s + r.outstanding, 0).toFixed(2),
   };
