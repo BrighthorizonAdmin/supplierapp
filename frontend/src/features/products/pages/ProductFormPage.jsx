@@ -626,17 +626,23 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
             <div>
               <p className="label">Specification</p>
               <div className="space-y-2">
-                {/* <select className="input" {...register('specWeight')}>
-                  <option value="">Weight</option>
-                  <option value="kg">kg</option>
-                  <option value="g">g</option>
-                  <option value="units">Units</option>
-                </select>
-                <select className="input" {...register('specDimensions')}>
-                  <option value="">Dimensions</option>
-                  <option value="cm">cm</option>
-                  <option value="inch">inch</option>
-                </select> */}
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    placeholder="Weight (kg) e.g. 0.5"
+                    className="input pr-10"
+                    {...register('specWeight', { valueAsNumber: true })}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">kg</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Dimensions e.g. 30×20×10 cm"
+                  className="input"
+                  {...register('specDimensions')}
+                />
                 <select className="input" {...register('specColor')}>
                   <option value="">Color/Variant</option>
                   <option value="red">Red</option>
