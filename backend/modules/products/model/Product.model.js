@@ -134,7 +134,7 @@ const productSchema = new mongoose.Schema(
       type: Date,
     },
     specifications: {
-      weight:     { type: String, trim: true },
+      weight:     { type: Number, min: 0, default: null }, // in kg — used for shipping weight calculation
       dimensions: { type: String, trim: true },
       color:      { type: String, trim: true },
     },

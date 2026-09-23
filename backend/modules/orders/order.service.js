@@ -885,6 +885,23 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
     if (process.env.NIMBUSPOST_EMAIL && !order.trackingId) {
       try {
         const npService = require('../nimbuspost/nimbuspost.service');
+
+        // Compute total shipping weight from product specifications
+        const orderItems = order.items?.length
+          ? order.items
+          : await OrderItem.find({ orderId: order._id }).lean();
+        const productIds = orderItems.map(i => i.productId).filter(Boolean);
+        const products   = productIds.length
+          ? await Product.find({ _id: { $in: productIds } }, 'specifications.weight').lean()
+          : [];
+        const weightMap  = Object.fromEntries(products.map(p => [p._id.toString(), p.specifications?.weight]));
+        const totalWeightKg = orderItems.reduce((sum, i) => {
+          const w = weightMap[i.productId?.toString()];
+          return sum + (w > 0 ? w * (Number(i.quantity) || 1) : 0);
+        }, 0);
+        // Attach computed weight (in kg) to order for nimbuspost.service to pick up
+        order._computedWeightKg = totalWeightKg > 0 ? totalWeightKg : null;
+
         const shipment = await npService.createShipment(order);
         if (shipment?.awb_number) {
           order.trackingId = String(shipment.awb_number);

@@ -50,6 +50,34 @@ const createShipment = async (order) => {
   return isV2() ? createShipmentV2(order) : createShipmentV1(order);
 };
 
+// Fetch available couriers for a route and return the cheapest one with a valid rate
+const getV1CourierId = async (fromPincode, toPincode, weight) => {
+  try {
+    const { data: res } = await axios.post(
+      `${V1_BASE}/courier/serviceability`,
+      { origin: String(fromPincode), destination: String(toPincode), payment_type: 'prepaid', weight: String(weight) },
+      { headers: await v1Headers(), timeout: 10000 }
+    );
+    const couriers = Array.isArray(res?.data) ? res.data : [];
+    if (couriers.length > 0) {
+      console.log('[NimbusPost V1] Sample courier fields:', JSON.stringify(couriers[0]));
+    }
+    // Skip couriers that need separate account credentials (Amazon Shipping variants)
+    const valid = couriers.filter((c) => !String(c.name || '').toLowerCase().includes('amazon'));
+    // Sort by whichever rate field is present
+    const getRate = (c) => Number(c.rate ?? c.charge ?? c.total_charge ?? c.freight ?? 0);
+    const sorted = valid.sort((a, b) => getRate(a) - getRate(b));
+    if (sorted.length > 0) {
+      console.log(`[NimbusPost V1] Auto-selected courier: ${sorted[0].name} (id=${sorted[0].id})`);
+      return sorted[0].id;
+    }
+    console.warn('[NimbusPost V1] No valid courier found in serviceability response');
+  } catch (err) {
+    console.warn('[NimbusPost V1] Serviceability check failed:', err.message);
+  }
+  return null;
+};
+
 const createShipmentV1 = async (order) => {
   const addr = order.deliveryAddress || {};
   const items = order.items || [];
@@ -70,6 +98,13 @@ const createShipmentV1 = async (order) => {
   const shipperPincode = process.env.NIMBUSPOST_SHIPPER_PINCODE || '500072';
   const shipperPhone   = process.env.NIMBUSPOST_SHIPPER_PHONE   || '9876543210';
 
+  // Use per-product computed weight if available; fall back to env default (0.5 kg)
+  const weightKg = order._computedWeightKg > 0
+    ? order._computedWeightKg
+    : (Number(process.env.NIMBUSPOST_DEFAULT_WEIGHT) || 0.5);
+  const weight   = Math.max(1, Math.round(weightKg * 1000));
+  const toPincode = String(addr.postalCode || addr.pincode || addr.zipCode || shipperPincode);
+
   const payload = {
     order_number:     order.orderNumber,
     payment_type:     'prepaid',
@@ -77,7 +112,7 @@ const createShipmentV1 = async (order) => {
     shipping_charges: 0,
     discount:         0,
     cod_charges:      0,
-    package_weight:   Math.max(1, Math.round((Number(process.env.NIMBUSPOST_DEFAULT_WEIGHT) || 0.5) * 1000)),
+    package_weight:   weight,
     package_length:   10,
     package_breadth:  10,
     package_height:   10,
@@ -87,7 +122,7 @@ const createShipmentV1 = async (order) => {
       address_2: '',
       city:      addr.city || shipperCity,
       state:     addr.state || process.env.NIMBUSPOST_DEFAULT_STATE || shipperState,
-      pincode:   String(addr.postalCode || addr.pincode || addr.zipCode || shipperPincode),
+      pincode:   toPincode,
       phone:     String(order.dealerPhone || addr.phone || shipperPhone),
     },
     pickup: {
@@ -103,12 +138,17 @@ const createShipmentV1 = async (order) => {
     order_items: orderItems,
   };
 
-  console.log('[NimbusPost V1] Creating shipment for', order.orderNumber);
-  const { data: res } = await axios.post(`${V1_BASE}/shipments`, payload, {
-    headers: await v1Headers(),
-    timeout: 15000,
-  });
+  console.log('[NimbusPost V1] Fetching serviceability before booking...');
+  const headers = await v1Headers();
+  const courierId = await getV1CourierId(shipperPincode, toPincode, weight);
+  if (courierId) {
+    payload.courier_id = courierId;
+  } else {
+    console.warn('[NimbusPost V1] No courier found via serviceability — proceeding without courier_id');
+  }
 
+  console.log('[NimbusPost V1] Creating shipment for', order.orderNumber);
+  const { data: res } = await axios.post(`${V1_BASE}/shipments`, payload, { headers, timeout: 15000 });
   console.log('[NimbusPost V1] Shipment response:', JSON.stringify(res));
 
   if (!res?.status) {
@@ -136,7 +176,11 @@ const createShipmentV2 = async (order) => {
       }))
     : [{ name: 'Products', qty: 1, price: Number(order.netAmount) || 0, sku: 'MISC' }];
 
-  const weight = Math.max(1, Math.round((Number(process.env.NIMBUSPOST_DEFAULT_WEIGHT) || 0.5) * 1000));
+  // Use per-product computed weight if available; fall back to env default (0.5 kg)
+  const weightKg2 = order._computedWeightKg > 0
+    ? order._computedWeightKg
+    : (Number(process.env.NIMBUSPOST_DEFAULT_WEIGHT) || 0.5);
+  const weight = Math.max(1, Math.round(weightKg2 * 1000));
 
   const payload = {
     order_number: order.orderNumber,
