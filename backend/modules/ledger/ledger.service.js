@@ -4,6 +4,7 @@ const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const { buildLedgerRows, groupByDealer, summarise } = require('./ledger.aggregator');
 const { toCsv, toXlsx } = require('./ledger.export');
+const { toPdf } = require('./ledger.pdf');
 const { notifyDealer, notifyDueDateChanged } = require('./ledger.notify');
 const { proofUrl } = require('./ledger.upload');
 
@@ -247,6 +248,23 @@ const exportLedger = async (query = {}) => {
       filename: `${base}.xlsx`,
       contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       buffer: Buffer.from(buffer),
+    };
+  }
+
+  if (format === 'pdf') {
+    // Portfolio-level totals (scope 'all') must reflect the SAME filtered rows being
+    // exported, not the unfiltered ledger — summarise() over `rows` does that.
+    // Company letterhead: the same Settings fields (companyName/Address/Mobile/GSTIN/
+    // PAN/Email/Website) the Invoice PDF's letterhead already reads (settings.service.js
+    // getSettings()), read here via the raw collection rather than the Settings model to
+    // avoid depending on that module — read raw, like every other cross-cutting lookup
+    // in this file (dealers, orders, invoices).
+    const company = (await coll('settings').findOne({ key: 'global' })) || {};
+    const buffer = await toPdf(rows, { scope, summary: scope === 'all' ? summarise(rows) : undefined, company });
+    return {
+      filename: `${base}.pdf`,
+      contentType: 'application/pdf',
+      buffer,
     };
   }
 

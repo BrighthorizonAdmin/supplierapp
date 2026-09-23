@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import {
   Search, Filter, X, Download, Bell, ChevronDown, ChevronRight,
   Paperclip, Trash2, Plus, CalendarClock, AlertTriangle,
-  IndianRupee, Users, Layers3, Wallet, FileSpreadsheet, FileText,
+  IndianRupee, Users, Layers3, Wallet, FileSpreadsheet, FileText, FileType,
   Clock, CheckCircle2, ReceiptText, ImagePlus, Send,
 } from 'lucide-react';
 import Modal from '../../../components/ui/Modal';
@@ -418,6 +418,7 @@ const DetailModal = ({ orderId, onClose }) => {
             <div className="flex items-center gap-2">
               <IconBtn icon={FileText} label="CSV" onClick={() => downloadLedger({ scope: 'order', orderId: r.orderId, format: 'csv' })} />
               <IconBtn icon={FileSpreadsheet} label="Excel" onClick={() => downloadLedger({ scope: 'order', orderId: r.orderId, format: 'xlsx' })} />
+              <IconBtn icon={FileType} label="PDF" onClick={() => downloadLedger({ scope: 'order', orderId: r.orderId, format: 'pdf' })} />
             </div>
             <div className="flex items-center gap-3">
               {lastReminder && (
@@ -508,6 +509,7 @@ const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding', exportParam
           )}
           <IconBtn icon={FileSpreadsheet} label="Excel" onClick={() => downloadLedger({ ...exportParams, scope: 'dealer', dealerId: g.dealerId, format: 'xlsx' })} />
           <IconBtn icon={FileText} label="CSV" onClick={() => downloadLedger({ ...exportParams, scope: 'dealer', dealerId: g.dealerId, format: 'csv' })} />
+          <IconBtn icon={FileType} label="PDF" onClick={() => downloadLedger({ ...exportParams, scope: 'dealer', dealerId: g.dealerId, format: 'pdf' })} />
         </div>
       </div>
 
@@ -662,6 +664,7 @@ const LedgerPage = () => {
             <Download size={14} /> Export all
           </button>
           <IconBtn icon={FileText} label="CSV" onClick={() => downloadLedger({ ...exportParams, format: 'csv' })} />
+          <IconBtn icon={FileType} label="PDF" onClick={() => downloadLedger({ ...exportParams, format: 'pdf' })} />
         </div>
       </div>
 

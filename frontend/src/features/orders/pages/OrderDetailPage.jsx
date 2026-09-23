@@ -844,6 +844,21 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
               {!order.paymentMethod && (
                 <p className="text-xs text-slate-400">Payment method not recorded</p>
               )}
+              {/* Split orders never show an amount above — "Payment Status: pending" just means
+                  the CREDIT portion is still outstanding, but the pay-now portion is already
+                  collected. Without this, the page looks like nothing was paid at all. */}
+              {order.paymentMethod === 'split' && (
+                <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3">
+                  <span className="text-slate-500">Paid at checkout</span>
+                  <span className="font-medium text-green-700">{fmt(order.splitPayNowAmount)}</span>
+                </div>
+              )}
+              {order.paymentMethod === 'split' && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">On credit</span>
+                  <span className="font-medium text-slate-700">{fmt(order.splitCreditAmount)}</span>
+                </div>
+              )}
               {order.pricingTier && (
                 <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3">
                   <span className="text-slate-500">Pricing Tier</span>

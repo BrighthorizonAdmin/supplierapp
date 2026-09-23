@@ -158,13 +158,9 @@ const AppRouter = () => {
               <PaymentListPage />
             </ProtectedRoute>
           } />
-          {/* Ledger — outstanding dues for pending/partial dealer orders.
-              Gated on payments:read for now; swap to a dedicated ledger:read later. */}
-          <Route path="ledger" element={
-            <ProtectedRoute permission="payments:read">
-              <LedgerPage />
-            </ProtectedRoute>
-          } />
+          {/* Ledger now lives under Finance (see NAV_ITEMS' `finance` group in Sidebar.jsx);
+              this old top-level URL just redirects so any existing bookmark/link still works. */}
+          <Route path="ledger" element={<Navigate to="/finance/ledger" replace />} />
           <Route path="invoices" element={
             <ProtectedRoute permission="invoices:read">
               <InvoiceListPage />
@@ -198,6 +194,14 @@ const AppRouter = () => {
           <Route path="finance" element={
             <ProtectedRoute permission="finance:read">
               <FinancePage />
+            </ProtectedRoute>
+          } />
+          {/* Ledger — outstanding dues for pending/partial dealer orders, nested under
+              Finance (see the `finance` nav group in Sidebar.jsx). Gated on payments:read
+              for now; swap to a dedicated ledger:read permission later. */}
+          <Route path="finance/ledger" element={
+            <ProtectedRoute permission="payments:read">
+              <LedgerPage />
             </ProtectedRoute>
           } />
           <Route path="audit" element={
