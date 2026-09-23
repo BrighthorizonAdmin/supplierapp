@@ -479,9 +479,9 @@ const OrderDetailPage = () => {
 <div class="grid2">
 <div>
 <div class="section-title">Customer Details</div>
-<div class="label">Name</div><div class="value">${order.dealerId?.businessName || order.dealerId?.name || '—'}</div>
-<div class="label">Email</div><div class="value">${order.dealerId?.email || order.email || '—'}</div>
-<div class="label">Phone</div><div class="value">${order.dealerId?.phone || order.phone || '—'}</div>
+<div class="label">Name</div><div class="value">${order.customerName ||'—'}</div>
+<div class="label">Email</div><div class="value">${order.dealerId?.email || order.email || order.customerEmail || '—'}</div>
+<div class="label">Phone</div><div class="value">${order.dealerId?.phone || order.phone || order.customerPhone || '—'}</div>
 <div class="label">Shipping Address</div>
 <div class="value">${[order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode, order.deliveryAddress?.country].filter(Boolean).join(', ') || order.dealerId?.address || '—'}</div>
 </div>
@@ -524,7 +524,8 @@ const OrderDetailPage = () => {
 <tr><td style="color:#666">Subtotal</td><td>₹${(order.subtotal || 0).toLocaleString('en-IN')}</td></tr>
 <tr><td style="color:#666">Tax</td><td>₹${(order.taxAmount || 0).toLocaleString('en-IN')}</td></tr>
 <tr><td style="color:#666">Shipping</td><td>₹${(order.shippingAmount || 0).toLocaleString('en-IN')}</td></tr>
-<tr class="total-final"><td>Total</td><td>₹${(order.netAmount || (order.subtotal || 0) + (order.taxAmount || 0) + (order.shippingAmount || 0)).toLocaleString('en-IN')}</td></tr>
+${(order.discountAmount || 0) > 0 ? `<tr><td style="color:#666">Flash sale discount${order.discountPercent ? ` (${order.discountPercent}%)` : ''}</td><td>-₹${order.discountAmount.toLocaleString('en-IN')}</td></tr>` : ''}
+<tr class="total-final"><td>Total</td><td>₹${(order.netAmount || (order.subtotal || 0) + (order.taxAmount || 0) + (order.shippingAmount || 0) - (order.discountAmount || 0)).toLocaleString('en-IN')}</td></tr>
 </tbody>
 </table>
 </div>
@@ -618,8 +619,14 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
   const subtotal = order.subtotal || 0;
   const tax = order.taxAmount || 0;
   const shipping = order.shippingCost || 0;
-  const total = order.netAmount || (subtotal + tax + shipping);
+  const discount = order.discountAmount || 0;
+  const total = order.netAmount || (subtotal + tax + shipping - discount);
   const dealer = order.dealerId || {};
+  // b2c (Buvvas Ecommerce) orders have no dealerId — customer identity lives
+  // directly on the order instead, same fallback the print template below uses.
+  const customerName = dealer.businessName || dealer.name || order.customerName || '—';
+  const customerEmail = dealer.email || order.customerEmail || '';
+  const customerPhone = dealer.phone || order.customerPhone || '';
   const addr = order.deliveryAddress || {};
   const timeline = order.timeline || [];
 
@@ -724,6 +731,12 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
               {shipping > 0 && (
                 <div className="flex justify-between text-sm text-slate-600"><span>Shipping</span><span>{fmt(shipping)}</span></div>
               )}
+              {discount > 0 && (
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span>Flash sale discount{order.flashSaleApplied && order.discountPercent ? ` (${order.discountPercent}%)` : ''}</span>
+                  <span>-{fmt(discount)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-200 text-base">
                 <span>Total</span><span>{fmt(total)}</span>
               </div>
@@ -786,9 +799,9 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
             </div>
             <div className="px-5 py-4 space-y-3">
               <div>
-                <p className="font-semibold text-slate-900">{dealer.businessName || dealer.name || '—'}</p>
-                {dealer.email && <p className="text-sm text-slate-500 mt-0.5">{dealer.email}</p>}
-                {dealer.phone && <p className="text-sm text-slate-500">{dealer.phone}</p>}
+                <p className="font-semibold text-slate-900">{customerName}</p>
+                {customerEmail && <p className="text-sm text-slate-500 mt-0.5">{customerEmail}</p>}
+                {customerPhone && <p className="text-sm text-slate-500">{customerPhone}</p>}
               </div>
               {(addr.fullAddress || addr.city) && (
                 <div className="pt-3 border-t border-slate-100">
@@ -830,6 +843,21 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
               )}
               {!order.paymentMethod && (
                 <p className="text-xs text-slate-400">Payment method not recorded</p>
+              )}
+              {/* Split orders never show an amount above — "Payment Status: pending" just means
+                  the CREDIT portion is still outstanding, but the pay-now portion is already
+                  collected. Without this, the page looks like nothing was paid at all. */}
+              {order.paymentMethod === 'split' && (
+                <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3">
+                  <span className="text-slate-500">Paid at checkout</span>
+                  <span className="font-medium text-green-700">{fmt(order.splitPayNowAmount)}</span>
+                </div>
+              )}
+              {order.paymentMethod === 'split' && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">On credit</span>
+                  <span className="font-medium text-slate-700">{fmt(order.splitCreditAmount)}</span>
+                </div>
               )}
               {order.pricingTier && (
                 <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3">

@@ -557,6 +557,10 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
            
             {/* <F label="Tax"          name="taxRate"   type="number" /> */}
             <F label="Base Price"   name="basePrice" type="number" step="0.01" required />
+            <div>
+              <F label="Buvvas Price" name="buvvasPrice" type="number" step="0.01" />
+              <p className="text-xs text-gray-400 mt-1">Customer-facing price shown on the Buvvas Ecommerce site. Leave blank to fall back to Base Price.</p>
+            </div>
             <div className="flex-1 flex flex-col">
               <label className="label mb-1">
                 Product Images

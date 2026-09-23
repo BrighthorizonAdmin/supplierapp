@@ -44,4 +44,10 @@ const uploadProductImage = multer({
   fileFilter: imageFilter,
 });
 
-module.exports = { uploadDocument, uploadProductImage };
+const uploadBlogImage = multer({
+  storage: createStorage('blogs'),
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: imageFilter,
+});
+
+module.exports = { uploadDocument, uploadProductImage, uploadBlogImage };

@@ -147,8 +147,8 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber, dealerId) {
       )
     );
  
-    // ✅ Send to dealer (single API call)
-    if (DEALER_API_URL && DEALER_WEBHOOK_SECRET) {
+    // ✅ Send to dealer (single API call) — not applicable to b2c (no dealer) orders
+    if (DEALER_API_URL && DEALER_WEBHOOK_SECRET && dealerId) {
       axios
         .post(
           `${DEALER_API_URL}/api/notifications/supplier/stock-alert`,
@@ -372,22 +372,26 @@ const confirmOrder = async (orderId, userId) => {
       throw new AppError(`Order is already ${order.status}`, 400);
     }
  
+    // Buvvas Ecommerce (b2c) orders have no dealer — only enforce dealer
+    // checks for dealer (b2b) orders.
     const dealer = order.dealerId;
- 
-    if (!dealer) {
-      throw new AppError('Dealer not found', 404);
+
+    if (order.orderType !== 'b2c') {
+      if (!dealer) {
+        throw new AppError('Dealer not found', 404);
+      }
+      if (dealer.status !== 'active') {
+        throw new AppError('Dealer account is not active', 400);
+      }
     }
- 
-    if (dealer.status !== 'active') {
-      throw new AppError('Dealer account is not active', 400);
-    }
- 
+
     // Supplier-created orders only
     const isSupplierCreatedOrder = !order.dbeOrderId;
- 
+
     // Credit limit validation
     if (
       isSupplierCreatedOrder &&
+      dealer &&
       dealer.creditUsed + order.netAmount > dealer.creditLimit
     ) {
       throw new AppError(
@@ -434,27 +438,46 @@ const confirmOrder = async (orderId, userId) => {
     await order.save({ session });
  
     // ==========================================
-    // REMOVED DUPLICATE STOCK DEDUCTION
+    // STOCK DEDUCTION — idempotency guard
     // ==========================================
-    // THIS BLOCK WAS CAUSING DOUBLE DECREMENT
-    //
-    for (const item of items) {
-      const qty = Number(item.quantity) || 0;
-      const pid = item.productId;
-   
-      if (pid && qty > 0) {
-        await Product.findByIdAndUpdate(
-          pid,
-          { $inc: { currentStockQty: -qty } },
-          { session, returnDocument: 'after' }
-        );
+    // Claim this order's stock deduction exactly once via an atomic
+    // conditional update on stockDeductedAt. Any duplicate/concurrent
+    // confirm call for the same order sees it already claimed and skips
+    // deduction (prevents double-click / race duplicate decrements).
+    const stockClaim = await Order.findOneAndUpdate(
+      { _id: orderId, stockDeductedAt: null },
+      { $set: { stockDeductedAt: new Date() } },
+      { session }
+    );
+
+    // Website (b2c) orders are also confirmed on the dealer side via the
+    // notifyDealerOrderStatus webhook below — the dealer backend reliably
+    // deducts this same shared Product.currentStockQty for b2c orders, so
+    // we must not deduct it again here or it gets deducted twice.
+    // b2b (dealer-app) orders keep the local deduction below, matching
+    // their previous working behavior — the dealer backend's own webhook
+    // deduction currently fails for b2b orders before it reaches its
+    // stock-deduction code (unrelated pre-existing dealer-side bug), so
+    // it must not be relied on for b2b until that's fixed on their side.
+    if (stockClaim && order.orderType !== 'b2c') {
+      for (const item of items) {
+        const qty = Number(item.quantity) || 0;
+        const pid = item.productId;
+
+        if (pid && qty > 0) {
+          await Product.findByIdAndUpdate(
+            pid,
+            { $inc: { currentStockQty: -qty } },
+            { session, returnDocument: 'after' }
+          );
+        }
       }
     }
     // ==========================================
  
     // Update dealer credit usage
-    if (isSupplierCreatedOrder) {
- 
+    if (isSupplierCreatedOrder && order.dealerId) {
+
       await Dealer.findByIdAndUpdate(
         order.dealerId,
         {
@@ -465,21 +488,23 @@ const confirmOrder = async (orderId, userId) => {
         { session }
       );
     }
- 
-    // Create transaction
-    await Transaction.create([
-      {
-        type: 'debit',
-        dealerId: order.dealerId,
-        amount: order.netAmount,
-        ref: {
-          refType: 'order',
-          refId: order._id,
-        },
-        description: `Order ${order.orderNumber} confirmed`,
-        createdBy: userId,
-      }
-    ], { session });
+
+    // Create transaction — dealer credit ledger entry, not applicable to b2c orders
+    if (order.dealerId) {
+      await Transaction.create([
+        {
+          type: 'debit',
+          dealerId: order.dealerId,
+          amount: order.netAmount,
+          ref: {
+            refType: 'order',
+            refId: order._id,
+          },
+          description: `Order ${order.orderNumber} confirmed`,
+          createdBy: userId,
+        }
+      ], { session });
+    }
  
     // Audit log
     await auditService.log(
@@ -523,6 +548,14 @@ const confirmOrder = async (orderId, userId) => {
       const inv = await Invoice.create([{
         orderId:     order._id,
         dealerId:    order.dealerId,
+        // Ecommerce (Buvvas website) orders have no dealer — bill the end
+        // customer directly as a b2c invoice instead of defaulting to b2b.
+        invoiceType: order.orderType === 'b2c' ? 'b2c' : 'b2b',
+        partyName:   order.orderType === 'b2c' ? (order.customerName || '') : undefined,
+        partyPhone:  order.orderType === 'b2c' ? (order.customerPhone || '') : undefined,
+        partyAddress: order.orderType === 'b2c'
+          ? [order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode].filter(Boolean).join(', ')
+          : undefined,
         lineItems:   invoiceLineItems,
         subtotal:    order.subtotal,
         taxAmount:   order.taxAmount,
@@ -610,15 +643,19 @@ const cancelOrder = async (orderId, reason, userId) => {
  
     if (wasConfirmed) {
       // Release inventory allocations and restore product-level currentStockQty
+      // (b2c/Buvvas items have no warehouseId/productId — nothing was allocated at confirm, skip)
       for (const item of items) {
-        await inventoryService.releaseAllocation(item.productId, item.warehouseId, item.quantity, session);
+        if (!item.productId) continue;
+        if (item.warehouseId) {
+          await inventoryService.releaseAllocation(item.productId, item.warehouseId, item.quantity, session);
+        }
         await Product.findByIdAndUpdate(
           item.productId,
           { $inc: { currentStockQty: item.quantity } },
           { session }
         );
       }
- 
+
       // Reverse creditUsed — only for supplier-created orders
       if (isSupplierCreatedOrder) {
         // const dealer = await Dealer.findById(order.dealerId).session(session).lean();
@@ -632,21 +669,23 @@ const cancelOrder = async (orderId, reason, userId) => {
           );
         }
       }
- 
+
       // Cancel invoice
       if (order.invoiceId) {
         await Invoice.findByIdAndUpdate(order.invoiceId, { status: 'cancelled' }, { session });
       }
- 
-      // Reverse transaction
-      await Transaction.create([{
-        type: 'credit',
-        dealerId: order.dealerId,
-        amount: order.netAmount,
-        ref: { refType: 'order', refId: order._id },
-        description: `Order ${order.orderNumber} cancelled`,
-        createdBy: userId,
-      }], { session });
+
+      // Reverse transaction — dealer credit ledger entry, not applicable to b2c orders
+      if (order.dealerId) {
+        await Transaction.create([{
+          type: 'credit',
+          dealerId: order.dealerId,
+          amount: order.netAmount,
+          ref: { refType: 'order', refId: order._id },
+          description: `Order ${order.orderNumber} cancelled`,
+          createdBy: userId,
+        }], { session });
+      }
     }
  
     const newStatus = order.status === 'pending' ? 'rejected' : 'cancelled';
@@ -673,8 +712,11 @@ const cancelOrder = async (orderId, reason, userId) => {
  
 const getOrderStats = async () => {
   const results = await Order.aggregate([
-    // Exclude D-BE-native orders that share the same collection
-    { $match: { orderNumber: { $not: { $regex: /^ORD-\d{13}-\d+$/ } } } },
+    // Both D-BE and S-BE share the same MongoDB `orders` collection. Only
+    // S-BE-native orderNumbers look like ORD-{8-digit date}-{seq} — D-BE's
+    // dealer orders (ORD-{13-digit timestamp}-{rand}) and ecommerce orders
+    // (WEB-{13-digit timestamp}-{rand}) are excluded by only matching this format.
+    { $match: { orderNumber: { $regex: /^ORD-\d{8}-\d+$/ } } },
     { $group: { _id: '$status', count: { $sum: 1 } } },
   ]);
   const counts = { draft: 0, confirmed: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0, total: 0 };
@@ -721,11 +763,12 @@ const getOrders = async (query = {}) => {
   const { page, limit, skip } = getPagination(query);
  
   // Both D-BE and S-BE share the same MongoDB `orders` collection.
-  // D-BE orders have orderNumber like ORD-{13-digit-timestamp}-{4-digits}.
-  // S-BE orders (webhook + manual) have orderNumber like ORD-{8-digit-date}-{seq}.
-  // Exclude D-BE-native documents so they never appear in the supplier order list.
+  // D-BE orders have orderNumber like ORD-{13-digit-timestamp}-{4-digits} (dealer)
+  // or WEB-{13-digit-timestamp}-{4-digits} (Buvvas Ecommerce).
+  // S-BE orders (webhook-linked + manual) always look like ORD-{8-digit-date}-{seq}.
+  // Only match that format so D-BE-native documents never appear twice.
   const match = {
-    orderNumber: { $not: /^ORD-\d{13}-\d+$/ },
+    orderNumber: /^ORD-\d{8}-\d+$/,
   };
  
   if (query.status) match.status = query.status;
@@ -988,6 +1031,12 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
         deliveredInvoice = await Invoice.create({
           orderId:      order._id,
           dealerId:     order.dealerId,
+          invoiceType:  order.orderType === 'b2c' ? 'b2c' : 'b2b',
+          partyName:    order.orderType === 'b2c' ? (order.customerName || '') : undefined,
+          partyPhone:   order.orderType === 'b2c' ? (order.customerPhone || '') : undefined,
+          partyAddress: order.orderType === 'b2c'
+            ? [order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode].filter(Boolean).join(', ')
+            : undefined,
           lineItems:    invoiceLineItems,
           subtotal:     order.subtotal,
           taxAmount:    order.taxAmount,
@@ -1061,24 +1110,37 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
       : await OrderItem.find({ orderId: order._id }).lean();
  
     console.log(`[updateOrderStatus] confirmed order=${orderId} items=${items.length}`);
- 
-    for (const item of items) {
-      const pid = item.productId;
-      const qty = Number(item.quantity) || 0;
-      if (!pid || qty <= 0) continue;
-      console.log(`[updateOrderStatus] deducting qty=${qty} from productId=${pid}`);
-      try {
-        const updated = await Product.findByIdAndUpdate(
-          pid,
-          [{ $set: { currentStockQty: { $max: [0, { $subtract: ['$currentStockQty', qty] }] } } }],
-          { new: true }
-        );
-        console.log(`[updateOrderStatus] product=${pid} newStockQty=${updated?.currentStockQty ?? 'NOT FOUND'}`);
-      } catch (stockErr) {
-        console.error(`[updateOrderStatus] stock deduction failed for product ${pid}:`, stockErr.message);
+
+    // Idempotency guard — same as confirmOrder(): claim the deduction
+    // exactly once per order (shared stockDeductedAt field), and skip
+    // entirely for website (b2c) orders since the dealer backend reliably
+    // deducts this same shared Product.currentStockQty via webhook for
+    // those. b2b (dealer-app) orders keep the local deduction — see the
+    // matching comment in confirmOrder() for why.
+    const stockClaim = await Order.findOneAndUpdate(
+      { _id: orderId, stockDeductedAt: null },
+      { $set: { stockDeductedAt: new Date() } }
+    );
+
+    if (stockClaim && order.orderType !== 'b2c') {
+      for (const item of items) {
+        const pid = item.productId;
+        const qty = Number(item.quantity) || 0;
+        if (!pid || qty <= 0) continue;
+        console.log(`[updateOrderStatus] deducting qty=${qty} from productId=${pid}`);
+        try {
+          const updated = await Product.findByIdAndUpdate(
+            pid,
+            [{ $set: { currentStockQty: { $max: [0, { $subtract: ['$currentStockQty', qty] }] } } }],
+            { new: true }
+          );
+          console.log(`[updateOrderStatus] product=${pid} newStockQty=${updated?.currentStockQty ?? 'NOT FOUND'}`);
+        } catch (stockErr) {
+          console.error(`[updateOrderStatus] stock deduction failed for product ${pid}:`, stockErr.message);
+        }
       }
     }
- 
+
     pushStockStatusAfterConfirm(items, order.orderNumber);
   }
  

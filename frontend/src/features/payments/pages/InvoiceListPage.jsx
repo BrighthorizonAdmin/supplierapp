@@ -45,22 +45,28 @@ const InvoiceListPage = () => {
           className={`px-2 py-0.5 rounded text-xs font-semibold ${
             v === 'retail'
               ? 'bg-green-100 text-green-800'
+              : v === 'b2c'
+              ? 'bg-purple-100 text-purple-800'
               : 'bg-blue-100 text-blue-800'
           }`}
         >
-          {v === 'retail' ? 'Retail' : 'B2B'}
+          {v === 'retail' ? 'Retail' : v === 'b2c' ? 'B2C' : 'B2B'}
         </span>
       ),
     },
     {
       key: 'partyName',
       label: 'Dealer',
-      render: (v, row) => v || row.dealerId?.businessName || '—',
+      render: (v, row) => (row.invoiceType === 'b2c' ? '—' : v || row.dealerId?.businessName || '—'),
     },
     {
       key: 'notes',
       label: 'Customer',
       render: (v, row) => {
+        if (row.invoiceType === 'b2c') {
+          const parts = [row.partyName, row.partyPhone].filter(Boolean);
+          return <span className="text-xs text-slate-600">{parts.length ? parts.join(' | ') : '—'}</span>;
+        }
         if (row.invoiceType !== 'retail') return '—';
         // Notes format: "Retail sale to: Name | Phone"
         const match = (v || '').replace('Retail sale to: ', '');
@@ -170,6 +176,7 @@ const InvoiceListPage = () => {
           <option value="">All Types</option>
           <option value="b2b">B2B (Supplier → Dealer)</option>
           <option value="retail">Retail (Dealer → Customer)</option>
+          <option value="b2c">B2C (Supplier → Customer)</option>
         </select>
 
         {/* Status filter */}
@@ -218,6 +225,16 @@ const InvoiceListPage = () => {
           }`}
         >
         B2B Invoices
+        </button>
+        <button
+          onClick={() => { setInvoiceType('b2c'); setPage(1); }}
+          className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
+            invoiceType === 'b2c'
+              ? 'bg-purple-700 text-white border-purple-700'
+              : 'bg-white text-purple-700 border-purple-300 hover:border-purple-500'
+          }`}
+        >
+        B2C Invoices
         </button>
       </div>
 

@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { formatDistanceToNow, format } from 'date-fns';
-import { MapPin, Calendar, Hash, FileText, CheckCircle, AlertCircle, AlertTriangle } from 'lucide-react';
+import { MapPin, Calendar, Hash, FileText, CheckCircle, AlertCircle, AlertTriangle, Globe, Smartphone, HelpCircle } from 'lucide-react';
 import { fetchDealers, approveDealer, rejectDealer, requestDealerUpdate } from '../dealerSlice';
 import Modal from '../../../components/ui/Modal';
 import api from '../../../services/api';
 
 const STATUS_TABS = [
   { label: 'Pending', value: 'pending' },
-  { label: 'In Review', value: 'in-review' },
+  // Hidden: no dealer can have status 'in-review' (the Dealer model doesn't allow it), so this tab is always empty.
+  // Uncomment together with the In-Review toggle below if an 'in-review' status is ever added on the backend.
+  // { label: 'In Review', value: 'in-review' },
   { label: 'Approved', value: 'active' },
   { label: 'Rejected', value: 'rejected' },
   { label: 'Updates Required', value: 'updates-required' },
@@ -86,6 +88,28 @@ const STATUS_LABELS = {
   'updates-required': 'Updates Required',
 };
 
+const SOURCE_LABELS = {
+  buvvas_website: 'Buvvas Website',
+  dealer_app: 'Dealer App',
+  other: 'Other / Unknown',
+};
+
+const SOURCE_ICONS = {
+  buvvas_website: Globe,
+  dealer_app: Smartphone,
+  other: HelpCircle,
+};
+
+const SourceBadge = ({ source, className = '' }) => {
+  const Icon = SOURCE_ICONS[source] || HelpCircle;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${source === 'buvvas_website' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200'} ${className}`}>
+      <Icon size={11} />
+      {SOURCE_LABELS[source] || 'Other / Unknown'}
+    </span>
+  );
+};
+
 const StatusPill = ({ status }) => (
   <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${STATUS_STYLES[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
     {STATUS_LABELS[status] || status}
@@ -126,7 +150,8 @@ const DealerOnboardingPage = () => {
 
   const [activeTab, setActiveTab] = useState('pending');
   const [selected, setSelected] = useState(null);
-  const [inReview, setInReview] = useState(false);
+  // In-Review toggle state — uncomment with the toggle in the header (and the setInReview(false) on row click).
+  // const [inReview, setInReview] = useState(false);
   const [dealerDocs, setDealerDocs] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
 
@@ -344,8 +369,12 @@ const DealerOnboardingPage = () => {
               return (
                 <button
                   key={dealer._id}
-                  onClick={() => { setSelected(dealer); setInReview(false); }}
-                  className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-l-2 ${selected?._id === dealer._id ? 'border-blue-600 bg-blue-50/50' : 'border-transparent'
+                  // With the In-Review toggle enabled, use: onClick={() => { setSelected(dealer); setInReview(false); }}
+                  onClick={() => setSelected(dealer)}
+                  // `!` (important) on the LEFT border colour only: the parent's `divide-slate-100`
+                  // overrides border-color on every row except the first, which hid the blue line.
+                  // Left-only so the row's top divider line keeps its normal grey colour.
+                  className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-l-2 ${selected?._id === dealer._id ? '!border-l-blue-600 bg-blue-50/50' : '!border-l-transparent'
                     }`}
                 >
                   <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
@@ -353,7 +382,10 @@ const DealerOnboardingPage = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{dealer.ownerName || '—'}</p>
+                      <p className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1.5">
+                        {dealer.ownerName || '—'}
+                        {(() => { const SrcIcon = SOURCE_ICONS[dealer.source] || HelpCircle; return <SrcIcon size={12} className="text-slate-400 flex-shrink-0" title={SOURCE_LABELS[dealer.source] || 'Other / Unknown'} /> })()}
+                      </p>
                       <span className="text-xs text-slate-400 flex-shrink-0">{timeAgo(dealer.createdAt)}</span>
                     </div>
                     <p className="text-xs text-slate-500 truncate mb-1.5">{dealer.businessName}</p>
@@ -386,9 +418,14 @@ const DealerOnboardingPage = () => {
 
               {/* Header row */}
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900">{selected.businessName}</h2>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-xl font-bold text-slate-900">{selected.businessName}</h2>
+                  <SourceBadge source={selected.source} />
+                </div>
                 <div className="flex items-center gap-3">
                   <StatusBadgeOutline status={selected.status} />
+                  {/* In-Review toggle — hidden: it only flipped local UI state (never saved or sent anywhere).
+                      Uncomment together with the `inReview` state and the "In Review" tab if it's ever wired up.
                   {selected.status !== 'active' && selected.status !== 'rejected' && (
                     <label className="flex flex-col items-center gap-0.5 cursor-pointer select-none">
                       <div
@@ -402,6 +439,7 @@ const DealerOnboardingPage = () => {
                       <span className="text-[10px] text-slate-500">In-Review</span>
                     </label>
                   )}
+                  */}
                 </div>
               </div>
 
@@ -461,6 +499,14 @@ const DealerOnboardingPage = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Applicant's note about their current business */}
+              {selected.applicantNote && (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-2">Applicant's Note</h3>
+                  <p className="text-sm text-slate-600 leading-relaxed">{selected.applicantNote}</p>
+                </div>
+              )}
 
               {/* ── CASE 1: Update Requested — waiting for dealer to fix (status = updates-required) ── */}
               {isAwaitingUpdate && (

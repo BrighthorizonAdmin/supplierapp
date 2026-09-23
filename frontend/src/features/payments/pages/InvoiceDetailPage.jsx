@@ -97,6 +97,7 @@ export default function InvoiceDetailPage() {
   if (loading || !inv) return <div className="p-10 text-center text-slate-400">Loading invoice...</div>;
 
   const isRetail = inv.invoiceType === 'retail';
+  const isB2C = inv.invoiceType === 'b2c';
   const noteParts = (inv.notes || '').replace('Retail sale to: ', '').split(' | ');
 
   // For retail: customer info lives in notes ("Retail sale to: Name | Phone")
@@ -240,10 +241,12 @@ export default function InvoiceDetailPage() {
               <span style={{ fontWeight: 'bold', fontSize: '11px' }}>Warranty Period</span>
               <span style={{ fontSize: '11px' }}>{inv.warrantyPeriod || '—'}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 'bold', fontSize: '11px' }}>Salesman</span>
-              <span style={{ fontSize: '11px' }}>{inv.salesmanName || '—'}</span>
-            </div>
+            {!isB2C && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 'bold', fontSize: '11px' }}>Salesman</span>
+                <span style={{ fontSize: '11px' }}>{inv.salesmanName || '—'}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -269,11 +272,11 @@ export default function InvoiceDetailPage() {
                     <td style={{ padding: '10px 6px', verticalAlign: 'top' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 'bold' }}>{item.productName}</span>
-                        {item.productSource === 'own' ? (
+                        {!isB2C && (item.productSource === 'own' ? (
                           <span style={{ fontSize: '10px', fontWeight: '600', color: '#1D4ED8', background: '#DBEAFE', borderRadius: 4, padding: '1px 6px' }}>Dealer's Own</span>
                         ) : (
                           <span style={{ fontSize: '10px', fontWeight: '600', color: '#065F46', background: '#D1FAE5', borderRadius: 4, padding: '1px 6px' }}>Supplier</span>
-                        )}
+                        ))}
                       </div>
                       {item.productCode && <div style={{ fontSize: '11px', color: '#666' }}>SKU: {item.productCode}</div>}
                       {item.description && <div style={{ fontSize: '11px', color: '#666' }}>{item.description}</div>}
@@ -432,7 +435,7 @@ export default function InvoiceDetailPage() {
                     <td style={{ paddingBottom: '4px', color: '#16a34a' }}>Payment Status</td>
                     <td style={{ paddingBottom: '4px', textAlign: 'right', color: '#16a34a', fontWeight: 'bold' }}>✓ Paid</td>
                   </tr>
-                ) : inv.dueDate ? (
+                ) : (!isB2C && inv.dueDate) ? (
                   <tr>
                     <td style={{ paddingBottom: '4px', color: '#444' }}>Due Date</td>
                     <td style={{ paddingBottom: '4px', textAlign: 'right' }}>{fmtDt(inv.dueDate)}</td>

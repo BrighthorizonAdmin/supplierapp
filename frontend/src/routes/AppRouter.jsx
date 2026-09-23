@@ -17,6 +17,8 @@ import InventoryPage from '../features/inventory/pages/InventoryPage';
 import InventoryDetailsPage from '../features/inventory/pages/InventoryDetailsPage';
 import ProductListPage from '../features/products/pages/ProductListPage';
 import ProductFormPage from '../features/products/pages/ProductFormPage';
+import FlashSaleListPage from '../features/flashSale/pages/FlashSaleListPage';
+import FlashSaleFormPage from '../features/flashSale/pages/FlashSaleFormPage';
 import OrderListPage from '../features/orders/pages/OrderListPage';
 import OrderDetailPage from '../features/orders/pages/OrderDetailPage';
 import RetailOrderListPage from '../features/retail/pages/RetailOrderListPage';
@@ -38,6 +40,10 @@ import InvoiceDetailPage from '../features/payments/pages/InvoiceDetailPage';
 import ChangePassword from '../features/usermanagement/pages/ChangePassword';
 import SupportDetailPage from '../features/support/pages/SupportDetailPage';
 import SupportListPage from '../features/support/pages/SupportListPage';
+import WebsiteEnquiryListPage from '../features/websiteEnquiries/pages/WebsiteEnquiryListPage';
+import WebsiteEnquiryDetailPage from '../features/websiteEnquiries/pages/WebsiteEnquiryDetailPage';
+import BlogListPage from '../features/blog/pages/BlogListPage';
+import BlogFormPage from '../features/blog/pages/BlogFormPage';
 import WarrantyListPage from '../features/warranty/pages/WarrantyListPage';
 import WarrantyDetailPage from '../features/warranty/pages/WarrantyDetailPage';
 import WarrantyLookupPage from '../features/warranty/pages/WarrantyLookupPage';
@@ -49,6 +55,7 @@ import DeliveryChallanFormPage from '../features/deliveryChallan/pages/DeliveryC
 import DeliveryChallanPrintPage from '../features/deliveryChallan/pages/DeliveryChallanPrintPage';
 import AddNewDealerPage from '../features/dealer/pages/AddNewDealerPage';
 import HsnPage from '../features/hsn/pages/HsnPage';
+import LedgerPage from '../features/ledger/pages/LedgerPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -116,6 +123,21 @@ const AppRouter = () => {
               <ProductFormPage />
             </ProtectedRoute>
           } />
+          <Route path="flash-sales" element={
+            <ProtectedRoute permission="flashsale:read">
+              <FlashSaleListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="flash-sales/new" element={
+            <ProtectedRoute permission="flashsale:write">
+              <FlashSaleFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="flash-sales/:id/edit" element={
+            <ProtectedRoute permission="flashsale:write">
+              <FlashSaleFormPage />
+            </ProtectedRoute>
+          } />
           <Route path="orders" element={
             <ProtectedRoute permission="orders:read">
               <OrderListPage />
@@ -136,6 +158,9 @@ const AppRouter = () => {
               <PaymentListPage />
             </ProtectedRoute>
           } />
+          {/* Ledger now lives under Finance (see NAV_ITEMS' `finance` group in Sidebar.jsx);
+              this old top-level URL just redirects so any existing bookmark/link still works. */}
+          <Route path="ledger" element={<Navigate to="/finance/ledger" replace />} />
           <Route path="invoices" element={
             <ProtectedRoute permission="invoices:read">
               <InvoiceListPage />
@@ -169,6 +194,14 @@ const AppRouter = () => {
           <Route path="finance" element={
             <ProtectedRoute permission="finance:read">
               <FinancePage />
+            </ProtectedRoute>
+          } />
+          {/* Ledger — outstanding dues for pending/partial dealer orders, nested under
+              Finance (see the `finance` nav group in Sidebar.jsx). Gated on payments:read
+              for now; swap to a dedicated ledger:read permission later. */}
+          <Route path="finance/ledger" element={
+            <ProtectedRoute permission="payments:read">
+              <LedgerPage />
             </ProtectedRoute>
           } />
           <Route path="audit" element={
@@ -220,6 +253,31 @@ const AppRouter = () => {
           <Route path="support/:id" element={
             <ProtectedRoute permission="support:read">
               <SupportDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="website-enquiries" element={
+            <ProtectedRoute permission="enquiries:read">
+              <WebsiteEnquiryListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="website-enquiries/:id" element={
+            <ProtectedRoute permission="enquiries:read">
+              <WebsiteEnquiryDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="blog" element={
+            <ProtectedRoute permission="blog:read">
+              <BlogListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="blog/new" element={
+            <ProtectedRoute permission="blog:write">
+              <BlogFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="blog/:id/edit" element={
+            <ProtectedRoute permission="blog:write">
+              <BlogFormPage />
             </ProtectedRoute>
           } />
           <Route path="warranty" element={

@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Users, Package, Boxes, ShoppingCart, Headphones,
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
   UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText, ShieldCheck as WarrantyIcon,
+  MessageSquare, Zap,
 } from 'lucide-react';
 import { toggleSidebar } from '../../store/uiSlice';
 import { usePermission } from '../../routes/ProtectedRoute';
@@ -18,16 +19,31 @@ const SALES_CHILDREN = [
   { to: '/delivery-challan',  label: 'Delivery Challan', perm: 'invoices:read' },
 ];
 
+const FINANCE_CHILDREN = [
+  { to: '/finance',        label: 'Overview', perm: 'finance:read' },
+  // Gated on payments:read for now, matching the route in AppRouter.jsx — swap to a
+  // dedicated ledger:read permission later if one gets added.
+  { to: '/finance/ledger', label: 'Ledger',   perm: 'payments:read' },
+];
+
 const NAV_ITEMS = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', perm: 'dashboard:read' },
   { to: '/marketing-leads', icon: Users, label: 'Marketing Leads', perm: 'marketing:read', end: false },
   { to: '/onboarding', icon: UserPlus, label: 'Onboarding', perm: 'dealer:read' },
   { to: '/dealers', icon: Users, label: 'Dealer Management', perm: 'dealer:read', end: false },
   { to: '/products', icon: Package, label: 'Product Catalog', perm: 'products:read' },
+  { to: '/flash-sales', icon: Zap, label: 'Flash Sale', perm: 'flashsale:read' },
   { to: '/hsn-codes', icon: Tag, label: 'HSN Codes', perm: 'products:read' },
   { to: '/inventory', icon: Boxes, label: 'Inventory', perm: 'inventory:read' },
   { to: '/orders', icon: ShoppingCart, label: 'Orders', perm: 'orders:read' },
-  { to: '/finance', icon: TrendingUp, label: 'Finances', perm: 'finance:read' },
+  // Ledger moved here as a child (was its own top-level item) — see FINANCE_CHILDREN.
+  // No `perm` on the group itself: the top-of-loop `if (perm && !hasPermission(perm))
+  // return null` check runs before a group's own children are ever filtered, so gating
+  // the group on 'finance:read' hid the whole group — Ledger included — for a user with
+  // 'payments:read' but not 'finance:read', even though the route itself only requires
+  // payments:read. Visibility is already correctly handled below by filtering children
+  // to what the user can see and hiding the group only if that leaves none.
+  { group: 'finance', icon: TrendingUp, label: 'Finances', children: FINANCE_CHILDREN },
   { to: '/payments', icon: CreditCard, label: 'Payments & Credits', perm: 'payments:read' },
   { group: 'sales', icon: Tag, label: 'Sales', perm: 'invoices:read', children: SALES_CHILDREN },
   { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
@@ -38,6 +54,8 @@ const NAV_ITEMS = [
   { to: '/rolemanagement', icon: ShieldCheck, label: 'Role Permissions', perm: 'users:manage' },
   { to: '/usermanagement', icon: Users, label: 'User Management', perm: 'users:manage' },
   { to: '/support', icon: Headphones, label: 'Support Tickets', perm: 'support:read' },
+  { to: '/website-enquiries', icon: MessageSquare, label: 'Website Enquiries', perm: 'enquiries:read' },
+  { to: '/blog', icon: FileText, label: 'Blog', perm: 'blog:read' },
 ];
 
 const Sidebar = () => {
@@ -49,8 +67,15 @@ const Sidebar = () => {
   const { hasPermission } = usePermission();
   const [showHelpCard, setShowHelpCard] = useState(true);
 
-  const isSalesActive = SALES_CHILDREN.some((p) => location.pathname.startsWith(p.to));
-  const [salesOpen, setSalesOpen] = useState(isSalesActive);
+  // Per-group open/active state — was hardcoded to a single `salesOpen` boolean shared
+  // by every collapsible group, which was harmless with only one group (Sales) but
+  // would have made a second one (Finance) open and close in lockstep with it.
+  const groupsWithChildren = NAV_ITEMS.filter((item) => item.group);
+  const isGroupActive = (item) => item.children.some((c) => location.pathname.startsWith(c.to));
+  const [openGroups, setOpenGroups] = useState(() =>
+    Object.fromEntries(groupsWithChildren.map((item) => [item.group, isGroupActive(item)]))
+  );
+  const toggleGroup = (group) => setOpenGroups((prev) => ({ ...prev, [group]: !prev[group] }));
 
   const handleLogout = () => {
     dispatch(logout());
@@ -95,12 +120,13 @@ const Sidebar = () => {
           if (item.group) {
             const visibleChildren = item.children.filter((c) => !c.perm || hasPermission(c.perm));
             if (visibleChildren.length === 0) return null;
-            const isOpen = sidebarOpen ? salesOpen : isSalesActive;
+            const active = isGroupActive(item);
+            const isOpen = sidebarOpen ? openGroups[item.group] : active;
             return (
               <div key={item.group}>
                 <button
-                  onClick={() => { if (sidebarOpen) setSalesOpen((v) => !v); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isSalesActive ? 'text-blue-700 bg-blue-50/60' : 'text-blue-600 hover:bg-white/10'}`}
+                  onClick={() => { if (sidebarOpen) toggleGroup(item.group); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active ? 'text-blue-700 bg-blue-50/60' : 'text-blue-600 hover:bg-white/10'}`}
                 >
                   <Icon size={17} className="flex-shrink-0" />
                   {sidebarOpen && (

@@ -104,7 +104,7 @@ const getInvoices = async (query = {}) => {
     match.status = { $in: ['issued', 'partial'] };
     match.dueDate = { $lt: new Date() };
   }
-  match.invoiceType = match.invoiceType || { $in: ['b2b', 'retail'] };
+  match.invoiceType = match.invoiceType || { $in: ['b2b', 'retail', 'b2c'] };
   // Exclude D-BE-created invoices (dealer app creates invoices for net-30 orders in the same
   // collection but without lineItems / totalAmount). Only show supplier-app invoices.
   match.lineItems = { $exists: true };

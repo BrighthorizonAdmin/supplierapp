@@ -36,11 +36,15 @@ const settingsRoutes = require('./modules/settings/settings.routes');
 const roleRoutes = require('./modules/roles/role.routes');
 const marketingLeadRoutes = require('./modules/marketingLeads/marketingLead.routes');
 const { router: supportRoutes, whRouter: supportWebhookRoutes } = require('./modules/support/support.routes');
+const { router: enquiryRoutes, whRouter: enquiryWebhookRoutes } = require('./modules/websiteEnquiries/websiteEnquiry.routes');
 const warrantyRoutes = require('./modules/warranty/warranty.routes');
 const dispatchedUnitRoutes = require('./modules/dispatchedUnits/dispatchedUnit.routes');
 const quoteRoutes          = require('./modules/quotes/quote.routes');
 const categoryRoutes       = require('./modules/categories/category.routes');
 const challanRoutes        = require('./modules/deliveryChallan/deliveryChallan.routes');
+const blogRoutes           = require('./modules/blog/blog.routes');
+const flashSaleRoutes      = require('./modules/flashSale/flashSale.routes');
+const ledgerRoutes         = require('./modules/ledger/ledger.routes');
 
 const app = express();
 
@@ -125,6 +129,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // ✅ Register webhooks BEFORE mongoSanitize so payload isn't mutated
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/webhooks', supportWebhookRoutes);
+app.use('/api/webhooks', enquiryWebhookRoutes);
 
 // NoSQL injection sanitization
 app.use(mongoSanitize());
@@ -144,10 +149,13 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/support',  supportRoutes);
+app.use('/api/website-enquiries', enquiryRoutes);
+app.use('/api/blog', blogRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/flash-sales', flashSaleRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/orders', orderRoutes);
@@ -168,6 +176,7 @@ app.use('/api/dispatched-units', dispatchedUnitRoutes);
 app.use('/api/quotes',          quoteRoutes);
 app.use('/api/categories',     categoryRoutes);
 app.use('/api/delivery-challans', challanRoutes);
+app.use('/api/ledger',          ledgerRoutes);
 
 // Frontend routing - serve index.html for all non-API routes (React Router support)
 app.get('*', (req, res, next) => {
