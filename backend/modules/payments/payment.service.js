@@ -2,6 +2,7 @@ const Payment = require('./model/Payment.model');
 const Invoice = require('./model/Invoice.model');
 const Dealer = require('../dealer/model/Dealer.model');
 const Transaction = require('../finance/model/Transaction.model');
+const LedgerEntry = require('../ledger/model/LedgerEntry.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const { withTransaction } = require('../../utils/transaction');
@@ -47,9 +48,19 @@ const confirmPayment = async (paymentId, userId) => {
       // Reduce dealer creditUsed and reward 5% credit limit bonus when invoice is fully paid
       if (invoice.status === 'paid') {
         const creditBonus = +(invoice.totalAmount * 0.05).toFixed(2);
+        // Offline payments recorded via the ledger (orderPayment.service) already
+        // freed part of this order's credit — don't free that part twice.
+        let alreadyReleased = 0;
+        if (invoice.orderId) {
+          const entry = await LedgerEntry.findOne({ orderId: invoice.orderId }).session(session).lean();
+          alreadyReleased = (entry?.manualPayments || [])
+            .filter((p) => !p.reversedAt)
+            .reduce((s, p) => s + (Number(p.creditReleased) || 0), 0);
+        }
+        const release = Math.max(0, invoice.totalAmount - alreadyReleased);
         await Dealer.findByIdAndUpdate(
           payment.dealerId,
-          { $inc: { creditUsed: -invoice.totalAmount, creditLimit: creditBonus } },
+          { $inc: { creditUsed: -release, creditLimit: creditBonus } },
           { session }
         );
       }

@@ -336,7 +336,8 @@ async function buildOrderPdf(row, company) {
         { header: 'Method', width: 65, value: (p) => p.method },
         { header: 'Reference', width: 90, value: (p) => p.reference },
         { header: 'Recorded By', width: 90, value: (p) => p.recordedByName },
-        { header: 'Note', width: pageWidth - 60 - 75 - 65 - 90 - 90, value: (p) => p.note },
+        { header: 'Note', width: pageWidth - 60 - 75 - 65 - 90 - 90,
+          value: (p) => (p.reversedAt ? `REVERSED${p.reversalReason ? ` — ${p.reversalReason}` : ''}` : p.note) },
       ],
       rows: manualPayments,
     });

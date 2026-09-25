@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import { createInvoice, updateInvoice, fetchInvoiceById } from '../paymentSlice';
+import { fetchSettings } from '../../notifications/settingsSlice';
+import { resolveStateCode, isInterState, derivedGstRate, gstSummaryRows } from '../../../utils/gst';
 import { fetchDealers } from '../../dealer/dealerSlice';
 import { fetchProducts } from '../../products/productSlice';
 import {
@@ -53,9 +55,7 @@ const calcSummary = (items, addlCharges, invoiceDisc, amtReceived, roundOff) => 
   const taxBreakdown = {};
   items.forEach((item) => {
     const rate = toNum(item.taxRate); if (!rate) return;
-    if (!taxBreakdown[rate]) taxBreakdown[rate] = { sgst:0, cgst:0 };
-    taxBreakdown[rate].sgst += (item.taxAmount||0)/2;
-    taxBreakdown[rate].cgst += (item.taxAmount||0)/2;
+    taxBreakdown[rate] = (taxBreakdown[rate]||0) + (item.taxAmount||0);
   });
   return { totalDisc, taxableAmt, totalTax, addlAmt, extraDisc, roundOffAmt, total, balance, taxBreakdown };
 };
@@ -107,6 +107,7 @@ export default function InvoiceFormPage() {
   const { list: dealers  = [] } = useSelector((s) => s.dealer);
   const { list: products = [] } = useSelector((s) => s.product);
   const { selectedInvoice, loading } = useSelector((s) => s.payment);
+  const companySettings = useSelector((s) => s.settings?.data || {});
   const today = format(new Date(), 'yyyy-MM-dd');
 
   // ── Core form state ───────────────────────────────────────────────────────
@@ -133,6 +134,8 @@ export default function InvoiceFormPage() {
   const [payMode,     setPayMode]     = useState('Cash');
   const [markPaid,    setMarkPaid]    = useState(false);
   const [bankAccount, setBankAccount] = useState(null);
+  const [linkedOrderId, setLinkedOrderId] = useState(null);
+  const keepSavedShipRef = useRef(false);
   const [errors,      setErrors]      = useState({});
 
   // ── Modal visibility ──────────────────────────────────────────────────────
@@ -210,6 +213,7 @@ export default function InvoiceFormPage() {
   useEffect(() => {
     dispatch(fetchDealers({ limit: 500 }));
     dispatch(fetchProducts({ limit: 1000 }));
+    dispatch(fetchSettings());
     if (isEdit) dispatch(fetchInvoiceById(id));
   }, [dispatch, id, isEdit]);
 
@@ -230,19 +234,7 @@ export default function InvoiceFormPage() {
     }
     // Line items
     if (fromOrder.items?.length > 0) {
-      // Derive a fallback taxRate from the order-level taxAmount & subtotal
-      // when individual items don't carry their own taxRate (e.g. dealer-app orders).
-      const orderLevelTaxRate = (() => {
-        const sub = fromOrder.subtotal || 0;
-        const tax = fromOrder.taxAmount || 0;
-        if (!sub || !tax) return 0;
-        const raw = Math.round((tax / sub) * 100);
-        // Snap to nearest valid GST slab: 0, 5, 12, 18, 28
-        const slabs = [0, 5, 12, 18, 28];
-        return slabs.reduce((prev, curr) =>
-          Math.abs(curr - raw) < Math.abs(prev - raw) ? curr : prev
-        );
-      })();
+      const orderLevelTaxRate = derivedGstRate(fromOrder.subtotal, fromOrder.taxAmount);
 
       setItems(
         fromOrder.items.map((item) => {
@@ -262,6 +254,9 @@ export default function InvoiceFormPage() {
         })
       );
     }
+    // Link the new invoice back to its order so the order's Invoice button
+    // opens it next time instead of creating another one.
+    if (fromOrder._id) setLinkedOrderId(fromOrder._id);
     // Notes
     setNotes(`Ref: Order ${fromOrder.orderNumber || fromOrder._id?.slice(-6).toUpperCase()}`);
     setShowNotes(true);
@@ -277,6 +272,7 @@ export default function InvoiceFormPage() {
       };
       setShipAddresses([addr]);
       setSelectedShipId('order');
+      keepSavedShipRef.current = Boolean(fromOrder.dealerId && typeof fromOrder.dealerId === 'object');
       setShipAddress(addr);
     }
     // Payment terms
@@ -288,6 +284,9 @@ export default function InvoiceFormPage() {
 
   // ── Build ship addresses when dealer changes ──────────────────────────────
   useEffect(() => {
+    // Edit prefill sets dealer + saved shipping address together — don't let
+    // this dealer-change reset clobber the saved address on that first pass.
+    if (keepSavedShipRef.current) { keepSavedShipRef.current = false; return; }
     if (!dealer) { setShipAddresses([]); setSelectedShipId(null); setShipAddress(null); return; }
     const addr = dealer.address;
     const list = addr
@@ -334,14 +333,31 @@ export default function InvoiceFormPage() {
     else setDealerSearch(inv.partyName||'');
     // Shipping address
     if (inv.shippingAddress?.city || inv.shippingAddress?.street) {
+      keepSavedShipRef.current = Boolean(d && typeof d === 'object'); // only when setDealer ran above
       setShipAddress(inv.shippingAddress);
       setShipAddresses([{ ...inv.shippingAddress, id: 'saved' }]);
       setSelectedShipId('saved');
     }
-    // Line items
-    const pre = inv.lineItems?.length ? inv.lineItems.map((li) => calcItem({...EMPTY_ITEM,...li})) : [{...EMPTY_ITEM}];
+    // Line items — invoices auto-created from dealer-app orders have 0% on
+    // every line while the tax sits at invoice level; recalculating with 0%
+    // would silently cut the total on save, so fall back to the derived rate.
+    const lines = inv.lineItems || [];
+    const noLineTax = lines.every((li) => !toNum(li.taxRate));
+    const fallbackRate = noLineTax ? derivedGstRate(inv.subtotal, inv.taxAmount) : 0;
+    const pre = lines.length
+      ? lines.map((li) => calcItem({
+          ...EMPTY_ITEM, ...li,
+          taxRate: noLineTax ? fallbackRate : li.taxRate,
+          // Serials already assigned are tied to stock/dispatch records — editing
+          // them here would corrupt those, so they're read-only in this form.
+          _serialsLocked: Boolean(li.serialNumbers?.length),
+        }))
+      : [{...EMPTY_ITEM}];
     setItems(pre);
     const ps = {}; pre.forEach((li,i) => { ps[i] = li.productName||''; }); setProdSearch(ps);
+    // Serials already attached (order delivery / earlier edit) — show them
+    const si = {}; lines.forEach((li,i) => { if (li.serialNumbers?.length) si[i] = li.serialNumbers.join(', '); });
+    setSerialInputs(si);
   }, [selectedInvoice, isEdit, id]);
 
   // ── Item helpers ──────────────────────────────────────────────────────────
@@ -423,6 +439,20 @@ export default function InvoiceFormPage() {
   const effectiveAmt = markPaid ? rawTotal : amtReceived;
   const summary      = calcSummary(calcedItems, addlCharges, invoiceDisc, effectiveAmt, roundOff);
 
+  // Same state → CGST + SGST, different states → IGST (unknown → CGST + SGST)
+  const keptParty   = isEdit && !dealer ? selectedInvoice : null; // B2C edit keeps its party snapshot
+  const sellerState = resolveStateCode({ gstins: [companySettings.companyGSTIN], texts: [companySettings.companyAddress] });
+  const buyerState  = resolveStateCode({
+    gstins: [dealer?.gstin, keptParty?.partyGST],
+    texts:  [shipAddress?.state, dealer?.address?.state, keptParty?.partyAddress],
+  });
+  const interState  = isInterState(sellerState, buyerState);
+
+  // Order invoices: what was paid is recorded against the order (checkout /
+  // credit), and later dealer payments are recorded in the Ledger — editing
+  // the received amount here too would double-count them.
+  const isOrderInvoice = isEdit && Boolean(selectedInvoice?.orderId);
+
   const handleMarkPaid = (checked) => { setMarkPaid(checked); setAmtReceived(checked ? rawTotal : 0); };
 
   // ── Validate ──────────────────────────────────────────────────────────────
@@ -501,6 +531,12 @@ export default function InvoiceFormPage() {
       invoicePrefix:   settings.invoicePrefix ? invoicePrefix : undefined,
       invoiceSequence: settings.invoicePrefix ? toNum(invoiceSequence) : undefined,
     };
+    if (!isEdit && linkedOrderId) payload.orderId = linkedOrderId;
+    // B2C / retail invoices have no dealer — keep the party snapshot already
+    // on the invoice rather than overwriting it with blanks.
+    if (isEdit && !dealer) {
+      delete payload.dealerId; delete payload.partyAddress; delete payload.partyGST; delete payload.partyPhone;
+    }
     const result = isEdit ? await dispatch(updateInvoice({id,body:payload})) : await dispatch(createInvoice(payload));
     if (!result.error) {
       if (andNew) {
@@ -738,13 +774,17 @@ export default function InvoiceFormPage() {
                               <Barcode size={13} className="text-blue-400 mt-2 flex-shrink-0" />
                               <div className="flex-1">
                                 <input
-                                  className={`w-full text-xs border rounded-md px-2.5 py-1.5 outline-none bg-white placeholder-gray-300 transition-colors ${
-                                    errors[`serial_${idx}`]
-                                      ? 'border-red-400 focus:border-red-500'
-                                      : 'border-blue-200 focus:border-blue-400'
+                                  className={`w-full text-xs border rounded-md px-2.5 py-1.5 outline-none placeholder-gray-300 transition-colors ${
+                                    item._serialsLocked
+                                      ? 'bg-gray-50 text-gray-600 border-gray-200 cursor-not-allowed'
+                                      : errors[`serial_${idx}`]
+                                        ? 'bg-white border-red-400 focus:border-red-500'
+                                        : 'bg-white border-blue-200 focus:border-blue-400'
                                   }`}
                                   placeholder={`Serial numbers, comma-separated — e.g. SN-001, SN-002 (${toNum(item.quantity)} required)`}
                                   value={serialInputs[idx] || ''}
+                                  readOnly={item._serialsLocked}
+                                  title={item._serialsLocked ? 'Serial numbers already assigned — change them from the order page' : undefined}
                                   onChange={(e) => {
                                     setSerialInputs((p) => ({ ...p, [idx]: e.target.value }));
                                     setErrors((er) => { const n = { ...er }; delete n[`serial_${idx}`]; return n; });
@@ -752,6 +792,9 @@ export default function InvoiceFormPage() {
                                 />
                                 {errors[`serial_${idx}`] && (
                                   <p className="text-xs text-red-500 mt-0.5">{errors[`serial_${idx}`]}</p>
+                                )}
+                                {item._serialsLocked && (
+                                  <p className="text-xs text-gray-500 mt-0.5">Already assigned — can't be edited here. Change them from the order page (before delivery).</p>
                                 )}
                                 {(() => {
                                   const raw = serialInputs[idx] || '';
@@ -1007,11 +1050,8 @@ export default function InvoiceFormPage() {
               <span>₹ {summary.taxableAmt.toFixed(2)}</span>
             </div>
 
-            {Object.entries(summary.taxBreakdown).map(([rate,val])=>(
-              <div key={rate} className="space-y-1">
-                <div className="flex justify-between text-sm text-gray-500"><span>SGST @ {rate/2}%</span><span>₹ {val.sgst.toFixed(2)}</span></div>
-                <div className="flex justify-between text-sm text-gray-500"><span>CGST @ {rate/2}%</span><span>₹ {val.cgst.toFixed(2)}</span></div>
-              </div>
+            {gstSummaryRows(summary.taxBreakdown, interState).map((row)=>(
+              <div key={row.label} className="flex justify-between text-sm text-gray-500"><span>{row.label}</span><span>₹ {row.amount.toFixed(2)}</span></div>
             ))}
 
             {!showDisc ? (
@@ -1052,9 +1092,9 @@ export default function InvoiceFormPage() {
 
           {/* Mark as fully paid */}
           <div className="px-4 pt-3 flex justify-end">
-            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+            <label className={`flex items-center gap-2 text-sm text-gray-600 select-none ${isOrderInvoice ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
               Mark as fully paid
-              <input type="checkbox" checked={markPaid} onChange={(e)=>handleMarkPaid(e.target.checked)} className="rounded border-gray-300 text-blue-600 cursor-pointer"/>
+              <input type="checkbox" checked={markPaid} disabled={isOrderInvoice} onChange={(e)=>handleMarkPaid(e.target.checked)} className="rounded border-gray-300 text-blue-600 cursor-pointer disabled:cursor-not-allowed"/>
             </label>
           </div>
 
@@ -1067,13 +1107,25 @@ export default function InvoiceFormPage() {
                 <input type="number" min="0"
                   className="flex-1 px-2 py-2 text-sm font-semibold text-gray-800 outline-none disabled:bg-gray-50 disabled:text-gray-400"
                   value={markPaid?summary.total.toFixed(2):amtReceived}
-                  onChange={(e)=>{setAmtReceived(e.target.value);setMarkPaid(false);}} disabled={markPaid}/>
+                  onChange={(e)=>{setAmtReceived(e.target.value);setMarkPaid(false);}} disabled={markPaid || isOrderInvoice}/>
               </div>
-              <select className="border border-gray-200 rounded-lg px-2 py-2 text-sm text-gray-600 outline-none bg-white cursor-pointer focus:border-blue-400"
-                value={payMode} onChange={(e)=>setPayMode(e.target.value)}>
+              <select className="border border-gray-200 rounded-lg px-2 py-2 text-sm text-gray-600 outline-none bg-white cursor-pointer focus:border-blue-400 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                value={payMode} onChange={(e)=>setPayMode(e.target.value)} disabled={isOrderInvoice}>
+                {/* Order invoices carry the order's method (e.g. "split"), which isn't in
+                    the list — show it as-is instead of the select falling back to "Cash" */}
+                {payMode && !PAY_MODES.includes(payMode) && (
+                  <option value={payMode}>{payMode === 'split' ? 'Split (paid + credit)' : payMode}</option>
+                )}
                 {PAY_MODES.map((m)=><option key={m}>{m}</option>)}
               </select>
             </div>
+            {isOrderInvoice && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                This invoice belongs to an order. The received amount shows what was paid when the order was placed.
+                Record any further payment from the dealer in{' '}
+                <Link to="/finance/ledger" state={{ openOrderId: selectedInvoice?.orderId?._id || selectedInvoice?.orderId }} className="font-semibold underline">Finance → Ledger</Link>, not here.
+              </div>
+            )}
             {/* Payment Received In — shown only when a non-Cash mode is selected and bank account exists */}
             {payMode !== 'Cash' && bankAccount?.accountNumber && (
               <div className="mt-3">
@@ -1089,8 +1141,8 @@ export default function InvoiceFormPage() {
 
           {/* Balance */}
           <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-            <span className="text-sm font-bold text-green-600">Balance Amount</span>
-            <span className="text-base font-black text-green-600">₹ {summary.balance.toFixed(2)}</span>
+            <span className={`text-sm font-bold ${summary.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>Balance Amount</span>
+            <span className={`text-base font-black ${summary.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>₹ {summary.balance.toFixed(2)}</span>
           </div>
 
           {/* Signature */}

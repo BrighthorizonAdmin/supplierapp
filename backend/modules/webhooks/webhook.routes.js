@@ -96,6 +96,15 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       };
     });
  
+    // 4b. Additional charges — same math as D-BE resolveCharges: "includesGst"
+    // means GST is added ON TOP of the entered amount.
+    const chargeLines = (additionalCharges || []).map((c) => {
+      const amount = +(Number(c.amount) || 0).toFixed(2);
+      const rate   = c.includesGst === false ? 0 : (Number(c.gstRate) || 0);
+      return { label: c.name || c.label || 'Additional Charges', amount, taxRate: rate, taxAmount: +(amount * rate / 100).toFixed(2) };
+    }).filter((c) => c.amount > 0);
+    const chargeSubtotal = +chargeLines.reduce((s, c) => s + c.amount, 0).toFixed(2);
+
     // 5. Derive correct payment status and balance — same logic as D-BE
     const total    = Number(totalAmount) || 0;
     const received = receivedAmount !== undefined ? Number(receivedAmount) : total;
@@ -138,9 +147,13 @@ router.post('/dealer-retail-invoice', async (req, res) => {
       notes:        `Retail sale to: ${customerName}${customerPhone ? ' | ' + customerPhone : ''}`,
       lineItems,
       bankDetails:  dealerBankDetails,
-      // Invoice.additionalCharges is a flat total (unlike Quote's itemized array) — sum here.
-      additionalCharges: (additionalCharges || []).reduce((s, c) => s + (Number(c.amount) || 0), 0),
-      subtotal:     Number(subtotal),
+      // D-BE's subtotal INCLUDES the charges (see D-BE retailInvoiceService); S-BE
+      // keeps them separate — subtotal = items only, additionalCharges = charges
+      // pre-tax, chargeLines = itemised with GST (already inside taxAmount).
+      chargeLines,
+      additionalCharges: chargeSubtotal,
+      additionalLabel: chargeLines.length === 1 && chargeLines[0].label ? chargeLines[0].label : 'Additional Charges',
+      subtotal:     +Math.max(0, Number(subtotal) - chargeSubtotal).toFixed(2),
       taxAmount:    Number(taxAmount),
       totalAmount:  total,
       amountPaid:   received,
@@ -233,7 +246,7 @@ router.post('/dealer-order', async (req, res) => {
       dbeOrderId, orderNumber, dealerId: dealerRef,
       dealerEmail, dealerName, dealerPhone,
       items, subtotal, taxAmount, netAmount, paymentMethod, paymentStatus,
-      splitPayNowAmount, splitCreditAmount,
+      splitPayNowAmount, splitCreditAmount, deliveryAddress,
     } = req.body;
  
     const Order = require('../orders/model/Order.model');
@@ -305,6 +318,8 @@ router.post('/dealer-order', async (req, res) => {
             paymentStatus: paymentStatus || '',
             splitPayNowAmount: Number(splitPayNowAmount || 0),
             splitCreditAmount: Number(splitCreditAmount || 0),
+            // D-BE always sends it; without it the invoice has no ship-to address
+            ...(deliveryAddress ? { deliveryAddress } : {}),
             notes: `Dealer order: ${orderNumber}`,
           },
         },

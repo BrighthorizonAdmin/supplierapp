@@ -26,6 +26,7 @@ router.post('/notify/bulk', ctrl.notifyBulk);  // every dealer with dues
 router.patch('/order/:orderId', ctrl.patchEntry);
 router.post('/order/:orderId/payment', uploadLedgerProof.single('screenshot'), ctrl.addManualPayment);
 router.delete('/order/:orderId/payment/:paymentId', ctrl.deleteManualPayment);
+router.post('/order/:orderId/payment/:paymentId/resync', ctrl.resyncManualPayment);
 router.post('/order/:orderId/screenshot', uploadLedgerProof.single('screenshot'), ctrl.addScreenshot);
 router.delete('/order/:orderId/screenshot/:screenshotId', ctrl.deleteScreenshot);
 

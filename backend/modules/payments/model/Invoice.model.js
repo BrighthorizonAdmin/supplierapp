@@ -94,9 +94,22 @@ const invoiceSchema = new mongoose.Schema({
   amountPaid: { type: Number, default: 0 },
   balance: { type: Number, default: 0 },
 
-  // Additional charges
+  // Additional charges — additionalCharges is the pre-tax TOTAL (added on top of
+  // subtotal); chargeLines itemises it when known (dealer-app retail invoices:
+  // installation, delivery …), each with its own GST, which is already included
+  // in taxAmount.
   additionalCharges: { type: Number, default: 0 },
   additionalLabel: { type: String, default: 'Additional Charges' },
+  chargeLines: {
+    type: [{
+      label:     { type: String, trim: true, default: '' },
+      amount:    { type: Number, default: 0 },
+      taxRate:   { type: Number, default: 0 },
+      taxAmount: { type: Number, default: 0 },
+      _id: false,
+    }],
+    default: [],
+  },
 
   // Round off
   roundOff: { type: Boolean, default: false },
