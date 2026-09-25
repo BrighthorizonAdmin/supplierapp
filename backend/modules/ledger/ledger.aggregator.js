@@ -223,6 +223,15 @@ async function buildLedgerRows(opts = {}) {
       }
     }
 
+    // Offline payments recorded through orderPayment.service were ALSO added to
+    // the S-BE invoice's amountPaid. Take them back out here so everything below
+    // sees exactly what it did before, and they're counted once — as manual
+    // payments in step 6.
+    const manualOnInvoice = (ledger?.manualPayments || [])
+      .filter((mp) => !mp.reversedAt && mp.appliedToInvoiceId)
+      .reduce((s, mp) => s + num(mp.amount), 0);
+    paidFromInvoices = Math.max(0, paidFromInvoices - manualOnInvoice);
+
     // ── 5. Order flagged completed but no granular record found ──
     let markedPaid = 0;
     if (
@@ -230,6 +239,7 @@ async function buildLedgerRows(opts = {}) {
       gatewayPaid === 0 &&
       allocationPaid === 0 &&
       paidFromInvoices === 0 &&
+      manualOnInvoice === 0 && // completed status may have been set BY those payments
       ['completed', 'paid'].includes(String(order.paymentStatus || '').toLowerCase())
     ) {
       markedPaid = net;
@@ -244,9 +254,11 @@ async function buildLedgerRows(opts = {}) {
       });
     }
 
-    // ── 6. Manual (ledger book-keeping) payments — never in `payments` ──
+    // ── 6. Manual (offline) payments — never in `payments` ──
+    // Reversed ones are kept for history but count for nothing.
     let manualPaid = 0;
     for (const mp of ledger?.manualPayments || []) {
+      if (mp.reversedAt) continue;
       manualPaid += num(mp.amount);
       timeline.push({
         date: mp.paidOn,

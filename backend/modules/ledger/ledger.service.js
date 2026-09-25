@@ -7,6 +7,7 @@ const { toCsv, toXlsx } = require('./ledger.export');
 const { toPdf } = require('./ledger.pdf');
 const { notifyDealer, notifyDueDateChanged } = require('./ledger.notify');
 const { proofUrl } = require('./ledger.upload');
+const { recordOrderPayment, reverseOrderPayment, resyncPayment } = require('./orderPayment.service');
 
 const coll = (name) => mongoose.connection.collection(name);
 const oid = (v) => new mongoose.Types.ObjectId(String(v));
@@ -114,46 +115,19 @@ const ensureEntry = async (orderId, user) => {
 };
 
 /**
- * Append a manual (book-keeping) payment. This writes ONLY to `ledgerentries`
- * — the real `payments` collection is never touched, so existing reconciliation
- * and dealer-credit logic are unaffected.
+ * Record an offline payment. Delegates to orderPayment.service, which also
+ * posts it to the order's invoice, frees dealer credit, logs a finance
+ * Transaction and updates the order's payment status.
  */
-const addManualPayment = async (orderId, body, file, user) => {
-  const amount = Number(body.amount);
-  if (!Number.isFinite(amount) || amount <= 0) throw new AppError('A positive amount is required', 400);
-  if (!body.paidOn) throw new AppError('paidOn (payment date) is required', 400);
+const addManualPayment = async (orderId, body, file, user) =>
+  recordOrderPayment(orderId, body, file ? proofUrl(file.filename) : (body.screenshotUrl || ''), user);
 
-  // Nothing left to collect on a fully-paid order — another payment would only push
-  // "paid" past the order total. (Deleting a wrong entry is still allowed, see
-  // deleteManualPayment.) Enforced here as well as in the UI so it can't be bypassed.
-  const current = await getOrderLedger(orderId);
-  if (current.settled) throw new AppError('This order is already fully paid — no further payment can be recorded', 409);
+// Reverses (never deletes) — undoes every effect of recording it, keeps the entry
+const deleteManualPayment = async (orderId, paymentId, reason, user) =>
+  reverseOrderPayment(orderId, paymentId, reason, user);
 
-  const entry = await ensureEntry(orderId, user);
-  entry.manualPayments.push({
-    amount,
-    paidOn: new Date(body.paidOn),
-    method: body.method || 'other',
-    reference: body.reference || '',
-    note: body.note || '',
-    screenshotUrl: file ? proofUrl(file.filename) : (body.screenshotUrl || ''),
-    recordedBy: user?.id,
-    recordedByName: user?.name || '',
-    recordedAt: new Date(),
-  });
-  await entry.save();
-  return getOrderLedger(orderId);
-};
-
-const deleteManualPayment = async (orderId, paymentId) => {
-  const entry = await LedgerEntry.findOne({ orderId: oid(orderId) });
-  if (!entry) throw new AppError('Ledger entry not found', 404);
-  const before = entry.manualPayments.length;
-  entry.manualPayments = entry.manualPayments.filter((p) => String(p._id) !== String(paymentId));
-  if (entry.manualPayments.length === before) throw new AppError('Manual payment not found', 404);
-  await entry.save();
-  return getOrderLedger(orderId);
-};
+// Retry pushing a payment to the dealer app after a failed sync
+const resyncManualPayment = async (orderId, paymentId) => resyncPayment(orderId, paymentId);
 
 // Calendar-day key so a save that leaves the due date on the same day is not "a change".
 const dayKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
@@ -342,6 +316,7 @@ const notifyAllDealers = async ({ channel = 'both', user }) => {
 };
 
 module.exports = {
+  resyncManualPayment,
   getLedger,
   getSummary,
   getOrderLedger,

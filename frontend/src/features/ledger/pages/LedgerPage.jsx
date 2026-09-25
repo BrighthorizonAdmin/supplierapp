@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   Search, Filter, X, Download, Bell, ChevronDown, ChevronRight,
-  Paperclip, Trash2, Plus, CalendarClock, AlertTriangle,
+  Paperclip, Undo2, Plus, CalendarClock, AlertTriangle,
   IndianRupee, Users, Layers3, Wallet, FileSpreadsheet, FileText, FileType,
   Clock, CheckCircle2, ReceiptText, ImagePlus, Send,
 } from 'lucide-react';
@@ -14,7 +15,7 @@ import api from '../../../services/api';
 import toast from 'react-hot-toast';
 import {
   fetchLedger, fetchOrderLedger, clearDetail,
-  addManualPayment, deleteManualPayment, patchLedgerEntry,
+  addManualPayment, deleteManualPayment, resyncManualPayment, patchLedgerEntry,
   uploadScreenshot, deleteScreenshot, notifyDealer, downloadLedger,
 } from '../ledgerSlice';
 
@@ -324,27 +325,56 @@ const DetailModal = ({ orderId, onClose }) => {
                   {showForm ? 'Close' : '+ Add payment'}
                 </button>
               }>
-              Manual payment log <span className="font-normal text-slate-400">· book-keeping only</span>
+              Offline payments
             </SectionTitle>
             <p className="-mt-1 mb-2 text-xs text-slate-400">
               Online, invoice, split &amp; gateway payments appear in the timeline above automatically.
-              Use this only for offline payments (cash, cheque, bank transfer) the system didn't capture — it stays out of the Payments module.
+              Record offline payments (cash, cheque, bank transfer) here — each one also updates the order's invoice,
+              its payment status and the dealer's available credit. A wrong entry is reversed, not deleted.
             </p>
             {showForm && !r.settled && <ManualPaymentForm orderId={r.orderId} onDone={() => setShowForm(false)} />}
             {(r.ledger?.manualPayments || []).length > 0 && (
               <ul className="mt-2 rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
                 {r.ledger.manualPayments.map((mp) => (
                   <li key={mp._id} className="px-4 py-2.5 flex items-center justify-between text-sm hover:bg-slate-50">
-                    <span className="text-slate-700 tabular-nums">
-                      <span className="font-semibold">{inr(mp.amount)}</span>
+                    <span className={`tabular-nums ${mp.reversedAt ? 'text-slate-400' : 'text-slate-700'}`}>
+                      <span className={`font-semibold ${mp.reversedAt ? 'line-through' : ''}`}>{inr(mp.amount)}</span>
                       <span className="text-slate-400"> · {mp.method} · {d(mp.paidOn)}{mp.reference ? ` · ${mp.reference}` : ''}</span>
+                      {mp.recordedByName && <span className="text-slate-400"> · by {mp.recordedByName}</span>}
+                      {/* Dealer-app sync — only payments recorded through the invoice-linked flow are pushed */}
+                      {mp.appliedToInvoiceId && mp.dealerSync?.status !== 'synced' && mp.dealerSync?.status !== 'n/a' && (
+                        <span className="block text-xs text-amber-600">
+                          {mp.dealerSync?.status === 'failed' ? 'Dealer app not updated' : 'Updating dealer app…'}
+                          {mp.dealerSync?.lastError ? ` (${mp.dealerSync.lastError})` : ''}
+                          {' · '}
+                          <button type="button" className="font-semibold underline"
+                            onClick={() => dispatch(resyncManualPayment({ orderId: r.orderId, paymentId: mp._id }))}>
+                            Retry
+                          </button>
+                        </span>
+                      )}
+                      {mp.reversedAt && (
+                        <span className="block text-xs text-red-500">
+                          Reversed {d(mp.reversedAt)}{mp.reversedByName ? ` by ${mp.reversedByName}` : ''}{mp.reversalReason ? ` — ${mp.reversalReason}` : ''}
+                        </span>
+                      )}
                     </span>
                     <div className="flex items-center gap-3">
                       {mp.screenshotUrl && (
                         <a href={`${ASSET_BASE}${mp.screenshotUrl}`} target="_blank" rel="noreferrer" className="text-primary-600"><Paperclip size={13} /></a>
                       )}
-                      <button onClick={() => dispatch(deleteManualPayment({ orderId: r.orderId, paymentId: mp._id }))}
-                        className="text-slate-400 hover:text-red-600"><Trash2 size={13} /></button>
+                      {!mp.reversedAt && (
+                        <button title="Reverse this payment"
+                          onClick={() => {
+                            const reason = window.prompt(`Reverse ${inr(mp.amount)} payment? This undoes it on the invoice, order and dealer credit.
+
+Reason:`);
+                            if (reason === null) return;
+                            if (!reason.trim()) { window.alert('A reason is required to reverse a payment.'); return; }
+                            dispatch(deleteManualPayment({ orderId: r.orderId, paymentId: mp._id, reason: reason.trim() }));
+                          }}
+                          className="text-slate-400 hover:text-red-600"><Undo2 size={13} /></button>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -592,7 +622,9 @@ const LedgerPage = () => {
   const [overdue, setOverdue] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [openOrder, setOpenOrder] = useState(null);
+  // Other pages (order / invoice) link here with state.openOrderId to open that order's entry directly
+  const location = useLocation();
+  const [openOrder, setOpenOrder] = useState(location.state?.openOrderId || null);
   const [notifyingAll, setNotifyingAll] = useState(false);
 
   // The "Cleared" tab is its own history view — it always asks the backend for

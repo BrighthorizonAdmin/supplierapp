@@ -1,7 +1,9 @@
+const mongoose = require('mongoose');
 const Invoice = require('./model/Invoice.model');
 const Dealer = require('../dealer/model/Dealer.model');
 const Product = require('../products/model/Product.model');
 const DispatchedUnit = require('../dispatchedUnits/model/DispatchedUnit.model');
+const Order = require('../orders/model/Order.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 
@@ -53,6 +55,27 @@ const calcTotals = (lineItems = [], invoiceDiscount = 0, additionalCharges = 0, 
     totalAmount = Math.round(totalAmount);
   }
   return { items, subtotal: +subtotal.toFixed(2), taxAmount: +taxAmount.toFixed(2), discountAmt, totalAmount, roundOffAmt };
+};
+
+// The form always posts status 'issued' — derive the real payment status from
+// the amounts (drafts and cancelled invoices keep their status).
+const applyPaymentStatus = (invoice) => {
+  if (['draft', 'cancelled'].includes(invoice.status)) return;
+  const total = Number(invoice.totalAmount) || 0;
+  invoice.amountPaid = Math.min(Math.max(Number(invoice.amountPaid) || 0, 0), total);
+  if (total > 0 && invoice.amountPaid >= total - 0.01) invoice.status = 'paid';
+  else if (invoice.amountPaid > 0) invoice.status = 'partial';
+  else if (invoice.status !== 'overdue') invoice.status = 'issued';
+};
+
+// When an order's invoice is fully paid, reflect it on the order so the order
+// page / ledger don't keep showing the payment as pending.
+const syncOrderPaymentStatus = async (invoice) => {
+  if (!invoice.orderId || invoice.status !== 'paid') return;
+  await Order.updateOne(
+    { _id: invoice.orderId, paymentStatus: { $nin: ['completed', 'paid'] } },
+    { $set: { paymentStatus: 'completed' } }
+  );
 };
 
 // ── Serial uniqueness helper ──────────────────────────────────
@@ -121,10 +144,32 @@ const getInvoices = async (query = {}) => {
 
 const getInvoiceById = async (id) => {
   const inv = await Invoice.findById(id)
-    .populate('dealerId', 'businessName dealerCode email address phone gstin')
-    .populate('orderId', 'orderNumber confirmedAt')
+    // city/state/pinCode/gstNumber: dealer-app dealers keep their address as flat
+    // top-level fields (shared `dealers` collection), not the nested address object
+    .populate('dealerId', 'businessName dealerCode email address city state pinCode pincode phone gstin gstNumber')
+    .populate('orderId', 'orderNumber confirmedAt deliveryAddress dbeOrderId')
     .lean();
   if (!inv) throw new AppError('Invoice not found', 404);
+
+  // SHIP TO for invoices created before the order's delivery address was copied in:
+  // take it from the order, or — for dealer-app orders whose supplier copy never
+  // stored it — from the dealer-app order itself (same shared `orders` collection).
+  if (!inv.shippingAddress?.street && !inv.shippingAddress?.city && inv.orderId && typeof inv.orderId === 'object') {
+    let a = inv.orderId.deliveryAddress;
+    if (!(a?.fullAddress || a?.city) && inv.orderId.dbeOrderId && mongoose.isValidObjectId(inv.orderId.dbeOrderId)) {
+      const dbeOrder = await mongoose.connection.collection('orders').findOne(
+        { _id: new mongoose.Types.ObjectId(String(inv.orderId.dbeOrderId)) },
+        { projection: { deliveryAddress: 1 } }
+      );
+      a = dbeOrder?.deliveryAddress;
+    }
+    if (a?.fullAddress || a?.street || a?.city) {
+      inv.shippingAddress = {
+        label: a.label || '', street: a.fullAddress || a.street || '', city: a.city || '',
+        state: a.state || '', pincode: a.postalCode || a.pincode || '',
+      };
+    }
+  }
 
   // For invoices saved before warrantyPeriod field existed, derive it live from the product
   if (!inv.warrantyPeriod) {
@@ -176,6 +221,19 @@ const createInvoice = async (body, user) => {
     ...rest
   } = body;
 
+  // One invoice per order — an order's invoice must be edited, not duplicated
+  if (rest.orderId) {
+    const order = await Order.findById(rest.orderId).select('invoiceId orderNumber').lean();
+    if (!order) throw new AppError('Linked order not found', 404);
+    const existing = await Invoice.findOne({
+      $or: [{ _id: order.invoiceId }, { orderId: order._id }],
+      status: { $ne: 'cancelled' },
+    }).select('invoiceNumber').lean();
+    if (existing) {
+      throw new AppError(`Order ${order.orderNumber} already has invoice ${existing.invoiceNumber} — edit that invoice instead`, 409);
+    }
+  }
+
   // Validate serial numbers: count match + uniqueness
   const allSerials = [];
   for (const item of lineItems) {
@@ -219,7 +277,7 @@ const createInvoice = async (body, user) => {
     }
   }
 
-  const invoice = await Invoice.create({
+  const invoice = new Invoice({
     ...rest,
     dealerId,
     lineItems: items,
@@ -235,6 +293,13 @@ const createInvoice = async (body, user) => {
     invoicePrefix: invoicePrefix || undefined,
     invoiceSequence: invoiceSequence || undefined,
   });
+  applyPaymentStatus(invoice);
+  await invoice.save();
+
+  if (invoice.orderId) {
+    await Order.updateOne({ _id: invoice.orderId }, { $set: { invoiceId: invoice._id } });
+    await syncOrderPaymentStatus(invoice);
+  }
 
   if (dealerId && bankDetails && Object.keys(bankDetails).length > 0) {
     await Dealer.findByIdAndUpdate(dealerId, { bankDetails });
@@ -361,7 +426,9 @@ const updateInvoice = async (id, body) => {
   if (invoiceSequence !== undefined) invoice.invoiceSequence = invoiceSequence;
 
   Object.assign(invoice, rest);
+  applyPaymentStatus(invoice);
   await invoice.save();
+  await syncOrderPaymentStatus(invoice);
   return invoice;
 };
 
@@ -476,4 +543,4 @@ const saveSerialNumbers = async (id, lineSerials) => {
   return invoice;
 };
 
-module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, issueInvoice, cancelInvoice, deleteInvoice, saveSerialNumbers };
+module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, issueInvoice, cancelInvoice, deleteInvoice, saveSerialNumbers, applyPaymentStatus };

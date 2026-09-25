@@ -42,12 +42,28 @@ export const addManualPayment = createAsyncThunk(
   }
 );
 
-export const deleteManualPayment = createAsyncThunk(
-  'ledger/deleteManualPayment',
+export const resyncManualPayment = createAsyncThunk(
+  'ledger/resyncManualPayment',
   async ({ orderId, paymentId }, { rejectWithValue }) => {
     try {
-      const { data } = await api.delete(`/ledger/order/${orderId}/payment/${paymentId}`);
-      toast.success('Payment entry removed');
+      const { data } = await api.post(`/ledger/order/${orderId}/payment/${paymentId}/resync`);
+      const mp = (data.data?.ledger?.manualPayments || []).find((p) => p._id === paymentId);
+      if (mp?.dealerSync?.status === 'synced') toast.success('Dealer app updated');
+      else toast.error(`Dealer app still not reachable${mp?.dealerSync?.lastError ? `: ${mp.dealerSync.lastError}` : ''}`);
+      return data.data;
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Retry failed');
+      return rejectWithValue(err.response?.data?.message);
+    }
+  }
+);
+
+export const deleteManualPayment = createAsyncThunk(
+  'ledger/deleteManualPayment',
+  async ({ orderId, paymentId, reason }, { rejectWithValue }) => {
+    try {
+      const { data } = await api.delete(`/ledger/order/${orderId}/payment/${paymentId}`, { data: { reason } });
+      toast.success('Payment reversed');
       return data.data;
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to remove entry');
@@ -233,6 +249,7 @@ const ledgerSlice = createSlice({
       .addCase(fetchOrderLedger.rejected, detailFail)
       .addCase(addManualPayment.fulfilled, detailDone)
       .addCase(deleteManualPayment.fulfilled, detailDone)
+      .addCase(resyncManualPayment.fulfilled, detailDone)
       .addCase(patchLedgerEntry.fulfilled, detailDone)
       .addCase(uploadScreenshot.fulfilled, detailDone)
       .addCase(deleteScreenshot.fulfilled, detailDone);

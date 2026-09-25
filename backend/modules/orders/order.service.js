@@ -42,6 +42,19 @@ const DealerInventory = mongoose.models.DealerInventory
 // Uses dbeOrderId (dealer's MongoDB _id) as the primary lookup key,
 // falls back to dealerOrderNumber if dbeOrderId not stored yet.
 // ─────────────────────────────────────────────────────────────────────────────
+// Order delivery address → invoice shippingAddress (the invoice's SHIP TO)
+const shipToFromOrder = (order) => {
+  const a = order.deliveryAddress;
+  if (!a || !(a.fullAddress || a.street || a.city)) return undefined;
+  return {
+    label:   a.label || '',
+    street:  a.fullAddress || a.street || '',
+    city:    a.city || '',
+    state:   a.state || '',
+    pincode: a.postalCode || a.pincode || '',
+  };
+};
+
 async function notifyDealerOrderStatus(order, status, extraFields = {}) {
   const DEALER_API_URL = process.env.DEALER_API_URL;
   const WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET;
@@ -556,6 +569,7 @@ const confirmOrder = async (orderId, userId) => {
         partyAddress: order.orderType === 'b2c'
           ? [order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode].filter(Boolean).join(', ')
           : undefined,
+        shippingAddress: shipToFromOrder(order),
         lineItems:   invoiceLineItems,
         subtotal:    order.subtotal,
         taxAmount:   order.taxAmount,
@@ -1037,6 +1051,7 @@ const updateOrderStatus = async (orderId, status, userId, extraFields = {}) => {
           partyAddress: order.orderType === 'b2c'
             ? [order.deliveryAddress?.fullAddress, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.postalCode].filter(Boolean).join(', ')
             : undefined,
+          shippingAddress: shipToFromOrder(order),
           lineItems:    invoiceLineItems,
           subtotal:     order.subtotal,
           taxAmount:    order.taxAmount,

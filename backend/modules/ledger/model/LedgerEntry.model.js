@@ -39,6 +39,31 @@ const manualPaymentSchema = new mongoose.Schema(
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     recordedByName: { type: String, trim: true, default: '' },
     recordedAt: { type: Date, default: Date.now },
+
+    // Set by orderPayment.service when the payment was also posted to the
+    // order's S-BE invoice (amountPaid). The aggregator counts such payments
+    // through the invoice, NOT again as a manual addend. Entries without it
+    // are legacy book-keeping-only rows and are still added on top.
+    appliedToInvoiceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice' },
+    // Dealer credit (creditUsed) freed by this payment — given back on reversal
+    creditReleased: { type: Number, default: 0 },
+    // This payment settled the order and flipped its paymentStatus to 'completed'
+    markedOrderPaid: { type: Boolean, default: false },
+
+    // Payments are never deleted — a mistaken one is reversed, keeping history
+    reversedAt: { type: Date },
+    reversedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    reversedByName: { type: String, trim: true, default: '' },
+    reversalReason: { type: String, trim: true, default: '' },
+
+    // Push to the dealer app (D-BE payment-update webhook). 'n/a' = supplier-
+    // created order, nothing on the dealer side to update.
+    dealerSync: {
+      status: { type: String, enum: ['pending', 'synced', 'failed', 'n/a'], default: 'pending' },
+      attempts: { type: Number, default: 0 },
+      lastError: { type: String, trim: true, default: '' },
+      syncedAt: { type: Date },
+    },
   },
   { _id: true }
 );
@@ -87,7 +112,7 @@ const ledgerEntrySchema = new mongoose.Schema(
 );
 
 ledgerEntrySchema.virtual('manualPaidTotal').get(function () {
-  return (this.manualPayments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  return (this.manualPayments || []).reduce((sum, p) => sum + (p.reversedAt ? 0 : (Number(p.amount) || 0)), 0);
 });
 
 ledgerEntrySchema.set('toJSON', { virtuals: true });
