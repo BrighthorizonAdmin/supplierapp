@@ -20,6 +20,10 @@ const PROGRESS_STEPS = [
 ];
 
 const fmt = (n) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`;
+const METHOD_LABELS = {
+  cash: 'Cash', upi: 'UPI', neft: 'NEFT', rtgs: 'RTGS', imps: 'IMPS', 'bank-transfer': 'Bank Transfer',
+  cheque: 'Cheque', card: 'Card', other: 'Other',
+};
 
 const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
   const currentRank = STATUS_RANK[order.status] ?? 0;
@@ -543,8 +547,14 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
     printWindow.document.close();
   };
 
+  // Orders get their invoice at confirmation (serials attached on delivery) —
+  // open that one (the printable view; it has its own Edit for corrections)
+  // instead of starting a duplicate. Only orders without an invoice fall back
+  // to a pre-filled new invoice.
+  const orderInvoiceId = order?.invoiceId?._id || order?.invoiceId;
   const handleInvoice = () => {
-    navigate('/invoices/new', { state: { fromOrder: order } });
+    if (orderInvoiceId) navigate(`/invoices/${orderInvoiceId}`);
+    else navigate('/invoices/new', { state: { fromOrder: order } });
   };
 
   useEffect(() => {
@@ -555,6 +565,23 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
   useEffect(() => {
     if (attempted && !loading && !order) navigate('/orders');
   }, [attempted, loading, order, navigate]);
+
+  // Ledger view of this order — offline payments recorded after checkout (Finance →
+  // Ledger) and what's still owed. Only confirmed dealer orders have a ledger row;
+  // for anything else this stays null and nothing extra is shown.
+  const [ledgerRow, setLedgerRow] = useState(null);
+  useEffect(() => {
+    if (!order?._id) return;
+    let cancelled = false;
+    api.get(`/ledger/order/${order._id}`)
+      .then(({ data }) => { if (!cancelled) setLedgerRow(data.data || null); })
+      .catch(() => { if (!cancelled) setLedgerRow(null); });
+    return () => { cancelled = true; };
+  }, [order?._id, order?.paymentStatus]);
+  const laterPayments = (ledgerRow?.ledger?.manualPayments || []).filter((p) => !p.reversedAt);
+  const isFullyPaid = ['paid', 'completed'].includes(order?.paymentStatus) || Boolean(ledgerRow?.settled);
+  const isPartPaid = !isFullyPaid && laterPayments.length > 0;
+  const isCreditOrder = order?.paymentMethod === 'split' || /^net-\d+$/.test(order?.paymentMethod || '');
 
   const executeStatusUpdate = async (status) => {
     setStatusLoading(true);
@@ -679,7 +706,7 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
                 <Printer size={14} /> Print
               </button>
               <button type='button' onClick={handleInvoice} className="btn-danger flex items-center gap-1.5 text-sm">
-                <FileText size={14} /> Invoice
+                <FileText size={14} /> {orderInvoiceId ? 'View Invoice' : 'Create Invoice'}
               </button>
             </>
           )}
@@ -827,8 +854,8 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
                   <CreditCard size={14} className="text-slate-400" />
                   <span>Payment Status</span>
                 </div>
-                <span className={`badge ${['paid', 'completed'].includes(order.paymentStatus) ? 'badge-green' : 'badge-yellow'}`}>
-                  {order.paymentStatus || 'Pending'}
+                <span className={`badge ${isFullyPaid ? 'badge-green' : isPartPaid ? 'badge-blue' : 'badge-yellow'}`}>
+                  {isPartPaid ? 'partial' : (order.paymentStatus || 'Pending')}
                 </span>
               </div>
               {(order.paymentMethod) && (
@@ -857,6 +884,34 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500">On credit</span>
                   <span className="font-medium text-slate-700">{fmt(order.splitCreditAmount)}</span>
+                </div>
+              )}
+              {/* Payments made after checkout — cash / UPI / cheque recorded in Finance → Ledger */}
+              {laterPayments.map((p) => (
+                <div key={p._id} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">
+                    {isCreditOrder ? 'Credit paid' : 'Paid'}
+                    <span className="text-slate-400"> · {METHOD_LABELS[p.method] || p.method} · {format(new Date(p.paidOn), 'dd MMM yyyy')}</span>
+                  </span>
+                  <span className="font-medium text-green-700">{fmt(p.amount)}</span>
+                </div>
+              ))}
+              {ledgerRow && laterPayments.length > 0 && (
+                <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3">
+                  <span className="font-medium text-slate-600">Balance due</span>
+                  <span className={`font-semibold ${ledgerRow.outstanding > 0.01 ? 'text-red-600' : 'text-green-700'}`}>
+                    {fmt(ledgerRow.outstanding)}
+                  </span>
+                </div>
+              )}
+              {ledgerRow && !ledgerRow.settled && ledgerRow.outstanding > 0.01 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Dealer paid outside the app (cash, UPI, cheque)? Record it in{' '}
+                  <button type="button" className="font-semibold underline"
+                    onClick={() => navigate('/finance/ledger', { state: { openOrderId: order._id } })}>
+                    Finance → Ledger
+                  </button>
+                  {' '}— it updates this order, its invoice, the dealer's credit and the dealer app.
                 </div>
               )}
               {order.pricingTier && (

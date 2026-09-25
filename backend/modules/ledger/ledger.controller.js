@@ -29,8 +29,15 @@ const addManualPayment = asyncHandler(async (req, res) => {
 });
 
 const deleteManualPayment = asyncHandler(async (req, res) => {
-  const row = await ledgerService.deleteManualPayment(req.params.orderId, req.params.paymentId);
-  return success(res, row, 'Manual payment removed');
+  // Payments are reversed (kept in the log), not deleted — see orderPayment.service
+  const reason = req.body?.reason || req.query?.reason || '';
+  const row = await ledgerService.deleteManualPayment(req.params.orderId, req.params.paymentId, reason, req.user);
+  return success(res, row, 'Payment reversed');
+});
+
+const resyncManualPayment = asyncHandler(async (req, res) => {
+  const row = await ledgerService.resyncManualPayment(req.params.orderId, req.params.paymentId);
+  return success(res, row, 'Dealer app sync retried');
 });
 
 const patchEntry = asyncHandler(async (req, res) => {
@@ -76,6 +83,7 @@ module.exports = {
   getOrderLedger,
   addManualPayment,
   deleteManualPayment,
+  resyncManualPayment,
   patchEntry,
   addScreenshot,
   deleteScreenshot,

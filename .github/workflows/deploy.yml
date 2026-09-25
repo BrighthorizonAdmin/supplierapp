@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+ 
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
@@ -53,4 +53,3 @@ jobs:
  
             echo "==> Development Deployment complete!"
           EOF
- 

@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchInvoiceById, issueInvoice, cancelInvoice } from '../paymentSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
+import { resolveStateCode, isInterState, derivedGstRate, gstSummaryRows } from '../../../utils/gst';
 import { format } from 'date-fns';
 import { Printer, ArrowLeft, Send, XCircle, Edit2 } from 'lucide-react';
 import api from '../../../services/api';
@@ -105,13 +106,78 @@ export default function InvoiceDetailPage() {
   const dealerObj = !isRetail && inv.dealerId && typeof inv.dealerId === 'object' ? inv.dealerId : null;
   const custName  = isRetail ? noteParts[0] : (inv.partyName || dealerObj?.businessName || '');
   const custPhone = isRetail ? noteParts[1] : (inv.partyPhone || dealerObj?.phone || '');
-  const billAddress = inv.partyAddress ||
-    (dealerObj ? [dealerObj.address?.street, dealerObj.address?.city, dealerObj.address?.state, dealerObj.address?.pincode].filter(Boolean).join(', ') : '');
-  const billGST   = inv.partyGST || dealerObj?.gstin || '';
+  // Supplier-created dealers nest the address (address.street/city/state/pincode);
+  // dealer-app ones keep flat fields (address string + city/state/pinCode).
+  const dealerAddr = dealerObj
+    ? (dealerObj.address && typeof dealerObj.address === 'object'
+      ? [dealerObj.address.street, dealerObj.address.city, dealerObj.address.state, dealerObj.address.pincode]
+      : [dealerObj.address, dealerObj.city, dealerObj.state, dealerObj.pinCode || dealerObj.pincode]
+    ).filter(Boolean).join(', ')
+    : '';
+  const dealerState = dealerObj ? (dealerObj.address?.state || dealerObj.state || '') : '';
+  const billAddress = inv.partyAddress || dealerAddr;
+  const billGST   = inv.partyGST || dealerObj?.gstin || dealerObj?.gstNumber || '';
+  const ship = inv.shippingAddress || {};
+  // Dealer-app delivery addresses often repeat the name / city inside the street
+  // ("Solar Groups, Bangalore" + city "Bangalore") — print each part only once.
+  const shipLines = (() => {
+    const seen = new Set([String(ship.label || '').trim().toLowerCase()].filter(Boolean));
+    const keep = (part) => {
+      const k = String(part || '').trim().toLowerCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    };
+    const street = String(ship.street || '').split(',').map((p) => p.trim()).filter(keep).join(', ');
+    const locality = [ship.city, ship.state, ship.pincode].map((p) => String(p || '').trim()).filter(keep).join(', ');
+    return [street, locality].filter(Boolean);
+  })();
 
-  const cgst = +((inv.taxAmount || 0) / 2).toFixed(2);
-  const sgst = cgst;
-  const taxableAmount = inv.subtotal || 0;
+  // Additional charges (installation, delivery …). Dealer-app retail invoices
+  // itemise them in chargeLines, each with its own GST (inside taxAmount).
+  // Retail invoices synced before chargeLines existed kept the charges INSIDE
+  // subtotal, so take them back out there.
+  const chargeLines = inv.chargeLines || [];
+  const addlTotal = +inv.additionalCharges || 0;
+  const legacyRetailCharges = isRetail && !chargeLines.length && addlTotal > 0;
+  const taxableAmount = legacyRetailCharges ? Math.max(0, (inv.subtotal || 0) - addlTotal) : (inv.subtotal || 0);
+  const chargeRows = chargeLines.length
+    ? chargeLines.map((c) => ({ label: c.label || 'Additional Charges', amount: +c.amount || 0 }))
+    : addlTotal > 0 ? [{ label: inv.additionalLabel || 'Additional Charges', amount: addlTotal }] : [];
+
+  // GST split: same state → CGST + SGST, different states → IGST.
+  // Retail invoices are the dealer's own sale (seller GSTIN not on record) —
+  // left as intra-state.
+  const sellerState = isRetail ? null : resolveStateCode({ gstins: [COMPANY.gstin], texts: [COMPANY.address] });
+  const buyerState  = resolveStateCode({
+    gstins: [billGST],
+    texts:  [inv.shippingAddress?.state, dealerState, billAddress],
+  });
+  const taxByRate = {};
+  (inv.lineItems || []).forEach((li) => {
+    const rate = +li.taxRate || 0;
+    if (!rate) return;
+    const t = li.taxAmount != null ? +li.taxAmount : (li.unitPrice * li.quantity * rate) / 100;
+    taxByRate[rate] = (taxByRate[rate] || 0) + t;
+  });
+  chargeLines.forEach((c) => {
+    const rate = +c.taxRate || 0;
+    if (rate && +c.taxAmount) taxByRate[rate] = (taxByRate[rate] || 0) + (+c.taxAmount);
+  });
+  // Dealer-app invoices: 0% on every line, tax only at invoice level
+  if (!Object.keys(taxByRate).length && +inv.taxAmount > 0) {
+    taxByRate[derivedGstRate(inv.subtotal, inv.taxAmount)] = +inv.taxAmount;
+  } else if (legacyRetailCharges) {
+    // Old retail sync didn't keep the charges' GST separately — it's the part of
+    // taxAmount the items don't account for.
+    const itemTax = Object.values(taxByRate).reduce((a, b) => a + b, 0);
+    const chargeTax = +inv.taxAmount - itemTax;
+    if (chargeTax > 0.01) {
+      const rate = derivedGstRate(addlTotal, chargeTax);
+      taxByRate[rate] = (taxByRate[rate] || 0) + chargeTax;
+    }
+  }
+  const gstRows = gstSummaryRows(taxByRate, isInterState(sellerState, buyerState));
 
   // A retail invoice is always synced from the Dealer app — it's the dealer's
   // own document and must never show the Supplier's own bank details or
@@ -165,6 +231,19 @@ export default function InvoiceDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Order invoices: further payments are recorded in the Ledger (outside the printable area) */}
+      {inv.orderId && inv.status !== 'cancelled' && Math.max(0, (+inv.totalAmount || 0) - (+inv.amountPaid || 0)) > 0.01 && (
+        <div className="max-w-4xl mx-auto mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 print:hidden">
+          Balance of ₹{Math.max(0, (+inv.totalAmount || 0) - (+inv.amountPaid || 0)).toLocaleString('en-IN')} is due on this order.
+          If the dealer paid outside the app (cash, UPI, cheque), record it in{' '}
+          <button type="button" className="font-semibold underline"
+            onClick={() => navigate('/finance/ledger', { state: { openOrderId: inv.orderId?._id || inv.orderId } })}>
+            Finance → Ledger
+          </button>
+          {' '}— it updates this invoice, the order, the dealer's credit and the dealer app.
+        </div>
+      )}
 
       {/* Invoice Document */}
       <div ref={printRef} className="bg-white max-w-4xl mx-auto shadow-lg print:shadow-none print:max-w-full"
@@ -232,9 +311,14 @@ export default function InvoiceDetailPage() {
           </div>
           <div style={{ flex: 1, padding: '10px 24px', borderRight: '1px solid #ccc' }}>
             <div style={{ fontWeight: 'bold', fontSize: '11px', marginBottom: '4px' }}>SHIP TO</div>
-            {(inv.shippingAddress?.street || billAddress) && (
-              <div style={{ fontSize: '11px', color: '#444' }}>{inv.shippingAddress?.street || billAddress}</div>
-            )}
+            {shipLines.length > 0 ? (
+              <>
+                {ship.label && <div style={{ fontSize: '12px', fontWeight: 'bold' }}>{ship.label}</div>}
+                {shipLines.map((l, i) => <div key={i} style={{ fontSize: '11px', color: '#444' }}>{l}</div>)}
+              </>
+            ) : billAddress ? (
+              <div style={{ fontSize: '11px', color: '#444' }}>{billAddress}</div>
+            ) : null}
           </div>
           <div style={{ flex: 1, padding: '10px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
@@ -266,7 +350,11 @@ export default function InvoiceDetailPage() {
             <tbody>
               {inv.lineItems?.length > 0 ? inv.lineItems.map((item, i) => {
                 const base = item.unitPrice * item.quantity;
-                const taxAmt = +(base * (item.taxRate || 0) / 100).toFixed(2);
+                const taxAmt = item.taxAmount != null
+                  ? +item.taxAmount
+                  : +(base * (item.taxRate || 0) / 100).toFixed(2);
+                // Row amount is pre-tax — tax is added once, in the summary below
+                const lineTaxable = item.lineTotal != null ? (+item.lineTotal - taxAmt) : base;
                 return (
                   <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '10px 6px', verticalAlign: 'top' }}>
@@ -296,7 +384,7 @@ export default function InvoiceDetailPage() {
                       <div style={{ fontSize: '10px', color: '#666' }}>({item.taxRate || 0}%)</div>
                     </td>
                     <td style={{ padding: '10px 6px', textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold' }}>
-                      {(+item.lineTotal).toLocaleString('en-IN', { minimumFractionDigits: 0 })}
+                      {lineTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                 );
@@ -311,11 +399,9 @@ export default function InvoiceDetailPage() {
                   {inv.lineItems?.reduce((s, i) => s + i.quantity, 0) || 0}
                 </td>
                 <td></td>
+                <td></td>
                 <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 'bold' }}>
                   ₹{taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-                <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 'bold' }}>
-                  ₹{(+inv.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}
                 </td>
               </tr>
             </tfoot>
@@ -386,14 +472,18 @@ export default function InvoiceDetailPage() {
                   <td style={{ paddingBottom: '4px', color: '#444' }}>Taxable Amount</td>
                   <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
-                <tr>
-                  <td style={{ paddingBottom: '4px', color: '#444' }}>CGST @9%</td>
-                  <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                </tr>
-                <tr>
-                  <td style={{ paddingBottom: '4px', color: '#444' }}>SGST @9%</td>
-                  <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                </tr>
+                {chargeRows.map((row, i) => (
+                  <tr key={`charge-${i}`}>
+                    <td style={{ paddingBottom: '4px', color: '#444' }}>{row.label}</td>
+                    <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
+                {gstRows.map((row) => (
+                  <tr key={row.label}>
+                    <td style={{ paddingBottom: '4px', color: '#444' }}>{row.label}</td>
+                    <td style={{ paddingBottom: '4px', textAlign: 'right' }}>₹{row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
                 {inv.discountAmt > 0 && (
                   <tr>
                     <td style={{ paddingBottom: '4px', color: '#444' }}>Discount</td>
