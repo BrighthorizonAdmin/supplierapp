@@ -1,26 +1,56 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchInvoices, deleteInvoice, issueInvoice } from '../paymentSlice';
+import { fetchInvoices, deleteInvoice, issueInvoice, updateInvoice } from '../paymentSlice';
 import Table from '../../../components/ui/Table';
 import Pagination from '../../../components/ui/Pagination';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { format } from 'date-fns';
 import { Plus, Search, Eye, Trash2, Send, FileText } from 'lucide-react';
 
+// Inline-editable Date cell for the table — keeps its own draft value so typing/
+// picking a date doesn't feel laggy, and saves via the existing updateInvoice
+// endpoint as soon as a complete date is chosen.
+const EditableDateCell = ({ row, dispatch }) => {
+  const toInputValue = (v) => (v ? format(new Date(v), 'yyyy-MM-dd') : '');
+  const [value, setValue] = useState(toInputValue(row.invoiceDate));
+
+  useEffect(() => { setValue(toInputValue(row.invoiceDate)); }, [row.invoiceDate]);
+
+  const handleChange = (e) => {
+    const newValue = e.target.value;
+    setValue(newValue);
+    if (newValue) dispatch(updateInvoice({ id: row._id, body: { invoiceDate: newValue } }));
+  };
+
+  return (
+    <input
+      type="date"
+      value={value}
+      onChange={handleChange}
+      onClick={(e) => e.stopPropagation()}
+      disabled={row.status === 'cancelled'}
+      className="input py-1 px-2 text-xs w-[150px] disabled:opacity-50 disabled:cursor-not-allowed"
+    />
+  );
+};
+
 const InvoiceListPage = () => {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const { invoices, invoicePagination, loading } = useSelector((s) => s.payment);
 
-  const [page,        setPage]        = useState(1);
-  const [status,      setStatus]      = useState('');
-  const [search,      setSearch]      = useState('');
-  const [invoiceType, setInvoiceType] = useState(''); // '' = all, 'b2b', 'retail'
+  const [page,         setPage]         = useState(1);
+  const [status,       setStatus]       = useState('');
+  const [search,       setSearch]       = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [dateFrom,     setDateFrom]     = useState('');
+  const [dateTo,       setDateTo]       = useState('');
+  const [invoiceType,  setInvoiceType]  = useState(''); // '' = all, 'b2b', 'retail'
 
   useEffect(() => {
-    dispatch(fetchInvoices({ page, limit: 20, status, search, invoiceType }));
-  }, [dispatch, page, status, search, invoiceType]);
+    dispatch(fetchInvoices({ page, limit: 20, status, search, customerName, dateFrom, dateTo, invoiceType }));
+  }, [dispatch, page, status, search, customerName, dateFrom, dateTo, invoiceType]);
 
   const fmt = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
 
@@ -76,7 +106,7 @@ const InvoiceListPage = () => {
     {
       key: 'invoiceDate',
       label: 'Date',
-      render: (v) => (v ? format(new Date(v), 'dd MMM yyyy') : '—'),
+      render: (v, row) => <EditableDateCell row={row} dispatch={dispatch} />,
     },
     {
       key: 'totalAmount',
@@ -165,6 +195,44 @@ const InvoiceListPage = () => {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
+        </div>
+
+        {/* Customer name search */}
+        <div className="relative flex-1 min-w-48">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className="input pl-9 w-full"
+            placeholder="Search customer name..."
+            value={customerName}
+            onChange={(e) => { setCustomerName(e.target.value); setPage(1); }}
+          />
+        </div>
+
+        {/* Custom date range filter */}
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            className="input w-40"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+          />
+          <span className="text-slate-400 text-sm">to</span>
+          <input
+            type="date"
+            className="input w-40"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}
+              className="text-xs text-slate-500 hover:text-slate-700 underline"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Invoice Type filter */}
