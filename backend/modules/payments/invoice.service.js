@@ -122,7 +122,26 @@ const getInvoices = async (query = {}) => {
   if (query.dealerId) match.dealerId = query.dealerId;
   if (query.status) match.status = query.status;
   if (query.invoiceType) match.invoiceType = query.invoiceType;
-  if (query.search) match.invoiceNumber = { $regex: query.search, $options: 'i' };
+  if (query.search) {
+    // Matches invoice #, customer (partyName / retail "notes" snapshot) or dealer business name
+    const term = String(query.search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = { $regex: term, $options: 'i' };
+    const dealerIds = await Dealer.find({ businessName: re }).distinct('_id');
+    match.$and = [{ $or: [
+      { invoiceNumber: re }, { partyName: re }, { notes: re }, { dealerId: { $in: dealerIds } },
+    ] }];
+  }
+  if (query.customerName) {
+    // partyName covers B2B dealer / B2C customer; notes covers the retail
+    // "Retail sale to: Name | Phone" snapshot format — search both.
+    const re = { $regex: query.customerName, $options: 'i' };
+    match.$or = [{ partyName: re }, { notes: re }];
+  }
+  if (query.dateFrom || query.dateTo) {
+    match.invoiceDate = {};
+    if (query.dateFrom) match.invoiceDate.$gte = new Date(`${query.dateFrom}T00:00:00.000Z`);
+    if (query.dateTo) match.invoiceDate.$lte = new Date(`${query.dateTo}T23:59:59.999Z`);
+  }
   if (query.overdue === 'true') {
     match.status = { $in: ['issued', 'partial'] };
     match.dueDate = { $lt: new Date() };

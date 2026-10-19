@@ -79,7 +79,20 @@ const notifyDealersAboutProduct = async (product, action) => {
   }
 };
 
+// Case-insensitive, whitespace-trimmed match on product name — blocks adding
+// the same product name twice.
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const assertUniqueName = async (name, excludeId) => {
+  if (typeof name !== 'string' || !name.trim()) return;
+  const exists = await Product.exists({
+    name: { $regex: `^\\s*${escapeRegex(name.trim())}\\s*$`, $options: 'i' },
+    ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+  });
+  if (exists) throw new AppError('A product with this name already exists', 409);
+};
+
 const createProduct = async (data, userId) => {
+  await assertUniqueName(data.name);
   // Seed currentStockQty from openingStockQty so live stock starts at the opening value
   const payload = { ...data, createdBy: userId };
   if (payload.currentStockQty === undefined) {
@@ -129,6 +142,10 @@ const updateProduct = async (id, updates, userId) => {
 
   // openingStockQty is immutable after creation — strip it from any update payload
   const { openingStockQty: _ignored, ...safeUpdates } = updates;
+  if (typeof safeUpdates.name === 'string'
+      && safeUpdates.name.trim().toLowerCase() !== (product.name || '').trim().toLowerCase()) {
+    await assertUniqueName(safeUpdates.name, product._id);
+  }
   Object.assign(product, safeUpdates);
   await product.save();
 

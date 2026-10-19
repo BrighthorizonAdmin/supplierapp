@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchQuoteById, deleteQuote } from '../quoteSlice';
+import { fetchQuoteById, deleteQuote, updateQuote } from '../quoteSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
 import { format } from 'date-fns';
 import { Printer, ArrowLeft, Edit2, Trash2 } from 'lucide-react';
@@ -44,6 +44,9 @@ const STATUS_COLORS = {
 const STATUS_LABELS = {
   deletedByDealer: 'Deleted by Dealer',
 };
+
+// Statuses the supplier can pick for its own quotes from the detail toolbar
+const STATUS_OPTIONS = ['draft', 'sent', 'accepted', 'rejected', 'expired'];
 
 // ── Tax breakdown helper (CGST + SGST split) ──────────────────────────────────
 function buildTaxBreakdown(lineItems = []) {
@@ -124,6 +127,10 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
     if (!res.error) navigate('/quotes');
   };
 
+  const handleStatusChange = (status) => {
+    if (status && status !== q?.status) dispatch(updateQuote({ id, body: { status } }));
+  };
+
   if (loading || !q) return <div className="p-10 text-center text-slate-400">Loading quote...</div>;
 
   const taxBreakdown   = buildTaxBreakdown(q.lineItems || []);
@@ -167,6 +174,16 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
         <div className="flex items-center gap-2">
           {q.source !== 'dealer' && (
             <>
+              <select
+                value={q.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                title="Change status"
+                className="px-3 py-2 text-sm font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors capitalize"
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
+              </select>
               <button
                 onClick={() => navigate(`/quotes/${id}/edit`)}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors"
