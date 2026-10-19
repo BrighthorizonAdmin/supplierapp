@@ -7,22 +7,22 @@ import Pagination from '../../../components/ui/Pagination';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { format } from 'date-fns';
 import { Plus, Search, Eye, Trash2, Send, FileText } from 'lucide-react';
-
+ 
 // Inline-editable Date cell for the table — keeps its own draft value so typing/
 // picking a date doesn't feel laggy, and saves via the existing updateInvoice
 // endpoint as soon as a complete date is chosen.
 const EditableDateCell = ({ row, dispatch }) => {
   const toInputValue = (v) => (v ? format(new Date(v), 'yyyy-MM-dd') : '');
   const [value, setValue] = useState(toInputValue(row.invoiceDate));
-
+ 
   useEffect(() => { setValue(toInputValue(row.invoiceDate)); }, [row.invoiceDate]);
-
+ 
   const handleChange = (e) => {
     const newValue = e.target.value;
     setValue(newValue);
     if (newValue) dispatch(updateInvoice({ id: row._id, body: { invoiceDate: newValue } }));
   };
-
+ 
   return (
     <input
       type="date"
@@ -34,26 +34,25 @@ const EditableDateCell = ({ row, dispatch }) => {
     />
   );
 };
-
+ 
 const InvoiceListPage = () => {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const { invoices, invoicePagination, loading } = useSelector((s) => s.payment);
-
-  const [page,         setPage]         = useState(1);
-  const [status,       setStatus]       = useState('');
-  const [search,       setSearch]       = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [dateFrom,     setDateFrom]     = useState('');
-  const [dateTo,       setDateTo]       = useState('');
-  const [invoiceType,  setInvoiceType]  = useState(''); // '' = all, 'b2b', 'retail'
-
+ 
+  const [page,        setPage]        = useState(1);
+  const [status,      setStatus]      = useState('');
+  const [search,      setSearch]      = useState('');
+  const [dateFrom,    setDateFrom]    = useState('');
+  const [dateTo,      setDateTo]      = useState('');
+  const [invoiceType, setInvoiceType] = useState(''); // '' = all, 'b2b', 'retail'
+ 
   useEffect(() => {
-    dispatch(fetchInvoices({ page, limit: 20, status, search, customerName, dateFrom, dateTo, invoiceType }));
-  }, [dispatch, page, status, search, customerName, dateFrom, dateTo, invoiceType]);
-
+    dispatch(fetchInvoices({ page, limit: 20, status, search, dateFrom, dateTo, invoiceType }));
+  }, [dispatch, page, status, search, dateFrom, dateTo, invoiceType]);
+ 
   const fmt = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
-
+ 
   const columns = [
     {
       key: 'invoiceNumber',
@@ -170,7 +169,7 @@ const InvoiceListPage = () => {
       ),
     },
   ];
-
+ 
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -183,31 +182,20 @@ const InvoiceListPage = () => {
           <Plus size={16} /> New Invoice
         </button>
       </div>
-
+ 
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
         {/* Search */}
-        <div className="relative flex-1 min-w-48">
+        <div className="relative w-full sm:w-80">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             className="input pl-9 w-full"
-            placeholder="Search invoice #..."
+            placeholder="Search invoice # or customer name..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
-
-        {/* Customer name search */}
-        <div className="relative flex-1 min-w-48">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            className="input pl-9 w-full"
-            placeholder="Search customer name..."
-            value={customerName}
-            onChange={(e) => { setCustomerName(e.target.value); setPage(1); }}
-          />
-        </div>
-
+ 
         {/* Custom date range filter */}
         <div className="flex items-center gap-2">
           <input
@@ -234,7 +222,7 @@ const InvoiceListPage = () => {
             </button>
           )}
         </div>
-
+ 
         {/* Invoice Type filter */}
         <select
           className="input w-48"
@@ -246,7 +234,7 @@ const InvoiceListPage = () => {
           <option value="retail">Retail (Dealer → Customer)</option>
           <option value="b2c">B2C (Supplier → Customer)</option>
         </select>
-
+ 
         {/* Status filter */}
         <select
           className="input w-40"
@@ -261,7 +249,7 @@ const InvoiceListPage = () => {
           ))}
         </select>
       </div>
-
+ 
       {/* Summary chips */}
       <div className="flex gap-3">
         <button
@@ -305,7 +293,7 @@ const InvoiceListPage = () => {
         B2C Invoices
         </button>
       </div>
-
+ 
       {/* Table */}
       <div className="card">
         <Table columns={columns} data={invoices} loading={loading} />
@@ -314,5 +302,5 @@ const InvoiceListPage = () => {
     </div>
   );
 };
-
+ 
 export default InvoiceListPage;

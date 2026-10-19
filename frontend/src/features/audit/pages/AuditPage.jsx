@@ -136,6 +136,18 @@ const SearchableCustomerSelect = ({ customers = [], selected = [], onChange }) =
           </div>
 
           <div className="max-h-52 overflow-y-auto py-1">
+           {/* "All Customers" — same as the "All …" option in the other filters: clears the customer filter */}
+            {'all customers'.includes(search.toLowerCase()) && (
+              <button
+                onClick={() => { setDraft([]); onChange([]); setOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors border-b border-slate-100"
+              >
+                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${draft.length === 0 ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                  {draft.length === 0 && <Check size={10} className="text-white" strokeWidth={3} />}
+                </div>
+                <span className="text-xs text-slate-700 leading-snug font-medium">All Customers</span>
+              </button>
+            )}
             {filtered.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-4">No customers found</p>
             ) : filtered.map(c => (
