@@ -308,19 +308,31 @@ const getInvoiceList = async (filters, { page = 1, limit = 20 } = {}) => {
 };
 
 const getFilterOptions = async () => {
-  const [salesmen, invoicePartyNames, dealers] = await Promise.all([
+  const [salesmen, partyTypes, dealers] = await Promise.all([
     Invoice.distinct('salesmanName', { salesmanName: { $nin: ['', null] } }),
-    Invoice.distinct('partyName', { partyName: { $nin: ['', null] }, status: { $nin: ['draft', 'cancelled'] } }),
+    Invoice.aggregate([
+      { $match: { partyName: { $nin: ['', null] }, status: { $nin: ['draft', 'cancelled'] } } },
+      { $group: { _id: '$partyName', types: { $addToSet: '$invoiceType' } } },
+    ]),
     Dealer.find({}, 'businessName _id').lean(),
   ]);
 
   const dealerIdMap = {};
   dealers.forEach(d => { if (d.businessName) dealerIdMap[d.businessName] = d._id.toString(); });
 
-  const allNames = [...new Set([...dealers.map(d => d.businessName).filter(Boolean), ...invoicePartyNames])]
+  // Invoice types each customer appears in (used to narrow the customer list by Type filter)
+  const typesMap = {};
+  partyTypes.forEach(p => { typesMap[p._id] = p.types.map(t => t || 'b2b'); });
+
+  const allNames = [...new Set([...dealers.map(d => d.businessName).filter(Boolean), ...partyTypes.map(p => p._id)])]
     .sort((a, b) => a.localeCompare(b));
 
-  const customers = allNames.map(name => ({ name, dealerId: dealerIdMap[name] || null }));
+  // Dealers with no invoices yet are B2B customers
+  const customers = allNames.map(name => ({
+    name,
+    dealerId: dealerIdMap[name] || null,
+    types: typesMap[name] || ['b2b'],
+  }));
 
   return { salesmen, customers };
 };
