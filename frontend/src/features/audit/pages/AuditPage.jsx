@@ -235,6 +235,24 @@ const AuditPage = () => {
   const [allPaymentModes,    setAllPaymentModes]    = useState([]);
   const [productSort,   setProductSort]   = useState({ field: 'revenue', dir: 'desc' });
 
+  // Customers narrowed by the Type filter (All types → every customer)
+  const visibleCustomers = useMemo(() => (
+    invoiceType === null
+      ? filterOptions.customers
+      : filterOptions.customers.filter(c => (c.types || ['b2b']).some(t => invoiceType.includes(t)))
+  ), [filterOptions.customers, invoiceType]);
+
+  // When Type changes, drop ticked customers that are no longer in the list
+  useEffect(() => {
+    setSelectedCustomers(prev => {
+      if (prev === null) return prev;
+      const names = visibleCustomers.map(c => c.name || c);
+      const kept = prev.filter(n => names.includes(n));
+      if (kept.length === 0 || kept.length === names.length) return null;
+      return kept.length === prev.length ? prev : kept;
+    });
+  }, [visibleCustomers]);
+
   const activeFilters = useMemo(() => {
     const dates = datePreset === 'custom'
       ? { startDate: customStart || null, endDate: customEnd || null }
@@ -246,7 +264,7 @@ const AuditPage = () => {
     let excludePartyNames = '';
     let excludeDealerIds  = '';
     if (selectedCustomers !== null) {
-      const allNames = filterOptions.customers.map(c => c.name || c);
+      const allNames = visibleCustomers.map(c => c.name || c);
       const unticked = allNames.filter(n => !selectedCustomers.includes(n));
       if (unticked.length < selectedCustomers.length) {
         // Most customers still ticked → send the (shorter) list of excluded ones
@@ -262,9 +280,9 @@ const AuditPage = () => {
       ...dates, invoiceType: csv(invoiceType), status: csv(status), paymentMode: csv(paymentMode),
       salesmanName: csv(salesman), partyNames, dealerIds, excludePartyNames, excludeDealerIds,
     };
-  }, [datePreset, customStart, customEnd, invoiceType, status, paymentMode, salesman, selectedCustomers, filterOptions.customers]);
+  }, [datePreset, customStart, customEnd, invoiceType, status, paymentMode, salesman, selectedCustomers, filterOptions.customers, visibleCustomers]);
 
-  const customerOptions    = useMemo(() => filterOptions.customers.map(c => ({ value: c.name || c, label: c.name || c })), [filterOptions.customers]);
+  const customerOptions    = useMemo(() => visibleCustomers.map(c => ({ value: c.name || c, label: c.name || c })), [visibleCustomers]);
   const paymentModeOptions = useMemo(() => allPaymentModes.map(m => ({ value: m, label: fmtPayMode(m) })), [allPaymentModes]);
   const salesmanOptions    = useMemo(() => filterOptions.salesmen.map(x => ({ value: x, label: x })), [filterOptions.salesmen]);
 
