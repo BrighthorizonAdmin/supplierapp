@@ -100,6 +100,9 @@ const Toggle = ({ checked, onChange }) => (
 export default function InvoiceFormPage() {
   const { id }   = useParams();
   const isEdit   = Boolean(id);
+  // Changing an existing invoice's date is Super Admin only
+  const currentUser = useSelector((s) => s.auth.user);
+  const dateLocked  = isEdit && ![].concat(currentUser?.role || []).includes('super-admin');
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -981,8 +984,9 @@ export default function InvoiceFormPage() {
                   <label className="text-xs text-gray-400 font-semibold block mb-1.5">Invoice Date</label>
                   <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-2 py-2 focus-within:border-blue-400">
                     <Calendar size={13} className="text-blue-500 flex-shrink-0"/>
-                    <input type="date" className="flex-1 text-sm font-semibold text-gray-800 outline-none bg-transparent min-w-0"
-                      value={invoiceDate} onChange={(e)=>setInvoiceDate(e.target.value)}/>
+                    <input type="date" className="flex-1 text-sm font-semibold text-gray-800 outline-none bg-transparent min-w-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                      value={invoiceDate} onChange={(e)=>setInvoiceDate(e.target.value)}
+                      disabled={dateLocked} title={dateLocked ? 'Only Super Admin can change the invoice date' : undefined}/>
                   </div>
                 </div>
               </div>
@@ -997,8 +1001,9 @@ export default function InvoiceFormPage() {
                   <label className="text-xs text-gray-400 font-semibold block mb-1.5">Invoice Date</label>
                   <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-2 py-2 focus-within:border-blue-400">
                     <Calendar size={13} className="text-blue-500 flex-shrink-0"/>
-                    <input type="date" className="flex-1 text-sm font-semibold text-gray-800 outline-none bg-transparent min-w-0"
-                      value={invoiceDate} onChange={(e)=>setInvoiceDate(e.target.value)}/>
+                    <input type="date" className="flex-1 text-sm font-semibold text-gray-800 outline-none bg-transparent min-w-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                      value={invoiceDate} onChange={(e)=>setInvoiceDate(e.target.value)}
+                      disabled={dateLocked} title={dateLocked ? 'Only Super Admin can change the invoice date' : undefined}/>
                   </div>
                 </div>
               </div>

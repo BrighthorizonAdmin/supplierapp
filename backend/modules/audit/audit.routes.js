@@ -18,6 +18,8 @@ const parseFilters = (q) => ({
   salesmanName: q.salesmanName || 'all',
   partyNames:   q.partyNames   || 'all',
   dealerIds:    q.dealerIds    || 'all',
+  excludePartyNames: q.excludePartyNames || '',
+  excludeDealerIds:  q.excludeDealerIds  || '',
 });
 
 router.get('/kpis', authorize('invoices:read'), asyncHandler(async (req, res) => {

@@ -2,18 +2,40 @@ const Invoice = require('../payments/model/Invoice.model');
 const Dealer  = require('../dealer/model/Dealer.model');
 const mongoose = require('mongoose');
 
-const buildMatch = ({ startDate, endDate, invoiceType, status, dealerId, paymentMode, salesmanName, partyNames, dealerIds }) => {
+// Filters may carry one value or a comma-separated list (multi-select checkboxes)
+const toList = (v) => (v && v !== 'all') ? String(v).split(',').map(s => s.trim()).filter(Boolean) : [];
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const toObjectIds = (v) => toList(v).map(id => {
+  try { return new mongoose.Types.ObjectId(id); } catch { return null; }
+}).filter(Boolean);
+
+const buildMatch = ({ startDate, endDate, invoiceType, status, dealerId, paymentMode, salesmanName, partyNames, dealerIds, excludePartyNames, excludeDealerIds }) => {
   const match = {};
   if (startDate || endDate) {
     match.invoiceDate = {};
     if (startDate) match.invoiceDate.$gte = new Date(startDate);
     if (endDate)   match.invoiceDate.$lte = new Date(endDate);
   }
-  if (invoiceType && invoiceType !== 'all') match.invoiceType = invoiceType;
-  if (status && status !== 'all') match.status = status;
+  const types = toList(invoiceType);
+  if (types.length === 1) match.invoiceType = types[0];
+  else if (types.length > 1) match.invoiceType = { $in: types };
+  const statuses = toList(status);
+  if (statuses.length === 1) match.status = statuses[0];
+  else if (statuses.length > 1) match.status = { $in: statuses };
   if (dealerId && dealerId !== 'all') match.dealerId = new mongoose.Types.ObjectId(dealerId);
-  if (paymentMode && paymentMode !== 'all') match.paymentMode = { $regex: new RegExp(paymentMode, 'i') };
-  if (salesmanName && salesmanName !== 'all') match.salesmanName = salesmanName;
+  const modes = toList(paymentMode);
+  if (modes.length === 1) match.paymentMode = { $regex: new RegExp(paymentMode, 'i') };
+  else if (modes.length > 1) match.paymentMode = { $in: modes.map(m => new RegExp(escapeRegex(m), 'i')) };
+  const salesmen = toList(salesmanName);
+  if (salesmen.length === 1) match.salesmanName = salesmen[0];
+  else if (salesmen.length > 1) match.salesmanName = { $in: salesmen };
+
+  // Customers unticked from "All" — sent as an exclusion list so the request
+  // stays short when most customers are still ticked
+  const exNames = toList(excludePartyNames);
+  const exIds   = toObjectIds(excludeDealerIds);
+  if (exNames.length) match.partyName = { $nin: exNames };
+  if (exIds.length)   match.dealerId  = { $nin: exIds };
 
   // Customer filter: match by partyName (retail) OR dealerId (B2B) so both invoice types are included
   const hasPartyNames = partyNames && partyNames !== 'all';
