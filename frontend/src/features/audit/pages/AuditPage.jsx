@@ -38,6 +38,12 @@ const fmtPayMode = (v) => {
   // Fallback: title-case each word, replace hyphens with spaces
   return lower.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 };
+const INVOICE_TYPE_OPTIONS = [{ value: 'b2b', label: 'B2B' }, { value: 'retail', label: 'Retail' }];
+const STATUS_OPTIONS = [
+  { value: 'issued', label: 'Issued' }, { value: 'partial', label: 'Partial' },
+  { value: 'paid', label: 'Paid' }, { value: 'overdue', label: 'Overdue' },
+];
+
 const TABS = ['Overview', 'Weekly', 'Heatmap', 'Products', 'Channels', 'Invoices'];
 
 const DATE_PRESETS = [
@@ -76,14 +82,16 @@ const ChartTooltip = ({ active, payload, label }) => {
   );
 };
 
-// ── Searchable Customer Multi-Select ─────────────────────────────────────────
-const SearchableCustomerSelect = ({ customers = [], selected = [], onChange }) => {
-  const [open, setOpen]       = useState(false);
-  const [search, setSearch]   = useState('');
-  const [draft, setDraft]     = useState(selected);
+// ── Multi-Select filter with "All" ───────────────────────────────────────────
+// value === null  → "All": every option is ticked (no filter applied)
+// value === [..]  → only these options are ticked (untick some from All to exclude them)
+const MultiSelect = ({ allLabel, noun, options = [], value = null, onChange }) => {
+  const [open, setOpen]     = useState(false);
+  const [search, setSearch] = useState('');
+  const [draft, setDraft]   = useState(value);
   const ref = useRef(null);
 
-  useEffect(() => { setDraft(selected); }, [selected]);
+  useEffect(() => { setDraft(value); }, [value]);
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -91,36 +99,52 @@ const SearchableCustomerSelect = ({ customers = [], selected = [], onChange }) =
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const filtered = useMemo(() =>
-    customers.filter(c => c.toLowerCase().includes(search.toLowerCase())),
-    [customers, search]
+  const allValues = useMemo(() => options.map(o => o.value), [options]);
+  const filtered  = useMemo(() =>
+    options.filter(o => String(o.label).toLowerCase().includes(search.toLowerCase())),
+    [options, search]
   );
 
-  const toggle = (name) => {
-    setDraft(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+  const isChecked  = (v) => draft === null || draft.includes(v);
+  const allChecked = draft === null || (allValues.length > 0 && allValues.every(v => draft.includes(v)));
+
+  const toggleAll = () => setDraft(allChecked ? [] : null);
+  const toggle = (v) => setDraft(prev => {
+    const base = prev === null ? allValues : prev;
+    return base.includes(v) ? base.filter(x => x !== v) : [...base, v];
+  });
+
+  const handleDone = () => {
+    // Everything ticked again → same as "All"
+    const next = draft === null || allValues.every(v => draft.includes(v)) ? null : draft;
+    onChange(next);
+    setOpen(false);
   };
 
-  const handleDone = () => { onChange(draft); setOpen(false); };
-  const handleClear = () => { setDraft([]); };
+  const label = value === null
+    ? allLabel
+    : value.length === 1
+      ? (options.find(o => o.value === value[0])?.label || value[0])
+      : `${value.length} ${noun}`;
 
-  const label = selected.length === 0
-    ? 'All Customers'
-    : selected.length === 1
-      ? selected[0].length > 18 ? selected[0].slice(0, 18) + '…' : selected[0]
-      : `${selected.length} customers`;
+  const Box = ({ checked }) => (
+    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${checked ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+      {checked && <Check size={10} className="text-white" strokeWidth={3} />}
+    </div>
+  );
 
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => { setOpen(v => !v); setDraft(selected); setSearch(''); }}
-        className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 pr-2 focus:outline-none bg-white transition-colors ${selected.length > 0 ? 'border-blue-400 text-blue-700' : 'border-slate-200 text-slate-600'}`}
+        onClick={() => { setOpen(v => !v); setDraft(value); setSearch(''); }}
+        className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 pr-2 focus:outline-none bg-white transition-colors whitespace-nowrap ${value !== null ? 'border-blue-400 text-blue-700' : 'border-slate-200 text-slate-600'}`}
       >
         <span className="max-w-[140px] truncate">{label}</span>
-        <ChevronDown size={11} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={11} className={`text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-50">
+        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-slate-200 rounded-xl shadow-xl z-50">
           <div className="p-2 border-b border-slate-100">
             <div className="flex items-center gap-2 px-2 py-1.5 bg-slate-50 rounded-lg">
               <Search size={12} className="text-slate-400 flex-shrink-0" />
@@ -128,7 +152,7 @@ const SearchableCustomerSelect = ({ customers = [], selected = [], onChange }) =
                 autoFocus
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search customers..."
+                placeholder={`Search ${noun}...`}
                 className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400"
               />
               {search && <button onClick={() => setSearch('')}><X size={11} className="text-slate-400" /></button>}
@@ -136,39 +160,38 @@ const SearchableCustomerSelect = ({ customers = [], selected = [], onChange }) =
           </div>
 
           <div className="max-h-52 overflow-y-auto py-1">
-           {/* "All Customers" — same as the "All …" option in the other filters: clears the customer filter */}
-            {'all customers'.includes(search.toLowerCase()) && (
+            {!search && (
               <button
-                onClick={() => { setDraft([]); onChange([]); setOpen(false); }}
+                onClick={toggleAll}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors border-b border-slate-100"
               >
-                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${draft.length === 0 ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
-                  {draft.length === 0 && <Check size={10} className="text-white" strokeWidth={3} />}
-                </div>
-                <span className="text-xs text-slate-700 leading-snug font-medium">All Customers</span>
+                <Box checked={allChecked} />
+                <span className="text-xs text-slate-700 leading-snug font-medium">{allLabel}</span>
               </button>
             )}
             {filtered.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4">No customers found</p>
-            ) : filtered.map(c => (
+              <p className="text-xs text-slate-400 text-center py-4">No results</p>
+            ) : filtered.map(o => (
               <button
-                key={c}
-                onClick={() => toggle(c)}
+                key={o.value}
+                onClick={() => toggle(o.value)}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors"
               >
-                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${draft.includes(c) ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
-                  {draft.includes(c) && <Check size={10} className="text-white" strokeWidth={3} />}
-                </div>
-                <span className="text-xs text-slate-700 leading-snug">{c}</span>
+                <Box checked={isChecked(o.value)} />
+                <span className="text-xs text-slate-700 leading-snug">{o.label}</span>
               </button>
             ))}
           </div>
 
-          <div className="flex items-center justify-between p-2 border-t border-slate-100">
-            <button onClick={handleClear} className="text-xs text-slate-500 hover:text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
-              Clear
-            </button>
-            <button onClick={handleDone} className="text-xs bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 transition-colors font-medium">
+          <div className="flex items-center justify-between gap-2 p-2 border-t border-slate-100">
+            <span className="text-[11px] text-slate-400 px-1">
+              {draft !== null && draft.length === 0 ? 'Select at least one' : ''}
+            </span>
+            <button
+              onClick={handleDone}
+              disabled={draft !== null && draft.length === 0}
+              className="text-xs bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               Done
             </button>
           </div>
@@ -185,11 +208,12 @@ const AuditPage = () => {
   const [customStart,       setCustomStart]       = useState('');
   const [customEnd,         setCustomEnd]         = useState('');
   const [showCustom,        setShowCustom]        = useState(false);
-  const [invoiceType,       setInvoiceType]       = useState('all');
-  const [status,            setStatus]            = useState('all');
-  const [selectedCustomers, setSelectedCustomers] = useState([]);
-  const [paymentMode,       setPaymentMode]       = useState('all');
-  const [salesman,          setSalesman]          = useState('all');
+  // Multi-select filters: null = "All" (every option ticked), array = ticked options
+  const [invoiceType,       setInvoiceType]       = useState(null);
+  const [status,            setStatus]            = useState(null);
+  const [selectedCustomers, setSelectedCustomers] = useState(null);
+  const [paymentMode,       setPaymentMode]       = useState(null);
+  const [salesman,          setSalesman]          = useState(null);
   const [loading,           setLoading]           = useState(false);
   const [invoicePage,       setInvoicePage]       = useState(1);
 
@@ -215,17 +239,34 @@ const AuditPage = () => {
     const dates = datePreset === 'custom'
       ? { startDate: customStart || null, endDate: customEnd || null }
       : getPresetDates(datePreset);
+    const csv = (sel) => (sel === null ? 'all' : sel.join(','));
+    const dealerIdOf = (name) => filterOptions.customers.find(c => (c.name || c) === name)?.dealerId;
     let partyNames = 'all';
     let dealerIds  = 'all';
-    if (selectedCustomers.length > 0) {
-      partyNames = selectedCustomers.join(',');
-      const ids = selectedCustomers
-        .map(name => filterOptions.customers.find(c => c.name === name)?.dealerId)
-        .filter(Boolean);
-      if (ids.length > 0) dealerIds = ids.join(',');
+    let excludePartyNames = '';
+    let excludeDealerIds  = '';
+    if (selectedCustomers !== null) {
+      const allNames = filterOptions.customers.map(c => c.name || c);
+      const unticked = allNames.filter(n => !selectedCustomers.includes(n));
+      if (unticked.length < selectedCustomers.length) {
+        // Most customers still ticked → send the (shorter) list of excluded ones
+        excludePartyNames = unticked.join(',');
+        excludeDealerIds  = unticked.map(dealerIdOf).filter(Boolean).join(',');
+      } else {
+        partyNames = selectedCustomers.join(',');
+        const ids = selectedCustomers.map(dealerIdOf).filter(Boolean);
+        if (ids.length > 0) dealerIds = ids.join(',');
+      }
     }
-    return { ...dates, invoiceType, status, paymentMode, salesmanName: salesman, partyNames, dealerIds };
+    return {
+      ...dates, invoiceType: csv(invoiceType), status: csv(status), paymentMode: csv(paymentMode),
+      salesmanName: csv(salesman), partyNames, dealerIds, excludePartyNames, excludeDealerIds,
+    };
   }, [datePreset, customStart, customEnd, invoiceType, status, paymentMode, salesman, selectedCustomers, filterOptions.customers]);
+
+  const customerOptions    = useMemo(() => filterOptions.customers.map(c => ({ value: c.name || c, label: c.name || c })), [filterOptions.customers]);
+  const paymentModeOptions = useMemo(() => allPaymentModes.map(m => ({ value: m, label: fmtPayMode(m) })), [allPaymentModes]);
+  const salesmanOptions    = useMemo(() => filterOptions.salesmen.map(x => ({ value: x, label: x })), [filterOptions.salesmen]);
 
   const buildParams = useCallback((extra = {}) => {
     const p = { ...activeFilters, ...extra };
@@ -288,7 +329,7 @@ const AuditPage = () => {
 
   const resetFilters = () => {
     setDatePreset('all'); setCustomStart(''); setCustomEnd(''); setShowCustom(false);
-    setInvoiceType('all'); setStatus('all'); setSelectedCustomers([]); setPaymentMode('all'); setSalesman('all');
+    setInvoiceType(null); setStatus(null); setSelectedCustomers(null); setPaymentMode(null); setSalesman(null);
   };
 
   const handleExportCSV = async () => {
@@ -479,24 +520,16 @@ const AuditPage = () => {
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
-          <Select label="Invoice Type" value={invoiceType} onChange={setInvoiceType}
-            options={[{ value: 'all', label: 'All Types' }, { value: 'b2b', label: 'B2B' }, { value: 'retail', label: 'Retail' }]} />
-          <Select label="Status" value={status} onChange={setStatus}
-            options={[{ value: 'all', label: 'All Statuses' }, { value: 'issued', label: 'Issued' }, { value: 'partial', label: 'Partial' }, { value: 'paid', label: 'Paid' }, { value: 'overdue', label: 'Overdue' }]} />
-
-          <SearchableCustomerSelect
-            customers={filterOptions.customers.map(c => c.name || c)}
-            selected={selectedCustomers}
-            onChange={setSelectedCustomers}
-          />
-
-          <Select label="Payment Mode" value={paymentMode} onChange={setPaymentMode}
-            options={[
-              { value: 'all', label: 'All Modes' },
-              ...allPaymentModes.map(m => ({ value: m, label: fmtPayMode(m) })),
-            ]} />
-          <Select label="Salesperson" value={salesman} onChange={setSalesman}
-            options={[{ value: 'all', label: 'All' }, ...filterOptions.salesmen.map(s => ({ value: s, label: s }))]} />
+          <MultiSelect allLabel="All Types" noun="types" value={invoiceType} onChange={setInvoiceType}
+            options={INVOICE_TYPE_OPTIONS} />
+          <MultiSelect allLabel="All Statuses" noun="statuses" value={status} onChange={setStatus}
+            options={STATUS_OPTIONS} />
+          <MultiSelect allLabel="All Customers" noun="customers" value={selectedCustomers} onChange={setSelectedCustomers}
+            options={customerOptions} />
+          <MultiSelect allLabel="All Modes" noun="modes" value={paymentMode} onChange={setPaymentMode}
+            options={paymentModeOptions} />
+          <MultiSelect allLabel="All Salespeople" noun="salespeople" value={salesman} onChange={setSalesman}
+            options={salesmanOptions} />
           <button onClick={resetFilters}
             className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-500 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
             <X size={12} /> Reset All
@@ -509,7 +542,7 @@ const AuditPage = () => {
         Showing <span className="font-semibold text-slate-700">{kpis?.invoiceCount ?? 0}</span> invoices ·
         Total <span className="font-semibold text-blue-600">{fmtL(kpis?.totalRevenue)}</span> ·
         {displayDateRange}
-        {selectedCustomers.length > 0 && (
+        {selectedCustomers !== null && (
           <span className="ml-2 text-blue-600 font-medium">· {selectedCustomers.length} customer{selectedCustomers.length > 1 ? 's' : ''} selected</span>
         )}
       </p>
@@ -1174,76 +1207,6 @@ const KpiCard = ({ label, value, sub, color }) => {
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{label}</p>
       <p className={`text-xl font-bold ${texts[color]}`}>{value}</p>
       <p className="text-xs text-slate-400 mt-1">{sub}</p>
-    </div>
-  );
-};
-
-const Select = ({ value, onChange, options }) => {
-  const [open, setOpen]     = useState(false);
-  const [search, setSearch] = useState('');
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch(''); } };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const filtered = useMemo(() =>
-    options.filter(o => o.label.toLowerCase().includes(search.toLowerCase())),
-    [options, search]
-  );
-  const selectedOpt = options.find(o => o.value === value);
-  const isFiltered  = value && value !== 'all';
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => { setOpen(v => !v); setSearch(''); }}
-        className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 pr-2 bg-white transition-colors focus:outline-none whitespace-nowrap ${isFiltered ? 'border-blue-400 text-blue-700' : 'border-slate-200 text-slate-600'}`}
-      >
-        <span className="max-w-[130px] truncate">{selectedOpt?.label || 'Select…'}</span>
-        <ChevronDown size={11} className={`text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-50">
-          <div className="p-2 border-b border-slate-100">
-            <div className="flex items-center gap-2 px-2 py-1.5 bg-slate-50 rounded-lg">
-              <Search size={12} className="text-slate-400 flex-shrink-0" />
-              <input
-                autoFocus
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search…"
-                className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400"
-              />
-              {search && (
-                <button onClick={() => setSearch('')}>
-                  <X size={11} className="text-slate-400 hover:text-slate-600" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="max-h-52 overflow-y-auto py-1">
-            {filtered.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4">No results</p>
-            ) : filtered.map(o => (
-              <button
-                key={o.value}
-                onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors"
-              >
-                <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${value === o.value ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
-                  {value === o.value && <Check size={10} className="text-white" strokeWidth={3} />}
-                </div>
-                <span className="text-xs text-slate-700 leading-snug">{o.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

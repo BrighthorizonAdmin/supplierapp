@@ -11,7 +11,7 @@ import { Plus, Search, Eye, Trash2, Send, FileText } from 'lucide-react';
 // Inline-editable Date cell for the table — keeps its own draft value so typing/
 // picking a date doesn't feel laggy, and saves via the existing updateInvoice
 // endpoint as soon as a complete date is chosen.
-const EditableDateCell = ({ row, dispatch }) => {
+const EditableDateCell = ({ row, dispatch, canEdit }) => {
   const toInputValue = (v) => (v ? format(new Date(v), 'yyyy-MM-dd') : '');
   const [value, setValue] = useState(toInputValue(row.invoiceDate));
  
@@ -29,7 +29,8 @@ const EditableDateCell = ({ row, dispatch }) => {
       value={value}
       onChange={handleChange}
       onClick={(e) => e.stopPropagation()}
-      disabled={row.status === 'cancelled'}
+      disabled={row.status === 'cancelled' || !canEdit}
+      title={canEdit ? undefined : 'Only Super Admin can change the invoice date'}
       className="input py-1 px-2 text-xs w-[150px] disabled:opacity-50 disabled:cursor-not-allowed"
     />
   );
@@ -39,6 +40,8 @@ const InvoiceListPage = () => {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const { invoices, invoicePagination, loading } = useSelector((s) => s.payment);
+  const currentUser  = useSelector((s) => s.auth.user);
+  const isSuperAdmin = [].concat(currentUser?.role || []).includes('super-admin');
  
   const [page,        setPage]        = useState(1);
   const [status,      setStatus]      = useState('');
@@ -105,7 +108,7 @@ const InvoiceListPage = () => {
     {
       key: 'invoiceDate',
       label: 'Date',
-      render: (v, row) => <EditableDateCell row={row} dispatch={dispatch} />,
+      render: (v, row) => <EditableDateCell row={row} dispatch={dispatch} canEdit={isSuperAdmin} />,
     },
     {
       key: 'totalAmount',

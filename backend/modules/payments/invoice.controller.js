@@ -15,7 +15,7 @@ const createInvoice   = asyncHandler(async (req, res) => {
   return success(res, inv, 'Invoice created', 201);
 });
 const updateInvoice   = asyncHandler(async (req, res) => {
-  const inv = await invoiceService.updateInvoice(req.params.id, req.body);
+  const inv = await invoiceService.updateInvoice(req.params.id, req.body, req.user);
   return success(res, inv, 'Invoice updated');
 });
 const issueInvoice    = asyncHandler(async (req, res) => {

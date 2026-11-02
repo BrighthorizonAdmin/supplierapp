@@ -355,10 +355,19 @@ const createInvoice = async (body, user) => {
   return invoice;
 };
 
-const updateInvoice = async (id, body) => {
+const updateInvoice = async (id, body, user) => {
   const invoice = await Invoice.findById(id);
   if (!invoice) throw new AppError('Invoice not found', 404);
   if (invoice.status === 'cancelled') throw new AppError('Cannot edit a cancelled invoice', 400);
+
+  // Invoice date can only be changed by Super Admin (sending the same date is fine)
+  if (body.invoiceDate !== undefined) {
+    const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+    const isSuperAdmin = [].concat(user?.role || []).includes('super-admin');
+    if (!isSuperAdmin && day(body.invoiceDate) !== day(invoice.invoiceDate)) {
+      throw new AppError('Only Super Admin can change the invoice date', 403);
+    }
+  }
 
   const {
     lineItems, invoiceDiscount,
