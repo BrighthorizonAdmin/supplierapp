@@ -6,6 +6,8 @@ import {
 import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { RefreshCw, Download, X, ChevronDown, Search, Check } from 'lucide-react';
 import api from '../../../services/api';
+import { resolveStateCode } from '../../../utils/gst';
+import { buildGstRows, printGstReport } from '../gstReport';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const fmtL  = (v) => `₹${((v || 0) / 100000).toFixed(2)}L`;
@@ -432,6 +434,33 @@ const AuditPage = () => {
     } catch {}
   };
 
+  // GSTR-1 style PDF of the invoices matching the current filters
+  const [gstExporting, setGstExporting] = useState(false);
+  const handleExportGstPdf = async () => {
+    setGstExporting(true);
+    try {
+      const [invRes, setRes] = await Promise.all([
+        api.get('/audit/gst-report', { params: buildParams() }),
+        api.get('/settings'),
+      ]);
+      const invs = invRes.data.data || [];
+      const s = setRes.data.data || {};
+      const company = { name: s.companyName || '', mobile: s.companyMobile || '', gstin: s.companyGSTIN || '' };
+      const sellerState = resolveStateCode({ gstins: [company.gstin], texts: [s.companyAddress] });
+      const fmtD = (d) => (d ? format(new Date(d), 'dd/MM/yyyy') : '');
+      const { startDate, endDate } = activeFilters;
+      const fromDate = fmtD(startDate || invs[0]?.invoiceDate || dateRange.minDate);
+      const toDate   = fmtD(endDate || invs[invs.length - 1]?.invoiceDate || dateRange.maxDate);
+      if (!printGstReport({ rows: buildGstRows(invs, sellerState), company, fromDate, toDate })) {
+        alert('Please allow pop-ups for this site to download the GST report.');
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not build the GST report.');
+    } finally {
+      setGstExporting(false);
+    }
+  };
+
   const heatmapStats = useMemo(() => {
     const { daily = [], monthly = [], byDayOfWeek = [], top10 = [] } = dailyStats;
     const peakDay    = daily.reduce((b, d) => d.revenue > (b?.revenue || 0) ? d : b, null);
@@ -507,6 +536,11 @@ const AuditPage = () => {
           <button onClick={handleExportCSV}
             className="flex items-center gap-1.5 text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50">
             <Download size={13} /> Export CSV
+          </button>
+          <button onClick={handleExportGstPdf} disabled={gstExporting}
+            title="GSTR-1 style sales register for the current filters"
+            className="flex items-center gap-1.5 text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+            <Download size={13} /> {gstExporting ? 'Preparing…' : 'GST Report (PDF)'}
           </button>
           <button onClick={fetchAll} disabled={loading}
             className="flex items-center gap-1.5 text-xs bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50">

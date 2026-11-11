@@ -226,7 +226,37 @@ router.post('/dealer-retail-invoice', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
- 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/dealer-retail-invoice-delete
+// Called by D-BE when the dealer owner deletes a retail invoice — removes the
+// supplier-side "D-" copy. Idempotent: a missing copy is not an error.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/dealer-retail-invoice-delete', async (req, res) => {
+  try {
+    const incomingSecret = req.headers['x-webhook-secret'];
+    if (!WEBHOOK_SECRET || incomingSecret !== WEBHOOK_SECRET) {
+      console.warn('[Webhook] Unauthorized attempt from:', req.ip);
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { dbeInvoiceId, invoiceNumber } = req.body;
+    if (!dbeInvoiceId && !invoiceNumber) {
+      return res.status(400).json({ success: false, message: 'dbeInvoiceId or invoiceNumber is required' });
+    }
+    const or = [];
+    if (dbeInvoiceId) or.push({ dbeInvoiceId: String(dbeInvoiceId) });
+    if (invoiceNumber) or.push({ invoiceNumber: `D-${invoiceNumber}` });
+
+    const result = await Invoice.deleteOne({ invoiceType: 'retail', $or: or });
+    console.log(`[Webhook] Retail invoice delete D-${invoiceNumber}: ${result.deletedCount ? 'removed' : 'not found'}`);
+    return res.status(200).json({ success: true, data: { deleted: result.deletedCount } });
+  } catch (err) {
+    console.error('[Webhook] dealer-retail-invoice-delete error:', err.message);
+    return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/webhooks/dealer-order
 // Called by D-BE whenever a dealer places a new order.

@@ -98,7 +98,7 @@ export default function QuoteListPage() {
       {activeTab === 'dealer' && (
         <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
           <Lock size={14} />
-          Dealer quotes are read-only. Only the dealer can edit or delete them.
+          Edits and status changes made here are also updated in the Dealer app. Only the dealer can delete them.
         </div>
       )}
 
@@ -229,8 +229,17 @@ export default function QuoteListPage() {
                             </button>
                           </>
                         )}
+                        {isDealer && q.status !== 'deletedByDealer' && (
+                          <button
+                            onClick={() => navigate(`/quotes/${q._id}/edit`)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                            title="Edit (also updates the Dealer app)"
+                          >
+                            <Edit2 size={15} />
+                          </button>
+                        )}
                         {isDealer && (
-                          <span className="p-1.5 text-gray-300" title="Read-only — dealer managed">
+                          <span className="p-1.5 text-gray-300" title="Only the dealer can delete this quote">
                             <Lock size={13} />
                           </span>
                         )}

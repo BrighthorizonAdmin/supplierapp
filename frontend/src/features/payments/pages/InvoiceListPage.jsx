@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchInvoices, deleteInvoice, issueInvoice, updateInvoice } from '../paymentSlice';
+import { fetchInvoices, deleteInvoice, issueInvoice, updateInvoice, manageDeleteInvoice } from '../paymentSlice';
 import Table from '../../../components/ui/Table';
 import Pagination from '../../../components/ui/Pagination';
 import StatusBadge from '../../../components/ui/StatusBadge';
@@ -166,6 +166,31 @@ const InvoiceListPage = () => {
               >
                 <Trash2 size={15} />
               </button>
+            </>
+          )}
+          {/* Super Admin: edit a generated invoice, delete one (dealer-app copies are deleted in the dealer app) */}
+          {row.status !== 'draft' && (
+            <>
+              {row.status !== 'cancelled' && isSuperAdmin && (
+                <button
+                  onClick={() => navigate(`/invoices/${id}/edit`)}
+                  className="p-1.5 rounded hover:bg-yellow-50 text-yellow-600"
+                  title="Edit"
+                >
+                  <FileText size={15} />
+                </button>
+              )}
+              {isSuperAdmin && !row.orderId && !row.dbeInvoiceId && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('Delete this invoice? Its serial numbers will go back to available stock.')) dispatch(manageDeleteInvoice(id));
+                  }}
+                  className="p-1.5 rounded hover:bg-red-50 text-red-500"
+                  title="Delete"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
             </>
           )}
         </div>

@@ -13,6 +13,7 @@ import Pagination from '../../../components/ui/Pagination';
 import KPICard from '../../../components/ui/KPICard';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
+import CustomerLedger from './CustomerLedger';
 import {
   fetchLedger, fetchOrderLedger, clearDetail,
   addManualPayment, deleteManualPayment, resyncManualPayment, patchLedgerEntry,
@@ -608,7 +609,7 @@ const DealerGroup = ({ g, onOpen, defaultOpen, view = 'outstanding', exportParam
 };
 
 /* ───────────────────────── page ───────────────────────── */
-const LedgerPage = () => {
+const DealerLedger = () => {
   const dispatch = useDispatch();
   const { groups, summary, pagination, loading } = useSelector((s) => s.ledger);
 
@@ -830,6 +831,33 @@ const LedgerPage = () => {
       </div>
 
       {openOrder && <DetailModal orderId={openOrder} onClose={() => setOpenOrder(null)} />}
+    </div>
+  );
+};
+
+// Dealers (the ledger above, unchanged) | Buvvas Customers (website orders)
+const LedgerPage = () => {
+  const location = useLocation();
+  // A link that opens a dealer order (state.openOrderId) always lands on the Dealers tab
+  const [party, setParty] = useState(() => {
+    if (location.state?.openOrderId) return 'dealers';
+    try { return sessionStorage.getItem('ledgerParty') || 'dealers'; } catch { return 'dealers'; }
+  });
+  const pick = (p) => {
+    setParty(p);
+    try { sessionStorage.setItem('ledgerParty', p); } catch { /* storage unavailable */ }
+  };
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-sm">
+        {[['dealers', 'Dealers'], ['customers', 'Buvvas Customers']].map(([v, label]) => (
+          <button key={v} onClick={() => pick(v)}
+            className={`px-4 py-1.5 rounded-md font-semibold transition-colors ${party === v ? 'bg-primary-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {party === 'customers' ? <CustomerLedger /> : <DealerLedger />}
     </div>
   );
 };

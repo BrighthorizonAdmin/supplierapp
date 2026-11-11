@@ -44,6 +44,8 @@ const ALL_PERMISSIONS = [
   { key: 'payments:write',      label: 'Manage Payments',        group: 'Finance' },
   { key: 'invoices:read',       label: 'View Invoices',          group: 'Finance' },
   { key: 'invoices:write',      label: 'Manage Invoices',        group: 'Finance' },
+  { key: 'invoices:editGenerated', label: 'Edit Generated Invoices', group: 'Finance', hidden: true },
+  { key: 'invoices:delete',     label: 'Delete Invoices',        group: 'Finance', hidden: true },
 
   //marketing
   {key: 'marketing:read', label: 'View Marketings', group:'Marketing'},

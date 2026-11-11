@@ -446,6 +446,9 @@ export default function QuoteFormPage() {
   const { list: products = [] } = useSelector((s) => s.product);
   const { selectedQuote, loading } = useSelector((s) => s.quotes);
   const settingsData = useSelector((s) => s.settings?.data || {});
+  // Editing a quote synced from the Dealer app: customer and bank details stay the
+  // dealer's (locked here); items, dates, status and notes sync back to the dealer.
+  const isDealerQuote = isEdit && selectedQuote?._id === id && selectedQuote?.source === 'dealer';
 
   const today    = format(new Date(), 'yyyy-MM-dd');
   const expiry30 = format(addDays(new Date(), 30), 'yyyy-MM-dd');
@@ -571,7 +574,8 @@ export default function QuoteFormPage() {
     setBankBranch(q.bankDetails?.bankBranch     || settingsData.bankBranch  || '');
 
     const d = q.dealerId;
-    if (d && typeof d === 'object') setDealer(d);
+    if (q.source === 'dealer') setDealer({ businessName: q.partyName || 'Customer', phone: q.partyPhone, _id: d?._id || d });
+    else if (d && typeof d === 'object') setDealer(d);
     else if (q.partyName) setDealer({ businessName: q.partyName, _id: q.dealerId });
 
     const pre = (q.lineItems || []).map((li) => calcItem({ ...EMPTY_ITEM, ...li }));
@@ -942,12 +946,18 @@ export default function QuoteFormPage() {
                   </p>
                 )}
                 {dealer.phone && <p className="text-sm text-gray-400 mt-0.5">{dealer.phone}</p>}
+                {isDealerQuote ? (
+                  <p className="mt-2 text-xs text-orange-600 font-medium">
+                    Dealer quote{selectedQuote?.dealerId?.businessName ? ` via ${selectedQuote.dealerId.businessName}` : ''}. Customer can only be changed by the dealer.
+                  </p>
+                ) : (
                 <button
                   onClick={() => { setDealer(null); setDealerSearch(''); setShowPartyDrop(false); }}
                   className="mt-2 text-xs text-blue-500 font-semibold hover:underline"
                 >
                   Change Party
                 </button>
+                )}
               </div>
             )}
           </div>
@@ -1248,8 +1258,8 @@ export default function QuoteFormPage() {
               </button>
             )}
 
-            {/* Bank Details */}
-            <div>
+            {/* Bank Details (a dealer quote keeps the dealer's own bank details) */}
+            <div className={isDealerQuote ? 'hidden' : ''}>
               <div className="text-sm font-semibold text-gray-700 mb-3">Bank Details</div>
               <div className="space-y-2">
                 <div>

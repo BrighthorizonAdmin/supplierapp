@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
-import { createInvoice, updateInvoice, fetchInvoiceById } from '../paymentSlice';
+import { createInvoice, updateInvoice, fetchInvoiceById, manageEditInvoice } from '../paymentSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
 import { resolveStateCode, isInterState, derivedGstRate, gstSummaryRows } from '../../../utils/gst';
 import { fetchDealers } from '../../dealer/dealerSlice';
@@ -102,7 +102,8 @@ export default function InvoiceFormPage() {
   const isEdit   = Boolean(id);
   // Changing an existing invoice's date is Super Admin only
   const currentUser = useSelector((s) => s.auth.user);
-  const dateLocked  = isEdit && ![].concat(currentUser?.role || []).includes('super-admin');
+  const isSuperAdmin = [].concat(currentUser?.role || []).includes('super-admin');
+  const dateLocked  = isEdit && !isSuperAdmin;
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -112,6 +113,17 @@ export default function InvoiceFormPage() {
   const { selectedInvoice, loading } = useSelector((s) => s.payment);
   const companySettings = useSelector((s) => s.settings?.data || {});
   const today = format(new Date(), 'yyyy-MM-dd');
+  // Super Admin can change/unassign serials of a generated invoice (drafts keep the normal edit)
+  const canManage = isEdit && isSuperAdmin
+    && selectedInvoice?._id === id && selectedInvoice.status !== 'draft';
+
+  // Generated invoices are view-only for everyone else (savingRef: a draft being issued here turns non-draft on save)
+  const savingRef = useRef(false);
+  useEffect(() => {
+    if (isEdit && !isSuperAdmin && !savingRef.current && selectedInvoice?._id === id && selectedInvoice.status !== 'draft') {
+      navigate(`/invoices/${id}`, { replace: true });
+    }
+  }, [isEdit, isSuperAdmin, selectedInvoice, id, navigate]);
 
   // ── Core form state ───────────────────────────────────────────────────────
   const [invoiceNo,   setInvoiceNo]   = useState('');
@@ -353,7 +365,7 @@ export default function InvoiceFormPage() {
           taxRate: noLineTax ? fallbackRate : li.taxRate,
           // Serials already assigned are tied to stock/dispatch records — editing
           // them here would corrupt those, so they're read-only in this form.
-          _serialsLocked: Boolean(li.serialNumbers?.length),
+          _serialsLocked: !canManage && Boolean(li.serialNumbers?.length),
         }))
       : [{...EMPTY_ITEM}];
     setItems(pre);
@@ -361,7 +373,7 @@ export default function InvoiceFormPage() {
     // Serials already attached (order delivery / earlier edit) — show them
     const si = {}; lines.forEach((li,i) => { if (li.serialNumbers?.length) si[i] = li.serialNumbers.join(', '); });
     setSerialInputs(si);
-  }, [selectedInvoice, isEdit, id]);
+  }, [selectedInvoice, isEdit, id, canManage]);
 
   // ── Item helpers ──────────────────────────────────────────────────────────
   const updateItem    = (idx, field, val) => setItems((p) => { const n=[...p]; n[idx]=calcItem({...n[idx],[field]:val}); return n; });
@@ -376,7 +388,7 @@ export default function InvoiceFormPage() {
   };
 
   const addRow = () => { const idx=items.length; setItems((p)=>[...p,{...EMPTY_ITEM}]); setProdSearch((p)=>({...p,[idx]:''})); };
-  const removeRow = (idx) => { setItems((p)=>p.filter((_,i)=>i!==idx)); setProdSearch((p)=>{const n={...p};delete n[idx];return n;}); setShowProdDrop((p)=>{const n={...p};delete n[idx];return n;}); };
+  const removeRow = (idx) => { setItems((p)=>p.filter((_,i)=>i!==idx)); setSerialInputs((p)=>{const n={};Object.entries(p).forEach(([k,v])=>{const i=Number(k);if(i<idx)n[i]=v;else if(i>idx)n[i-1]=v;});return n;}); setProdSearch((p)=>{const n={...p};delete n[idx];return n;}); setShowProdDrop((p)=>{const n={...p};delete n[idx];return n;}); };
 
   // ── Add Items Modal helpers ───────────────────────────────────────────────
   const filteredModalProducts = (products||[]).filter((p) => {
@@ -540,7 +552,11 @@ export default function InvoiceFormPage() {
     if (isEdit && !dealer) {
       delete payload.dealerId; delete payload.partyAddress; delete payload.partyGST; delete payload.partyPhone;
     }
-    const result = isEdit ? await dispatch(updateInvoice({id,body:payload})) : await dispatch(createInvoice(payload));
+    savingRef.current = true;
+    const result = isEdit
+      ? await dispatch(canManage ? manageEditInvoice({id,body:payload}) : updateInvoice({id,body:payload}))
+      : await dispatch(createInvoice(payload));
+    if (result.error) savingRef.current = false;
     if (!result.error) {
       if (andNew) {
         setDealer(null); setDealerSearch(''); setItems([{...EMPTY_ITEM}]); setProdSearch({});
@@ -570,7 +586,7 @@ export default function InvoiceFormPage() {
       <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between flex-shrink-0 shadow-sm z-50">
         <div className="flex items-center gap-3">
           <button onClick={()=>navigate('/invoices')} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 transition-colors"><ArrowLeft size={18}/></button>
-          <h1 className="text-lg font-bold text-gray-800">{isEdit?'Edit Sales Invoice':'Create Sales Invoice'}</h1>
+          <h1 className="text-lg font-bold text-gray-800">{isEdit?(selectedInvoice?.dbeInvoiceId?'Edit Dealer Invoice (also updates DealerKart)':'Edit Sales Invoice'):'Create Sales Invoice'}</h1>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={()=>setShowSettingsModal(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
@@ -795,6 +811,9 @@ export default function InvoiceFormPage() {
                                 />
                                 {errors[`serial_${idx}`] && (
                                   <p className="text-xs text-red-500 mt-0.5">{errors[`serial_${idx}`]}</p>
+                                )}
+                                {canManage && (
+                                  <p className="text-xs text-blue-600 mt-0.5">Remove or replace a serial — removed serials go back to available stock.</p>
                                 )}
                                 {item._serialsLocked && (
                                   <p className="text-xs text-gray-500 mt-0.5">Already assigned — can't be edited here. Change them from the order page (before delivery).</p>

@@ -30,7 +30,8 @@ const deleteRole = asyncHandler(async (req, res) => {
 
 // Returns the full permission registry so the frontend can build the UI
 const listPermissions = asyncHandler(async (req, res) => {
-  return success(res, ALL_PERMISSIONS, 'Available permissions fetched');
+  // hidden entries stay valid (roles already holding them still save) but can't be assigned
+  return success(res, ALL_PERMISSIONS.filter((p) => !p.hidden), 'Available permissions fetched');
 });
 
 module.exports = { listRoles, getRole, createRole, updateRole, deleteRole, listPermissions };
