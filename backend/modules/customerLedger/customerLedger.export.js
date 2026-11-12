@@ -9,7 +9,7 @@ const PDFDocument = require('pdfkit');
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const money = (n) => num(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const fmtDate = (d) => {
+const fmtDate = (d) => { 
   if (!d) return '';
   const dt = new Date(d);
   return Number.isNaN(dt.getTime()) ? '' : `${String(dt.getDate()).padStart(2, '0')} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
