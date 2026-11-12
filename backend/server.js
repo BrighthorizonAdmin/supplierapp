@@ -45,6 +45,7 @@ const challanRoutes        = require('./modules/deliveryChallan/deliveryChallan.
 const blogRoutes           = require('./modules/blog/blog.routes');
 const flashSaleRoutes      = require('./modules/flashSale/flashSale.routes');
 const ledgerRoutes         = require('./modules/ledger/ledger.routes');
+const customerLedgerRoutes = require('./modules/customerLedger/customerLedger.routes');
 
 const app = express();
 
@@ -177,6 +178,7 @@ app.use('/api/quotes',          quoteRoutes);
 app.use('/api/categories',     categoryRoutes);
 app.use('/api/delivery-challans', challanRoutes);
 app.use('/api/ledger',          ledgerRoutes);
+app.use('/api/customer-ledger', customerLedgerRoutes);
 
 // Frontend routing - serve index.html for all non-API routes (React Router support)
 app.get('*', (req, res, next) => {

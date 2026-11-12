@@ -37,7 +37,8 @@ const createRetailOrder = async (data, userId) => {
     if (item.productId) {
       await Product.findByIdAndUpdate(
         item.productId,
-        [{ $set: { currentStockQty: { $max: [0, { $add: ['$currentStockQty', -item.quantity] }] } } }]
+        [{ $set: { currentStockQty: { $max: [0, { $add: ['$currentStockQty', -item.quantity] }] } } }],
+        { updatePipeline: true }
       );
     }
   }

@@ -307,6 +307,14 @@ const getInvoiceList = async (filters, { page = 1, limit = 20 } = {}) => {
   return { data, total, page, totalPages: Math.ceil(total / limit) };
 };
 
+const getGstReportInvoices = async (filters) => {
+  return Invoice.find(buildMatch(filters))
+    .sort({ invoiceDate: 1, invoiceNumber: 1 })
+    .select('invoiceNumber invoiceDate invoiceType dealerId partyName partyGST partyAddress shippingAddress notes lineItems subtotal taxAmount totalAmount additionalCharges chargeLines')
+    .populate('dealerId', 'businessName name gstNumber gstin address city state')
+    .lean();
+};
+
 const getFilterOptions = async () => {
   const [salesmen, partyTypes, dealers] = await Promise.all([
     Invoice.distinct('salesmanName', { salesmanName: { $nin: ['', null] } }),
@@ -415,4 +423,4 @@ const getDateRange = async () => {
   return result[0] ? { minDate: result[0].min, maxDate: result[0].max } : { minDate: null, maxDate: null };
 };
 
-module.exports = { getKPIs, getInvoiceTypeSplit, getPaymentMethodMix, getWeeklyRevenue, getHeatmap, getTopProducts, getTopChannels, getInvoiceList, getFilterOptions, getDateRange, getDailyStats, getStatusSplit, getTopSalespeople, getCustomerRevenue };
+module.exports = { getKPIs, getInvoiceTypeSplit, getPaymentMethodMix, getWeeklyRevenue, getHeatmap, getTopProducts, getTopChannels, getInvoiceList, getGstReportInvoices, getFilterOptions, getDateRange, getDailyStats, getStatusSplit, getTopSalespeople, getCustomerRevenue };

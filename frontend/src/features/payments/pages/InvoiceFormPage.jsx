@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
-import { createInvoice, updateInvoice, fetchInvoiceById } from '../paymentSlice';
+import { createInvoice, updateInvoice, fetchInvoiceById, manageEditInvoice } from '../paymentSlice';
+import api from '../../../services/api';
 import { fetchSettings } from '../../notifications/settingsSlice';
 import { resolveStateCode, isInterState, derivedGstRate, gstSummaryRows } from '../../../utils/gst';
 import { fetchDealers } from '../../dealer/dealerSlice';
@@ -102,7 +103,8 @@ export default function InvoiceFormPage() {
   const isEdit   = Boolean(id);
   // Changing an existing invoice's date is Super Admin only
   const currentUser = useSelector((s) => s.auth.user);
-  const dateLocked  = isEdit && ![].concat(currentUser?.role || []).includes('super-admin');
+  const isSuperAdmin = [].concat(currentUser?.role || []).includes('super-admin');
+  const dateLocked  = isEdit && !isSuperAdmin;
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -112,6 +114,17 @@ export default function InvoiceFormPage() {
   const { selectedInvoice, loading } = useSelector((s) => s.payment);
   const companySettings = useSelector((s) => s.settings?.data || {});
   const today = format(new Date(), 'yyyy-MM-dd');
+  // Super Admin can change/unassign serials of a generated invoice (drafts keep the normal edit)
+  const canManage = isEdit && isSuperAdmin
+    && selectedInvoice?._id === id && selectedInvoice.status !== 'draft';
+
+  // Generated invoices are view-only for everyone else (savingRef: a draft being issued here turns non-draft on save)
+  const savingRef = useRef(false);
+  useEffect(() => {
+    if (isEdit && !isSuperAdmin && !savingRef.current && selectedInvoice?._id === id && selectedInvoice.status !== 'draft') {
+      navigate(`/invoices/${id}`, { replace: true });
+    }
+  }, [isEdit, isSuperAdmin, selectedInvoice, id, navigate]);
 
   // ── Core form state ───────────────────────────────────────────────────────
   const [invoiceNo,   setInvoiceNo]   = useState('');
@@ -129,7 +142,7 @@ export default function InvoiceFormPage() {
   const [showTerms,   setShowTerms]   = useState(true);
   const [addlCharges, setAddlCharges] = useState(0);
   const [showAddlChg, setShowAddlChg] = useState(false);
-  const [addlLabel,   setAddlLabel]   = useState('Additional Charges');
+  const [addlLabel,   setAddlLabel]   = useState('');
   const [invoiceDisc, setInvoiceDisc] = useState(0);
   const [showDisc,    setShowDisc]    = useState(false);
   const [roundOff,    setRoundOff]    = useState(false);
@@ -189,10 +202,26 @@ export default function InvoiceFormPage() {
   // ── Dealer search ─────────────────────────────────────────────────────────
   const [dealerSearch,   setDealerSearch]   = useState('');
   const [showDealerDrop, setShowDealerDrop] = useState(false);
+  // Party in place before Change Party, so leaving without a pick brings it back
+  const prevPartyRef = useRef(null);
+  const partyLabel = (d) => d?.businessName || d?.name || d?.ownerName || '';
+  const restoreParty = () => {
+    const prev = prevPartyRef.current;
+    if (!prev) return;
+    prevPartyRef.current = null;
+    // the dealer-change effect would rebuild Ship To from the dealer — keep the saved one
+    keepSavedShipRef.current = true;
+    setDealer(prev.dealer); setDealerSearch(prev.search); setShowDealerDrop(false);
+    setShipAddress(prev.shipAddress); setShipAddresses(prev.shipAddresses); setSelectedShipId(prev.selectedShipId);
+  };
   const dealerRef = useRef(null);
 
   // ── Serial numbers per row (comma-separated input string) ────────────────
   const [serialInputs, setSerialInputs] = useState({}); // { idx: "SN-001, SN-002" }
+  // In-stock serials of each row's product, offered as picks when Super Admin edits
+  const [stockSerials, setStockSerials] = useState({}); // { idx: ['SN-001', ...] }
+  // What was typed in a row's product box since it got focus ('' = show every product)
+  const [prodQuery, setProdQuery] = useState({});
 
   // ── Product search per row ────────────────────────────────────────────────
   const [prodSearch,   setProdSearch]   = useState({});
@@ -305,6 +334,9 @@ export default function InvoiceFormPage() {
     const inv = selectedInvoice;
     setInvoiceNo(inv.invoiceNumber||''); setInvoiceDate(inv.invoiceDate?.split('T')[0]||today);
     setDueDate(inv.dueDate?.split('T')[0]||''); setNotes(inv.notes||''); setShowNotes(Boolean(inv.notes));
+    // Show the invoice's own payment terms (e.g. "Net 15"), so saving doesn't reset them to 30
+    const savedDays = parseInt(String(inv.paymentTerms || '').replace(/\D/g, ''), 10);
+    if (!isNaN(savedDays)) setPaymentDays(savedDays);
     setWarrantyPeriod(inv.warrantyPeriod || '');
     setSalesmanName(inv.salesmanName || '');
     setTerms(inv.termsAndConditions||''); setShowTerms(Boolean(inv.termsAndConditions));
@@ -312,7 +344,7 @@ export default function InvoiceFormPage() {
     setAmtReceived(inv.amountPaid||0); setMarkPaid(inv.amountPaid>0 && inv.balance===0);
     // Additional charges
     if (inv.additionalCharges > 0) { setAddlCharges(inv.additionalCharges); setShowAddlChg(true); }
-    if (inv.additionalLabel) setAddlLabel(inv.additionalLabel);
+    if (inv.additionalLabel && inv.additionalLabel !== 'Additional Charges') setAddlLabel(inv.additionalLabel);
     // Round off
     setRoundOff(Boolean(inv.roundOff));
     // Payment mode & bank details
@@ -328,11 +360,11 @@ export default function InvoiceFormPage() {
     const d = inv.dealerId;
     if (d && typeof d==='object') { 
       setDealer(d); 
-      setDealerSearch(d.businessName || '');
+      setDealerSearch(partyLabel(d));
       if (d?.bankDetails) {
         setBankAccount(d.bankDetails);
       }
-      setDealerSearch(d.businessName||''); }
+      setDealerSearch(partyLabel(d)); }
     else setDealerSearch(inv.partyName||'');
     // Shipping address
     if (inv.shippingAddress?.city || inv.shippingAddress?.street) {
@@ -353,7 +385,7 @@ export default function InvoiceFormPage() {
           taxRate: noLineTax ? fallbackRate : li.taxRate,
           // Serials already assigned are tied to stock/dispatch records — editing
           // them here would corrupt those, so they're read-only in this form.
-          _serialsLocked: Boolean(li.serialNumbers?.length),
+          _serialsLocked: !canManage && Boolean(li.serialNumbers?.length),
         }))
       : [{...EMPTY_ITEM}];
     setItems(pre);
@@ -361,14 +393,35 @@ export default function InvoiceFormPage() {
     // Serials already attached (order delivery / earlier edit) — show them
     const si = {}; lines.forEach((li,i) => { if (li.serialNumbers?.length) si[i] = li.serialNumbers.join(', '); });
     setSerialInputs(si);
-  }, [selectedInvoice, isEdit, id]);
+  }, [selectedInvoice, isEdit, id, canManage]);
+
+  useEffect(() => {
+    if (!canManage || selectedInvoice?.dbeInvoiceId) return;
+    (selectedInvoice?.lineItems || []).forEach((li, i) => { if (li.productId) loadStockSerials(i, li.productId); });
+  }, [canManage, selectedInvoice]);
 
   // ── Item helpers ──────────────────────────────────────────────────────────
   const updateItem    = (idx, field, val) => setItems((p) => { const n=[...p]; n[idx]=calcItem({...n[idx],[field]:val}); return n; });
   const setDiscType   = (idx, type) => setItems((p) => { const n=[...p]; n[idx]=calcItem({...n[idx],discountType:type,discountValue:0}); return n; });
   const setDiscVal    = (idx, val)  => setItems((p) => { const n=[...p]; n[idx]=calcItem({...n[idx],discountValue:val}); return n; });
 
+  const loadStockSerials = async (idx, productId) => {
+    if (!productId) { setStockSerials((s) => ({ ...s, [idx]: [] })); return; }
+    try {
+      const { data } = await api.get('/dispatched-units/in-stock', { params: { productId } });
+      setStockSerials((s) => ({ ...s, [idx]: (data.data || []).map((u) => u.serialNumber) }));
+    } catch { setStockSerials((s) => ({ ...s, [idx]: [] })); }
+  };
+  // Dealer invoices pick from the dealer's own serials (checked in the dealer app)
+  const pickSerials = canManage && !selectedInvoice?.dbeInvoiceId;
+
   const pickProduct = (idx, p) => {
+    // A different product can't keep the old product's serials
+    if (String(items[idx]?.productId || '') !== String(p._id)) {
+      setSerialInputs((s) => ({ ...s, [idx]: '' }));
+      if (pickSerials) loadStockSerials(idx, p._id);
+    }
+    setProdQuery((q) => ({ ...q, [idx]: '' }));
     setItems((prev) => { const n=[...prev]; n[idx]=calcItem({...n[idx],productId:p._id,productName:p.name,unitPrice:p.basePrice||0,taxRate:p.taxRate||0,unit:(p.unit||'PCS').toUpperCase(),hsnCode:p.hsnCode||'',discountValue:0}); return n; });
     setProdSearch((p2)=>({...p2,[idx]:p.name})); setShowProdDrop((p2)=>({...p2,[idx]:false}));
     setErrors((e)=>({...e,items:''}));
@@ -376,7 +429,7 @@ export default function InvoiceFormPage() {
   };
 
   const addRow = () => { const idx=items.length; setItems((p)=>[...p,{...EMPTY_ITEM}]); setProdSearch((p)=>({...p,[idx]:''})); };
-  const removeRow = (idx) => { setItems((p)=>p.filter((_,i)=>i!==idx)); setProdSearch((p)=>{const n={...p};delete n[idx];return n;}); setShowProdDrop((p)=>{const n={...p};delete n[idx];return n;}); };
+  const removeRow = (idx) => { setItems((p)=>p.filter((_,i)=>i!==idx)); setStockSerials((p)=>{const n={};Object.entries(p).forEach(([k,v])=>{const i=Number(k);if(i<idx)n[i]=v;else if(i>idx)n[i-1]=v;});return n;}); setSerialInputs((p)=>{const n={};Object.entries(p).forEach(([k,v])=>{const i=Number(k);if(i<idx)n[i]=v;else if(i>idx)n[i-1]=v;});return n;}); setProdSearch((p)=>{const n={...p};delete n[idx];return n;}); setShowProdDrop((p)=>{const n={...p};delete n[idx];return n;}); };
 
   // ── Add Items Modal helpers ───────────────────────────────────────────────
   const filteredModalProducts = (products||[]).filter((p) => {
@@ -466,7 +519,16 @@ export default function InvoiceFormPage() {
     // Serial count must match quantity when serials are entered
     items.forEach((item, idx) => {
       const raw = serialInputs[idx] || '';
-      if (!raw.trim()) return;
+      if (!raw.trim()) {
+        // Super Admin edit: a new/changed product that has serials in stock needs them
+        if (pickSerials && item.productId && toNum(item.quantity) > 0 && stockSerials[idx]?.length) {
+          const before = (selectedInvoice?.lineItems || []).filter((li) => String(li.productId) === String(item.productId));
+          if (!before.length || before.some((li) => li.serialNumbers?.length)) {
+            e[`serial_${idx}`] = `Select ${toNum(item.quantity)} serial number(s) for "${item.productName}"`;
+          }
+        }
+        return;
+      }
       const serials = raw.split(',').map((s) => s.trim()).filter(Boolean);
       const qty = toNum(item.quantity);
       if (serials.length !== qty) {
@@ -482,7 +544,7 @@ export default function InvoiceFormPage() {
     if (!validate()) return;
     const payload = {
       dealerId:     dealer?._id||'',
-      partyName:    dealer?.businessName||dealerSearch.trim(),
+      partyName:    partyLabel(dealer)||dealerSearch.trim(),
       invoiceNumber: settings.invoicePrefix
         ? `${invoicePrefix||''}-${invoiceSequence||1}`
         : (invoiceNo || undefined),
@@ -506,7 +568,7 @@ export default function InvoiceFormPage() {
       status:       asDraft ? 'draft' : 'issued',
       // Additional charges
       additionalCharges: showAddlChg ? toNum(addlCharges) : 0,
-      additionalLabel:   addlLabel,
+      additionalLabel:   addlLabel.trim() || 'Additional Charges',
       // Round off
       roundOff,
       // Payment
@@ -540,7 +602,11 @@ export default function InvoiceFormPage() {
     if (isEdit && !dealer) {
       delete payload.dealerId; delete payload.partyAddress; delete payload.partyGST; delete payload.partyPhone;
     }
-    const result = isEdit ? await dispatch(updateInvoice({id,body:payload})) : await dispatch(createInvoice(payload));
+    savingRef.current = true;
+    const result = isEdit
+      ? await dispatch(canManage ? manageEditInvoice({id,body:payload}) : updateInvoice({id,body:payload}))
+      : await dispatch(createInvoice(payload));
+    if (result.error) savingRef.current = false;
     if (!result.error) {
       if (andNew) {
         setDealer(null); setDealerSearch(''); setItems([{...EMPTY_ITEM}]); setProdSearch({});
@@ -553,8 +619,9 @@ export default function InvoiceFormPage() {
   };
 
   // ── Filtered lists ────────────────────────────────────────────────────────
-  const filteredDealers = (dealers||[]).filter((d)=>d?.businessName?.toLowerCase().includes((dealerSearch||'').toLowerCase())).slice(0,8);
-  const getFilteredProds = (idx) => { const q=((prodSearch[idx]??items[idx]?.productName)||'').toLowerCase(); if(!q)return[]; return(products||[]).filter((p)=>p?.name?.toLowerCase().includes(q)).slice(0,8); };
+  const filteredDealers = (dealers||[]).filter((d)=>{const q=(dealerSearch||'').toLowerCase();return !q||partyLabel(d).toLowerCase().includes(q)||String(d?.phone||'').includes(q)||String(d?.dealerCode||'').toLowerCase().includes(q);}).slice(0,8);
+  // Empty box or just focused: every product; typing narrows it down
+  const getFilteredProds = (idx) => { const q=(prodQuery[idx]||'').toLowerCase().trim(); const list=(products||[]).filter((p)=>!q||p?.name?.toLowerCase().includes(q)||p?.productCode?.toLowerCase().includes(q)); return list.slice(0,100); };
 
   const shipAddrDisplay = shipAddress
     ? [shipAddress.street, shipAddress.city, shipAddress.state, shipAddress.pincode].filter(Boolean).join(', ')
@@ -570,13 +637,16 @@ export default function InvoiceFormPage() {
       <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between flex-shrink-0 shadow-sm z-50">
         <div className="flex items-center gap-3">
           <button onClick={()=>navigate('/invoices')} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 transition-colors"><ArrowLeft size={18}/></button>
-          <h1 className="text-lg font-bold text-gray-800">{isEdit?'Edit Sales Invoice':'Create Sales Invoice'}</h1>
+          <h1 className="text-lg font-bold text-gray-800">{isEdit?(selectedInvoice?.dbeInvoiceId?'Edit Dealer Invoice (also updates DealerKart)':'Edit Sales Invoice'):'Create Sales Invoice'}</h1>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={()=>setShowSettingsModal(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             <Settings size={15}/> Settings <span className="w-1.5 h-1.5 rounded-full bg-red-500 ml-0.5"/>
           </button>
-          <button onClick={()=>handleSave(true,true)} disabled={loading} className="px-4 py-2 text-sm font-semibold text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors">Save & New</button>
+          {/* Save & New only when creating — on edit it would save a generated invoice as a draft */}
+          {!isEdit && (
+            <button onClick={()=>handleSave(true,true)} disabled={loading} className="px-4 py-2 text-sm font-semibold text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors">Save & New</button>
+          )}
           <button onClick={()=>handleSave(false,false)} disabled={loading} className="px-5 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 shadow transition-colors">{loading?'Saving…':'Save'}</button>
         </div>
       </div>
@@ -596,16 +666,22 @@ export default function InvoiceFormPage() {
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Bill To</span>
                   {dealer && (
-                    <button onClick={()=>{setDealer(null);setDealerSearch('');setTimeout(()=>setShowDealerDrop(true),50);}}
+                    <button onClick={()=>{prevPartyRef.current={dealer,search:dealerSearch,shipAddress,shipAddresses,selectedShipId};setDealer(null);setDealerSearch('');setTimeout(()=>setShowDealerDrop(true),50);}}
                       className="px-3 py-1 text-xs font-semibold text-blue-600 border border-blue-300 rounded-full hover:bg-blue-50">
                       Change Party
+                    </button>
+                  )}
+                  {!dealer && prevPartyRef.current && (
+                    <button onMouseDown={(e)=>e.preventDefault()} onClick={restoreParty}
+                      className="px-3 py-1 text-xs font-semibold text-gray-600 border border-gray-300 rounded-full hover:bg-gray-50">
+                      Keep {partyLabel(prevPartyRef.current.dealer) || 'current party'}
                     </button>
                   )}
                 </div>
                 {errors.dealer && <p className="text-xs text-red-500 mb-2">{errors.dealer}</p>}
                 {dealer ? (
                   <div className="relative group">
-                    <p className="font-bold text-gray-900 text-base leading-snug">{dealer.businessName}</p>
+                    <p className="font-bold text-gray-900 text-base leading-snug">{partyLabel(dealer)}</p>
                     {dealer.ownerName && <p className="text-sm text-gray-500 mt-0.5">{dealer.ownerName}</p>}
                     {dealer.phone     && <p className="text-sm text-gray-500">{dealer.phone}</p>}
                     {dealer.address?.city && <p className="text-sm text-gray-500">{[dealer.address.street,dealer.address.city,dealer.address.state,dealer.address.pincode].filter(Boolean).join(', ')}</p>}
@@ -620,19 +696,20 @@ export default function InvoiceFormPage() {
                       value={dealerSearch}
                       onChange={(e)=>{setDealerSearch(e.target.value);setShowDealerDrop(true);setErrors((er)=>({...er,dealer:''}));}}
                       onFocus={()=>setShowDealerDrop(true)}
+                      onBlur={(e)=>{ if (!e.target.value.trim()) restoreParty(); }}
                     />
                     {showDealerDrop && filteredDealers.length>0 && (
                       <div className="absolute z-50 left-0 mt-1 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
                         {filteredDealers.map((d)=>(
                           <button key={d._id} onMouseDown={(e)=>e.preventDefault()}
                             onClick={()=>{setDealer(d);
-                              setDealerSearch(d.businessName || '');
+                              setDealerSearch(partyLabel(d));
                               if (d?.bankDetails) {
                                 setBankAccount(d.bankDetails);
                               }
-                              setDealerSearch(d.businessName);setShowDealerDrop(false);setErrors((er)=>({...er,dealer:''}));}}
+                              prevPartyRef.current=null;setDealerSearch(partyLabel(d));setShowDealerDrop(false);setErrors((er)=>({...er,dealer:''}));}}
                             className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors">
-                            <p className="text-sm font-semibold text-gray-800">{d.businessName}</p>
+                            <p className="text-sm font-semibold text-gray-800">{partyLabel(d)}</p>
                             <p className="text-xs text-gray-400">{d.dealerCode}{d.phone?` · ${d.phone}`:''}</p>
                           </button>
                         ))}
@@ -695,11 +772,11 @@ export default function InvoiceFormPage() {
                               className="w-full font-medium text-gray-800 text-sm outline-none border-b border-transparent hover:border-gray-300 focus:border-blue-500 bg-transparent pb-0.5 placeholder-gray-400 transition-colors"
                               placeholder="Type or select item"
                               value={searchVal}
-                              onChange={(e)=>{const v=e.target.value;setProdSearch((p)=>({...p,[idx]:v}));updateItem(idx,'productName',v);setShowProdDrop((p)=>({...p,[idx]:true}));setErrors((er)=>({...er,items:''}));}}
-                              onFocus={()=>setShowProdDrop((p)=>({...p,[idx]:true}))}
+                              onChange={(e)=>{const v=e.target.value;setProdSearch((p)=>({...p,[idx]:v}));setProdQuery((q)=>({...q,[idx]:v}));updateItem(idx,'productName',v);setShowProdDrop((p)=>({...p,[idx]:true}));setErrors((er)=>({...er,items:''}));}}
+                              onFocus={()=>{setProdQuery((q)=>({...q,[idx]:''}));setShowProdDrop((p)=>({...p,[idx]:true}));}}
                             />
                             {showProdDrop[idx] && filteredProd.length>0 && (
-                              <div className="absolute z-40 left-0 mt-0.5 w-72 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
+                              <div className="absolute z-40 left-0 mt-0.5 w-72 max-h-72 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-2xl">
                                 {filteredProd.map((p)=>(
                                   <button key={p._id} onMouseDown={(e)=>e.preventDefault()} onClick={()=>pickProduct(idx,p)}
                                     className="w-full text-left px-3 py-2.5 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors">
@@ -795,6 +872,24 @@ export default function InvoiceFormPage() {
                                 />
                                 {errors[`serial_${idx}`] && (
                                   <p className="text-xs text-red-500 mt-0.5">{errors[`serial_${idx}`]}</p>
+                                )}
+                                {canManage && (
+                                  <p className="text-xs text-blue-600 mt-0.5">Remove or replace a serial — removed serials go back to available stock.</p>
+                                )}
+                                {pickSerials && stockSerials[idx]?.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                                    <span className="text-xs text-gray-500">In stock for this product:</span>
+                                    {stockSerials[idx].filter((sn) => !(serialInputs[idx] || '').split(',').map((s) => s.trim().toUpperCase()).includes(sn)).slice(0, 30).map((sn) => (
+                                      <button key={sn} type="button"
+                                        onClick={() => {
+                                          setSerialInputs((p) => { const cur = (p[idx] || '').split(',').map((s) => s.trim()).filter(Boolean); return { ...p, [idx]: [...cur, sn].join(', ') }; });
+                                          setErrors((er) => { const n = { ...er }; delete n[`serial_${idx}`]; return n; });
+                                        }}
+                                        className="text-xs px-1.5 py-0.5 rounded border border-blue-200 bg-white text-blue-700 hover:bg-blue-50">
+                                        + {sn}
+                                      </button>
+                                    ))}
+                                  </div>
                                 )}
                                 {item._serialsLocked && (
                                   <p className="text-xs text-gray-500 mt-0.5">Already assigned — can't be edited here. Change them from the order page (before delivery).</p>
@@ -1014,9 +1109,11 @@ export default function InvoiceFormPage() {
           <div className="p-4 border-b border-dashed border-gray-200 grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-gray-400 font-semibold block mb-1.5">Payment Terms</label>
-              <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 py-2 focus-within:border-blue-400">
-                <input type="number" min="0" className="w-10 text-sm font-semibold text-gray-800 outline-none bg-transparent"
-                  value={paymentDays} onChange={(e)=>setPaymentDays(e.target.value)}/>
+              {/* Payment terms are fixed once the invoice is generated */}
+              <div className={`flex items-center gap-1 border border-gray-200 rounded-lg px-2 py-2 focus-within:border-blue-400 ${canManage ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                title={canManage ? "Payment terms can't be changed on a generated invoice" : undefined}>
+                <input type="number" min="0" className="w-10 text-sm font-semibold text-gray-800 outline-none bg-transparent disabled:text-gray-500 disabled:cursor-not-allowed"
+                  value={paymentDays} disabled={canManage} onChange={(e)=>setPaymentDays(e.target.value)}/>
                 <span className="text-xs text-gray-400">days</span>
               </div>
             </div>
@@ -1040,13 +1137,13 @@ export default function InvoiceFormPage() {
             ) : (
               <div className="flex items-center gap-2">
                 <input className="flex-1 text-sm border-b border-gray-200 outline-none focus:border-blue-400 bg-transparent text-gray-600 placeholder-gray-300"
-                  placeholder="Label" value={addlLabel} onChange={(e)=>setAddlLabel(e.target.value)}/>
+                  placeholder="Charge name (e.g. Delivery)" autoFocus value={addlLabel} onChange={(e)=>setAddlLabel(e.target.value)}/>
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-gray-400">₹</span>
                   <input type="number" min="0" className="w-16 text-sm text-right border-b border-gray-200 outline-none focus:border-blue-400 bg-transparent text-gray-700"
                     value={addlCharges} onChange={(e)=>setAddlCharges(e.target.value)}/>
                 </div>
-                <button onClick={()=>{setShowAddlChg(false);setAddlCharges(0);}} className="text-gray-300 hover:text-red-400"><X size={13}/></button>
+                <button onClick={()=>{setShowAddlChg(false);setAddlCharges(0);setAddlLabel('');}} className="text-gray-300 hover:text-red-400"><X size={13}/></button>
               </div>
             )}
 

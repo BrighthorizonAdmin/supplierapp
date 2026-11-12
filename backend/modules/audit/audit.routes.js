@@ -63,6 +63,13 @@ router.get('/invoices', authorize('invoices:read'), asyncHandler(async (req, res
   return success(res, data);
 }));
 
+// GSTR-1 style export: every invoice matching the Analytics filters, with line
+// items and the party's GSTIN/state (rows per GST rate are built in the page)
+router.get('/gst-report', authorize('invoices:read'), asyncHandler(async (req, res) => {
+  const data = await svc.getGstReportInvoices(parseFilters(req.query));
+  return success(res, data);
+}));
+
 router.get('/daily-stats', authorize('invoices:read'), asyncHandler(async (req, res) => {
   const data = await svc.getDailyStats(parseFilters(req.query));
   return success(res, data);

@@ -98,6 +98,29 @@ export const deleteInvoice = createAsyncThunk('payment/deleteInvoice', async (id
   }
 });
 
+// Higher roles only — edit/delete an already generated invoice (serials go back to stock)
+export const manageEditInvoice = createAsyncThunk('payment/manageEditInvoice', async ({ id, body }, { rejectWithValue }) => {
+  try {
+    const { data } = await api.put(`/invoices/${id}/manage`, body);
+    toast.success('Invoice updated!');
+    return data.data;
+  } catch (err) {
+    toast.error(err.response?.data?.message || 'Failed to update invoice');
+    return rejectWithValue(err.response?.data?.message);
+  }
+});
+
+export const manageDeleteInvoice = createAsyncThunk('payment/manageDeleteInvoice', async (id, { rejectWithValue }) => {
+  try {
+    await api.delete(`/invoices/${id}/manage`);
+    toast.success('Invoice deleted');
+    return id;
+  } catch (err) {
+    toast.error(err.response?.data?.message || 'Failed to delete invoice');
+    return rejectWithValue(err.response?.data?.message);
+  }
+});
+
 export const fetchSettings = createAsyncThunk('payment/fetchSettings', async (_, { rejectWithValue }) => {
   try {
     const { data } = await api.get('/settings');
@@ -171,6 +194,15 @@ const paymentSlice = createSlice({
       })
       .addCase(deleteInvoice.fulfilled,     (state, action) => {
         state.invoices = state.invoices.filter((x) => x._id !== action.payload);
+      })
+      .addCase(manageEditInvoice.fulfilled, (state, action) => {
+        const i = state.invoices.findIndex((x) => x._id === action.payload._id);
+        if (i !== -1) state.invoices[i] = action.payload;
+        state.selectedInvoice = action.payload;
+      })
+      .addCase(manageDeleteInvoice.fulfilled, (state, action) => {
+        state.invoices = state.invoices.filter((x) => x._id !== action.payload);
+        if (state.selectedInvoice?._id === action.payload) state.selectedInvoice = null;
       });
   },
 });

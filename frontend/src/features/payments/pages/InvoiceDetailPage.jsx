@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchInvoiceById, issueInvoice, cancelInvoice } from '../paymentSlice';
+import { fetchInvoiceById, issueInvoice, cancelInvoice, manageDeleteInvoice } from '../paymentSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
 import { resolveStateCode, isInterState, derivedGstRate, gstSummaryRows } from '../../../utils/gst';
 import { format } from 'date-fns';
-import { Printer, ArrowLeft, Send, XCircle, Edit2 } from 'lucide-react';
+import { Printer, ArrowLeft, Send, XCircle, Edit2, Trash2 } from 'lucide-react';
 import api from '../../../services/api';
 
 const fmtDt = (d) => d ? format(new Date(d), 'dd/MM/yyyy') : '—';
@@ -36,6 +36,8 @@ export default function InvoiceDetailPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const printRef = useRef();
+  const currentUser = useSelector((s) => s.auth.user);
+  const isSuperAdmin = [].concat(currentUser?.role || []).includes('super-admin');
 
   const { selectedInvoice: inv, loading } = useSelector((s) => s.payment);
   const settingsData = useSelector((s) => s.settings?.data || {});
@@ -104,7 +106,7 @@ export default function InvoiceDetailPage() {
   // For retail: customer info lives in notes ("Retail sale to: Name | Phone")
   // For B2B: partyName/partyPhone are snapshots; fall back to populated dealerId
   const dealerObj = !isRetail && inv.dealerId && typeof inv.dealerId === 'object' ? inv.dealerId : null;
-  const custName  = isRetail ? noteParts[0] : (inv.partyName || dealerObj?.businessName || '');
+  const custName  = isRetail ? noteParts[0] : (inv.partyName || dealerObj?.businessName || dealerObj?.name || '');
   const custPhone = isRetail ? noteParts[1] : (inv.partyPhone || dealerObj?.phone || '');
   // Supplier-created dealers nest the address (address.street/city/state/pincode);
   // dealer-app ones keep flat fields (address string + city/state/pinCode).
@@ -219,6 +221,23 @@ export default function InvoiceDetailPage() {
                 <Send size={14} /> Issue Invoice
               </button>
             </>
+          )}
+          {/* Super Admin: edit a generated invoice, delete one (dealer-app copies are deleted in the dealer app) */}
+          {inv.status !== 'draft' && inv.status !== 'cancelled' && isSuperAdmin && (
+            <button onClick={() => navigate(`/invoices/${id}/edit`)} className="btn-outline flex items-center gap-1.5">
+              <Edit2 size={14} /> Edit
+            </button>
+          )}
+          {!inv.dbeInvoiceId && !inv.orderId && inv.status !== 'draft' && isSuperAdmin && (
+            <button
+              onClick={async () => {
+                if (!window.confirm('Delete this invoice? Its serial numbers will go back to available stock.')) return;
+                const res = await dispatch(manageDeleteInvoice(id));
+                if (!res.error) navigate('/invoices');
+              }}
+              className="btn-outline text-red-600 border-red-200 hover:bg-red-50 flex items-center gap-1.5">
+              <Trash2 size={14} /> Delete
+            </button>
           )}
           {!['paid', 'cancelled'].includes(inv.status) && inv.status !== 'draft' && (
             <button onClick={() => { if (window.confirm('Cancel invoice?')) dispatch(cancelInvoice(id)); }}

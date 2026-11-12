@@ -3,6 +3,7 @@ const Dealer = require('../dealer/model/Dealer.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const { reserveSeq, freeSeq, formatCode, peekSeq } = require('../../utils/numberSequence');
+const axios = require('axios');
 
 // Preview only — does NOT reserve/advance the sequence, so opening the New
 // Quote form (and navigating away without saving) never burns a number. The
@@ -120,9 +121,65 @@ const createQuote = async (body, user) => {
   });
 };
 
+// Sends a supplier-side edit of a dealer quote (source: 'dealer') back to the
+// Dealer app so both copies match. Line discounts are folded into the unit
+// price because the dealer quote has no discount fields.
+const syncQuoteToDealer = async (quote) => {
+  const DEALER_API_URL = process.env.DEALER_API_URL;
+  const WEBHOOK_SECRET = process.env.DEALER_WEBHOOK_SECRET;
+  if (!DEALER_API_URL || !WEBHOOK_SECRET) throw new Error('DEALER_API_URL / DEALER_WEBHOOK_SECRET not configured');
+
+  const Product = require('../products/model/Product.model');
+  const ids = quote.lineItems.map((li) => li.productId).filter(Boolean);
+  const products = ids.length ? await Product.find({ _id: { $in: ids } }).select('sku').lean() : [];
+  const skuById = Object.fromEntries(products.map((p) => [String(p._id), p.sku || '']));
+
+  let itemsNet = 0, itemsTax = 0;
+  const items = quote.lineItems.map((li) => {
+    const qty     = Number(li.quantity) || 1;
+    const taxable = Math.max(0, qty * (Number(li.unitPrice) || 0) - (Number(li.discountAmount) || 0));
+    itemsNet += taxable;
+    itemsTax += Number(li.taxAmount) || 0;
+    return {
+      productId: li.productId ? String(li.productId) : '',
+      sku:       li.productId ? skuById[String(li.productId)] || '' : '',
+      name:      li.productName,
+      hsnCode:   li.hsnCode || '',
+      quantity:  qty,
+      unitPrice: +(taxable / qty).toFixed(2),
+      taxRate:   Number(li.taxRate) || 0,
+    };
+  });
+  const charges   = quote.additionalCharges || [];
+  const chargeNet = charges.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+  const chargeTax = charges.reduce((s, c) => s + (Number(c.taxAmount) || 0), 0);
+
+  await axios.post(`${DEALER_API_URL}/api/dealer-quotes/webhook/supplier-update`, {
+    dbeQuoteId:  quote.dbeQuoteId,
+    status:      quote.status,
+    items,
+    additionalCharges: charges.map((c) => ({ label: c.label, amount: c.amount, taxRate: c.taxRate })),
+    subtotal:    +(itemsNet + chargeNet).toFixed(2),
+    taxAmount:   +(itemsTax + chargeTax).toFixed(2),
+    totalAmount: quote.totalAmount,
+    quoteDate:   quote.quoteDate,
+    expiryDate:  quote.expiryDate || null,
+    salesman:    quote.salesman || '',
+    notes:       quote.notes || '',
+  }, {
+    headers: { 'Content-Type': 'application/json', 'x-webhook-secret': WEBHOOK_SECRET },
+    timeout: 8000,
+  });
+};
+
 const updateQuote = async (id, body) => {
   const quote = await Quote.findById(id);
   if (!quote) throw new AppError('Quote not found', 404);
+
+  const isDealerQuote = quote.source === 'dealer' && Boolean(quote.dbeQuoteId);
+  if (isDealerQuote && quote.status === 'deletedByDealer') {
+    throw new AppError('This quote was deleted by the dealer and can no longer be edited', 400);
+  }
 
   const {
     lineItems,
@@ -153,8 +210,23 @@ const updateQuote = async (id, body) => {
   if (roundOffAmount    !== undefined) quote.roundOffAmount     = roundOffAmount;
   if (validForDays      !== undefined) quote.validForDays       = validForDays;
 
+  // A dealer quote's customer, dealer link and number belong to the dealer — never changed from here
+  if (isDealerQuote) {
+    ['dealerId', 'dealerBusinessName', 'partyName', 'partyPhone', 'partyAddress', 'partyGST',
+      'quoteNumber', 'source', 'dbeQuoteId', 'bankDetails'].forEach((k) => delete rest[k]);
+  }
   Object.assign(quote, rest);
   await quote.save();
+
+  if (isDealerQuote) {
+    try {
+      await syncQuoteToDealer(quote);
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message;
+      console.error(`[Quote] dealer sync failed for ${quote.quoteNumber}:`, msg);
+      throw new AppError(`Saved here, but the Dealer app could not be updated: ${msg}`, 502);
+    }
+  }
   return quote;
 };
 

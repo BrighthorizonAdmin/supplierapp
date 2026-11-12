@@ -22,6 +22,8 @@ const NAME_TO_CODE = [
   ...Object.entries(ALIASES),
 ].sort((a, b) => b[0].length - a[0].length); // longest first so "West Bengal" wins over shorter matches
 
+export const stateName = (code) => STATE_CODES[code] || '';
+
 export const stateCodeFromGSTIN = (gstin) => {
   const m = String(gstin || '').trim().match(/^(\d{2})[A-Z0-9]/i);
   return m && STATE_CODES[m[1]] ? m[1] : null;

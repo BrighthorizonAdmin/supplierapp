@@ -172,6 +172,27 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Dealer quotes: status + edit (synced back to the Dealer app), never delete */}
+          {isDealerSourced && q.status !== 'deletedByDealer' && (
+            <>
+              <select
+                value={q.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                title="Change status (also updates the Dealer app)"
+                className="px-3 py-2 text-sm font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors capitalize"
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => navigate(`/quotes/${id}/edit`)}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors"
+              >
+                <Edit2 size={14} /> Edit
+              </button>
+            </>
+          )}
           {q.source !== 'dealer' && (
             <>
               <select
