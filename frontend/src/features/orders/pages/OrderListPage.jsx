@@ -219,7 +219,7 @@ const filteredOrders = useMemo(() => {
       // Headers mirror exactly the visible table columns (excluding Actions)
       const headers = isRetail
         ? ['Order ID', 'Type', 'Customer', 'Date', 'Time', 'Items', 'Amount', 'Payment', 'Status']
-        : ['Order ID', 'Dealer', 'Date', 'Time', 'Items', 'Amount', 'Payment', 'Priority', 'Status'];
+        : ['Order ID', 'Dealer / Customer', 'Date', 'Time', 'Items', 'Amount', 'Payment', 'Priority', 'Status'];
 
       const rows = orders.map((o) => {
         const date   = format(new Date(o.createdAt), 'yyyy-MM-dd');
@@ -244,7 +244,7 @@ const filteredOrders = useMemo(() => {
         // Mirrors B2B / All table columns: ORDER ID, DEALER, DATE & TIME, ITEMS, AMOUNT, PAYMENT, PRIORITY, STATUS
         return [
           orderId,
-          o.dealerId?.businessName || o.dealerId?.name || '—',
+          o.orderType === 'b2c' ? (o.customerId?.name || o.customerName || '—') : (o.dealerId?.businessName || o.dealerId?.name || '—'),
           date, time, items, amount,
           o.paymentMethod || o.pricingTier || '—',
           o.priority || 'Normal',
@@ -479,7 +479,7 @@ const filteredOrders = useMemo(() => {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  {['ORDER ID','DEALER','DATE & TIME','ITEMS','AMOUNT','PAYMENT','PRIORITY','STATUS'].map((h) => (
+                  {['ORDER ID','DEALER / CUSTOMER','DATE & TIME','ITEMS','AMOUNT','PAYMENT','PRIORITY','STATUS'].map((h) => (
                     <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -510,15 +510,20 @@ const filteredOrders = useMemo(() => {
                         </p>
                         {order.dealerOrderNumber && (
                           <p className="text-xs text-slate-400 mt-0.5">
-                            Dealer: {order.dealerOrderNumber}
+                            {order.orderType === 'b2c' ? 'Website' : 'Dealer'}: {order.dealerOrderNumber}
                           </p>
                         )}
                       </button>
                     </td>
 
-                    {/* Dealer */}
+                    {/* Dealer — or, for Buvvas website orders, the customer */}
                     <td className="px-4 py-3.5 font-medium text-slate-700">
-                      {order.dealerId?.businessName || order.dealerId?.name || '—'}
+                      {order.orderType === 'b2c' ? (
+                        <>
+                          {order.customerId?.name || order.customerName || '—'}
+                          <p className="text-xs font-normal text-slate-400">Customer{order.customerPhone ? ` · ${order.customerPhone}` : ''}</p>
+                        </>
+                      ) : (order.dealerId?.businessName || order.dealerId?.name || '—')}
                     </td>
 
                     {/* Date & Time */}

@@ -106,7 +106,7 @@ export default function InvoiceDetailPage() {
   // For retail: customer info lives in notes ("Retail sale to: Name | Phone")
   // For B2B: partyName/partyPhone are snapshots; fall back to populated dealerId
   const dealerObj = !isRetail && inv.dealerId && typeof inv.dealerId === 'object' ? inv.dealerId : null;
-  const custName  = isRetail ? noteParts[0] : (inv.partyName || dealerObj?.businessName || '');
+  const custName  = isRetail ? noteParts[0] : (inv.partyName || dealerObj?.businessName || dealerObj?.name || '');
   const custPhone = isRetail ? noteParts[1] : (inv.partyPhone || dealerObj?.phone || '');
   // Supplier-created dealers nest the address (address.street/city/state/pincode);
   // dealer-app ones keep flat fields (address string + city/state/pinCode).

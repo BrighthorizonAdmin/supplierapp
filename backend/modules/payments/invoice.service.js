@@ -162,7 +162,7 @@ const getInvoices = async (query = {}) => {
   match.lineItems = { $exists: true };
   const [data, total] = await Promise.all([
     Invoice.find(match)
-      .populate('dealerId', 'businessName dealerCode')
+      .populate('dealerId', 'businessName name dealerCode')
       .populate('orderId', 'orderNumber')
       .sort({ invoiceDate: -1 })
       .skip(skip).limit(limit).lean(),
@@ -175,7 +175,7 @@ const getInvoiceById = async (id) => {
   const inv = await Invoice.findById(id)
     // city/state/pinCode/gstNumber: dealer-app dealers keep their address as flat
     // top-level fields (shared `dealers` collection), not the nested address object
-    .populate('dealerId', 'businessName dealerCode email address city state pinCode pincode phone gstin gstNumber')
+    .populate('dealerId', 'businessName name dealerCode email address city state pinCode pincode phone gstin gstNumber')
     .populate('orderId', 'orderNumber confirmedAt deliveryAddress dbeOrderId')
     .lean();
   if (!inv) throw new AppError('Invoice not found', 404);
@@ -856,6 +856,7 @@ const applyOrderLines = async (order, items, subtotalDelta, taxDelta) => {
         unitPrice: unit,
         basePrice: unit,
         quantity: qty,
+        taxRate: Number(li.taxRate) || 0,
         lineTotal: +taxable.toFixed(2),
       };
     });
@@ -1018,16 +1019,40 @@ const manageEditInvoice = async (id, body, user) => {
     await checkSerialUniqueness(newSerials, invoice._id);
     await assertNotSoldByDealer(removed);
 
-    // A newly assigned serial that already exists must be in stock for that product
-    if (added.length) {
-      const existing = await DispatchedUnit.find({ serialNumber: { $in: added } })
-        .select('serialNumber productId status isDeleted').lean();
-      for (const u of existing) {
-        if (u.isDeleted) throw new AppError(`Serial number ${u.serialNumber} was deleted from stock`, 400);
-        const line = lineItems.find(li => li.serialNumbers.includes(u.serialNumber));
-        if (u.productId && line?.productId && String(u.productId) !== String(line.productId)) {
-          throw new AppError(`Serial number ${u.serialNumber} belongs to a different product`, 400);
+    // Every serial must belong to its line's product (also ones kept after a
+    // product change), and a newly assigned one must be in stock
+    const units = newSerials.length
+      ? await DispatchedUnit.find({ serialNumber: { $in: newSerials } })
+        .select('serialNumber productId productName status isDeleted').lean()
+      : [];
+    const unitOf = new Map(units.map((u) => [u.serialNumber, u]));
+    const oldProductOf = new Map();
+    invoice.lineItems.forEach((li) => (li.serialNumbers || []).forEach((s) => oldProductOf.set(s.toUpperCase(), String(li.productId || ''))));
+    const oldPids = new Set(invoice.lineItems.map((li) => String(li.productId || '')));
+    const oldSerialPids = new Set(invoice.lineItems.filter((li) => li.serialNumbers?.length).map((li) => String(li.productId || '')));
+    for (const li of lineItems) {
+      const pid = li.productId ? String(li.productId) : '';
+      if (!pid) continue;
+      const name = li.productName || 'this product';
+      for (const sn of li.serialNumbers) {
+        const u = unitOf.get(sn);
+        if (u) {
+          if (u.isDeleted) throw new AppError(`Serial number ${sn} was deleted from stock`, 400);
+          if (u.productId && String(u.productId) !== pid) {
+            throw new AppError(`Serial number ${sn} belongs to ${u.productName || 'a different product'}, not ${name}`, 400);
+          }
+          if (added.includes(sn) && u.status !== 'in_stock') throw new AppError(`Serial number ${sn} is not available in stock`, 400);
+        } else if (added.includes(sn)) {
+          throw new AppError(`Serial number ${sn} is not in stock for ${name}`, 400);
+        } else if (oldProductOf.get(sn) !== pid) {
+          throw new AppError(`Serial number ${sn} belongs to a different product, not ${name}`, 400);
         }
+      }
+      // A product that has serials in stock: a new/changed line must get its serials
+      const qty = Number(li.quantity) || 0;
+      if (qty > 0 && !li.serialNumbers.length && (!oldPids.has(pid) || oldSerialPids.has(pid))
+        && await DispatchedUnit.exists({ productId: pid, status: 'in_stock', isDeleted: { $ne: true } })) {
+        throw new AppError(`Select ${qty} serial number(s) for ${name}`, 400);
       }
     }
 

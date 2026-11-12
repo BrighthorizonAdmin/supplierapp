@@ -89,7 +89,7 @@ const InvoiceListPage = () => {
     {
       key: 'partyName',
       label: 'Dealer',
-      render: (v, row) => (row.invoiceType === 'b2c' ? '—' : v || row.dealerId?.businessName || '—'),
+      render: (v, row) => (row.invoiceType === 'b2c' ? '—' : v || row.dealerId?.businessName || row.dealerId?.name || '—'),
     },
     {
       key: 'notes',
