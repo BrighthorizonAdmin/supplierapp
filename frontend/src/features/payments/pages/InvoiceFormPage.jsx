@@ -334,6 +334,9 @@ export default function InvoiceFormPage() {
     const inv = selectedInvoice;
     setInvoiceNo(inv.invoiceNumber||''); setInvoiceDate(inv.invoiceDate?.split('T')[0]||today);
     setDueDate(inv.dueDate?.split('T')[0]||''); setNotes(inv.notes||''); setShowNotes(Boolean(inv.notes));
+    // Show the invoice's own payment terms (e.g. "Net 15"), so saving doesn't reset them to 30
+    const savedDays = parseInt(String(inv.paymentTerms || '').replace(/\D/g, ''), 10);
+    if (!isNaN(savedDays)) setPaymentDays(savedDays);
     setWarrantyPeriod(inv.warrantyPeriod || '');
     setSalesmanName(inv.salesmanName || '');
     setTerms(inv.termsAndConditions||''); setShowTerms(Boolean(inv.termsAndConditions));
@@ -1106,9 +1109,11 @@ export default function InvoiceFormPage() {
           <div className="p-4 border-b border-dashed border-gray-200 grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-gray-400 font-semibold block mb-1.5">Payment Terms</label>
-              <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 py-2 focus-within:border-blue-400">
-                <input type="number" min="0" className="w-10 text-sm font-semibold text-gray-800 outline-none bg-transparent"
-                  value={paymentDays} onChange={(e)=>setPaymentDays(e.target.value)}/>
+              {/* Payment terms are fixed once the invoice is generated */}
+              <div className={`flex items-center gap-1 border border-gray-200 rounded-lg px-2 py-2 focus-within:border-blue-400 ${canManage ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                title={canManage ? "Payment terms can't be changed on a generated invoice" : undefined}>
+                <input type="number" min="0" className="w-10 text-sm font-semibold text-gray-800 outline-none bg-transparent disabled:text-gray-500 disabled:cursor-not-allowed"
+                  value={paymentDays} disabled={canManage} onChange={(e)=>setPaymentDays(e.target.value)}/>
                 <span className="text-xs text-gray-400">days</span>
               </div>
             </div>
