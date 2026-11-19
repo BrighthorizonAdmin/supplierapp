@@ -5,6 +5,7 @@ import { fetchChallanById } from '../deliveryChallanSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
 import { format } from 'date-fns';
 import { Printer, ArrowLeft } from 'lucide-react';
+import { resolveStateCode, isInterState, gstSummaryRows } from '../../../utils/gst';
 
 // ── Number to words (Indian system) ─────────────────────────────────────────
 const ONES = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine',
@@ -73,6 +74,15 @@ export default function DeliveryChallanPrintPage() {
   );
 
   const co  = settings;
+  // Same state → CGST + SGST, different states → IGST (unknown → CGST + SGST)
+  const challanDealer = c.dealerId && typeof c.dealerId === 'object' ? c.dealerId : null;
+  const interState = isInterState(
+    resolveStateCode({ gstins: [co.companyGSTIN], texts: [co.companyAddress] }),
+    resolveStateCode({
+      gstins: [c.partyGST, c.shipTo?.gstin, challanDealer?.gstin, challanDealer?.gstNumber],
+      texts:  [c.placeOfSupply, challanDealer?.address?.state, challanDealer?.state],
+    })
+  );
   const cName = co.companyName || 'Your Company';
 
   const metaRows = [
@@ -284,15 +294,11 @@ export default function DeliveryChallanPrintPage() {
                     <span>₹ {fmt(totalTaxable)}</span>
                   </div>
 
-                  {Object.entries(taxByRate).map(([rate, amt]) => (
-                    <div key={rate} style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-                      <span>
-                        {c.placeOfSupply && c.placeOfSupply !== (co.companyAddress || '').split(',').pop()?.trim()
-                          ? `IGST @${rate}%`
-                          : `GST @${rate}%`
-                        }
-                      </span>
-                      <span>₹ {fmt(amt)}</span>
+                  {/* Same state → CGST + SGST, different states → IGST */}
+                  {gstSummaryRows(taxByRate, interState).map(({ label, amount }) => (
+                    <div key={label} style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+                      <span>{label}</span>
+                      <span>₹ {fmt(amount)}</span>
                     </div>
                   ))}
 

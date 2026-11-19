@@ -91,6 +91,22 @@ const StatusCell = ({ order, onView, onReject, onConfirm }) => {
   );
 };
 
+// ─── New dealer-app order ────────────────────────────────────────────────────
+// Placed in the dealer app and still waiting to be accepted or rejected here.
+// The highlight goes away by itself once the status moves on from pending.
+const isNewDealerOrder = (order) =>
+  order.status === 'pending' && order.orderType !== 'b2c' && Boolean(order.dbeOrderId || order.dealerOrderNumber);
+
+const NewOrderBadge = () => (
+  <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-400 text-white align-middle">
+    <span className="relative flex h-1.5 w-1.5">
+      <span className="absolute inline-flex h-full w-full rounded-full bg-white opacity-75 motion-safe:animate-ping" />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+    </span>
+    New
+  </span>
+);
+
 // ─── Row action menu ──────────────────────────────────────────────────────────
 const RowActions = ({ row, onView }) => (
   <button
@@ -491,17 +507,23 @@ const filteredOrders = useMemo(() => {
                   <tr>
                     <td colSpan={8} className="px-4 py-14 text-center text-slate-400">No orders found</td>
                   </tr>
-                ) : filteredOrders.map((order) => (
-                  <tr key={order._id} onClick={() => goToOrder(order)} className="hover:bg-slate-50 transition-colors cursor-pointer">
+                ) : filteredOrders.map((order) => { const isNew = isNewDealerOrder(order); return (
+                  <tr
+                    key={order._id}
+                    onClick={() => goToOrder(order)}
+                    className={`transition-colors cursor-pointer ${isNew ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-slate-50'}`}
+                    title={isNew ? 'New order from the dealer app — waiting to be accepted' : undefined}
+                  >
 
                     {/* Order ID */}
-                    <td className="px-4 py-3.5">
+                    <td className={`px-4 py-3.5 ${isNew ? 'border-l-4 border-amber-400' : ''}`}>
                       <button
                         onClick={() => navigate(`/orders/${order._id}`)}
                         className="text-left"
                       >
                         <p className="font-semibold text-slate-800 hover:text-primary-600 transition-colors">
                           {order.orderNumber}
+                          {isNew && <NewOrderBadge />}
                           {order.returns?.some((r) => r.status === 'refunded') && (
                             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-500">
                               Returned
@@ -562,7 +584,7 @@ const filteredOrders = useMemo(() => {
                     </td>
 
                   </tr>
-                ))}
+                ); })}
               </tbody>
             </table>
           </div>

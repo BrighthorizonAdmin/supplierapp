@@ -37,6 +37,7 @@ import RoleManagementPage from '../features/usermanagement/pages/RoleManagement'
 import UserManagementPage from '../features/usermanagement/pages/UserManagement';
 import InvoiceFormPage from '../features/payments/pages/InvoiceFormPage';
 import InvoiceDetailPage from '../features/payments/pages/InvoiceDetailPage';
+import InvoiceHistoryPage from '../features/payments/pages/InvoiceHistoryPage';
 import ChangePassword from '../features/usermanagement/pages/ChangePassword';
 import SupportDetailPage from '../features/support/pages/SupportDetailPage';
 import SupportListPage from '../features/support/pages/SupportListPage';
@@ -179,6 +180,11 @@ const AppRouter = () => {
           <Route path="invoices/:id/edit" element={
             <ProtectedRoute permission="invoices:write">
               <InvoiceFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="invoice-history" element={
+            <ProtectedRoute permission="invoices:read">
+              <InvoiceHistoryPage />
             </ProtectedRoute>
           } />
           <Route path="returns" element={

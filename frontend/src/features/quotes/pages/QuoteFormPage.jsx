@@ -6,6 +6,7 @@ import { fetchDealers } from '../../dealer/dealerSlice';
 import { fetchProducts } from '../../products/productSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
 import api from '../../../services/api';
+import { resolveStateCode, isInterState } from '../../../utils/gst';
 import {
   ArrowLeft, Plus, Trash2, X, Calendar, Search, ChevronDown, QrCode,
 } from 'lucide-react';
@@ -698,6 +699,12 @@ export default function QuoteFormPage() {
     setAdditionalCharges((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
+  // Same state → CGST + SGST, different states → IGST (unknown → CGST + SGST)
+  const interState = isInterState(
+    resolveStateCode({ gstins: [settingsData.companyGSTIN], texts: [settingsData.companyAddress] }),
+    resolveStateCode({ gstins: [dealer?.gstin, dealer?.gstNumber], texts: [dealer?.address?.state, dealer?.state] })
+  );
+
   // ── Summary ──────────────────────────────────────────────────────────────
   const summary = useMemo(() => {
     let baseTotal = 0, totalDiscount = 0, taxTotal = 0;
@@ -1382,17 +1389,26 @@ export default function QuoteFormPage() {
               <span className="text-gray-800">₹ {summary.taxableAmount.toFixed(2)}</span>
             </div>
 
-            {/* Tax Breakdown */}
+            {/* Tax Breakdown — IGST when the dealer is in another state */}
             {Object.entries(summary.taxBreakdown).map(([rate, val]) => (
               <React.Fragment key={rate}>
-                <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
-                  <span className="text-gray-500">SGST@{Number(rate) / 2}</span>
-                  <span className="text-gray-700">₹ {val.sgst.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
-                  <span className="text-gray-500">CGST@{Number(rate) / 2}</span>
-                  <span className="text-gray-700">₹ {val.cgst.toFixed(2)}</span>
-                </div>
+                {interState ? (
+                  <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
+                    <span className="text-gray-500">IGST@{Number(rate)}</span>
+                    <span className="text-gray-700">₹ {(val.sgst + val.cgst).toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
+                      <span className="text-gray-500">SGST@{Number(rate) / 2}</span>
+                      <span className="text-gray-700">₹ {val.sgst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
+                      <span className="text-gray-500">CGST@{Number(rate) / 2}</span>
+                      <span className="text-gray-700">₹ {val.cgst.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </React.Fragment>
             ))}
 

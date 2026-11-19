@@ -14,6 +14,7 @@ const superAdminOnly = (req, res, next) => {
 };
 
 router.get   ('/',           authorize('invoices:read'),   ctrl.getInvoices);
+router.get   ('/history',    authorize('invoices:read'),   ctrl.getInvoiceHistory); // before /:id
 router.get   ('/:id',        authorize('invoices:read'),   ctrl.getInvoiceById);
 router.post  ('/',           authorize('invoices:write'),  ctrl.createInvoice);
 router.put   ('/:id',        authorize('invoices:write'),  ctrl.updateInvoice);

@@ -9,6 +9,7 @@ import {
   ArrowLeft, Plus, Trash2, X, Calendar, Search, ChevronDown, QrCode, Printer,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { resolveStateCode, isInterState } from '../../../utils/gst';
 
 const GST_RATES = [
   { label: 'No Tax',       value: 0    },
@@ -544,6 +545,15 @@ export default function DeliveryChallanFormPage() {
 
   const removeCharge = useCallback((idx) => setAdditionalCharges((prev) => prev.filter((_, i) => i !== idx)), []);
 
+  // Same state → CGST + SGST, different states → IGST (unknown → CGST + SGST)
+  const interState = isInterState(
+    resolveStateCode({ gstins: [settingsData.companyGSTIN], texts: [settingsData.companyAddress] }),
+    resolveStateCode({
+      gstins: [partyGST, shipToGST, dealer?.gstin, dealer?.gstNumber],
+      texts:  [placeOfSupply, dealer?.address?.state, dealer?.state],
+    })
+  );
+
   const summary = useMemo(() => {
     let baseTotal = 0, totalDiscount = 0, taxTotal = 0;
     const taxBreakdown = {};
@@ -1076,14 +1086,23 @@ export default function DeliveryChallanFormPage() {
 
             {Object.entries(summary.taxBreakdown).map(([rate, val]) => (
               <React.Fragment key={rate}>
-                <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
-                  <span className="text-gray-500">SGST@{Number(rate) / 2}</span>
-                  <span className="text-gray-700">₹ {val.sgst.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
-                  <span className="text-gray-500">CGST@{Number(rate) / 2}</span>
-                  <span className="text-gray-700">₹ {val.cgst.toFixed(2)}</span>
-                </div>
+                {interState ? (
+                  <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
+                    <span className="text-gray-500">IGST@{Number(rate)}</span>
+                    <span className="text-gray-700">₹ {(val.sgst + val.cgst).toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
+                      <span className="text-gray-500">SGST@{Number(rate) / 2}</span>
+                      <span className="text-gray-700">₹ {val.sgst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm py-1.5 border-b border-gray-100">
+                      <span className="text-gray-500">CGST@{Number(rate) / 2}</span>
+                      <span className="text-gray-700">₹ {val.cgst.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </React.Fragment>
             ))}
 

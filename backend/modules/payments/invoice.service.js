@@ -6,6 +6,7 @@ const DispatchedUnit = require('../dispatchedUnits/model/DispatchedUnit.model');
 const Order = require('../orders/model/Order.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
+const invoiceHistory = require('./invoiceHistory.service');
 
 // Converts "12 months" / "1 year" / "2 years" → number of months
 const parseWarrantyMonths = (period = '') => {
@@ -369,6 +370,7 @@ const updateInvoice = async (id, body, user) => {
   const invoice = await Invoice.findById(id);
   if (!invoice) throw new AppError('Invoice not found', 404);
   if (invoice.status === 'cancelled') throw new AppError('Cannot edit a cancelled invoice', 400);
+  const before = invoiceHistory.snapshot(invoice);
 
   // Generated invoices can only be edited by Super Admin; drafts stay open
   const isSuperAdmin = [].concat(user?.role || []).includes('super-admin');
@@ -472,42 +474,67 @@ const updateInvoice = async (id, body, user) => {
   applyPaymentStatus(invoice);
   await invoice.save();
   await syncOrderPaymentStatus(invoice);
+
+  const dateOnly = Object.keys(body).length === 1 && body.invoiceDate !== undefined;
+  await invoiceHistory.record({
+    action: 'edit', source: dateOnly ? 'Date change (invoice list)' : 'Edit invoice',
+    before, after: invoice, user,
+  });
   return invoice;
 };
 
-const issueInvoice = async (id) => {
+const issueInvoice = async (id, user) => {
   const invoice = await Invoice.findById(id);
   if (!invoice) throw new AppError('Invoice not found', 404);
   if (invoice.status !== 'draft') throw new AppError('Only draft invoices can be issued', 400);
+  const before = invoiceHistory.snapshot(invoice);
   invoice.status = 'issued';
   invoice.issuedAt = new Date();
   await invoice.save();
+  await invoiceHistory.record({ action: 'issue', source: 'Issue invoice', before, after: invoice, user });
   return invoice;
 };
 
-const cancelInvoice = async (id) => {
+const cancelInvoice = async (id, user) => {
   const invoice = await Invoice.findById(id);
   if (!invoice) throw new AppError('Invoice not found', 404);
   if (['paid', 'cancelled'].includes(invoice.status)) throw new AppError('Cannot cancel this invoice', 400);
+  const before = invoiceHistory.snapshot(invoice);
   invoice.status = 'cancelled';
   invoice.cancelledAt = new Date();
   await invoice.save();
+  await invoiceHistory.record({ action: 'cancel', source: 'Cancel invoice', before, after: invoice, user });
   return invoice;
 };
 
-const deleteInvoice = async (id) => {
+const deleteInvoice = async (id, user) => {
   const invoice = await Invoice.findById(id);
   if (!invoice) throw new AppError('Invoice not found', 404);
   if (invoice.status !== 'draft') throw new AppError('Only draft invoices can be deleted', 400);
+  const before = invoiceHistory.snapshot(invoice);
   await invoice.deleteOne();
+  await invoiceHistory.record({ action: 'delete', source: 'Delete draft', before, user, changes: deletedSummary(before) });
 };
+
+// What a deleted invoice looked like, for its history entry
+const deletedSummary = (inv) => [
+  { field: 'status', label: 'Status', kind: 'text', from: inv.status || '', to: 'deleted' },
+  { field: 'totalAmount', label: 'Total Amount', kind: 'money', from: (Number(inv.totalAmount) || 0).toFixed(2), to: '' },
+  ...(inv.lineItems || []).map((li) => ({
+    field: `lineItems.${li.productName}`, label: `${li.productName || 'Item'} — Item removed`, kind: 'text',
+    from: [`Qty ${Number(li.quantity) || 0} × ₹${(Number(li.unitPrice) || 0).toFixed(2)}`,
+      (li.serialNumbers || []).length ? `SN: ${li.serialNumbers.join(', ')}` : ''].filter(Boolean).join(' | '),
+    to: '',
+  })),
+];
 
 // Save serial numbers for line items of an auto-generated invoice
 // lineSerials = [{ index: 0, serialNumbers: ['SN-001', 'SN-002'] }, ...]
-const saveSerialNumbers = async (id, lineSerials) => {
+const saveSerialNumbers = async (id, lineSerials, user) => {
   const invoice = await Invoice.findById(id);
   if (!invoice) throw new AppError('Invoice not found', 404);
   if (invoice.status === 'cancelled') throw new AppError('Cannot update a cancelled invoice', 400);
+  const before = invoiceHistory.snapshot(invoice);
 
   // Validate count per entry and collect all serials for uniqueness check
   const allSerials = [];
@@ -583,6 +610,7 @@ const saveSerialNumbers = async (id, lineSerials) => {
     await DispatchedUnit.bulkWrite(ops);
   }
 
+  await invoiceHistory.record({ action: 'serials', source: 'Save serial numbers', before, after: invoice, user });
   return invoice;
 };
 
@@ -969,6 +997,10 @@ const editDealerInvoice = async (invoice, body, user) => {
   await auditService.log('invoice', updated._id, 'update', user?._id || user?.id, {
     after: { invoiceNumber: updated.invoiceNumber, totalAmount: updated.totalAmount },
   });
+  await invoiceHistory.record({
+    action: 'edit', source: 'Super Admin edit (dealer app invoice)',
+    before: invoiceHistory.snapshot(invoice), after: updated, user,
+  });
   return updated;
 };
 
@@ -978,6 +1010,7 @@ const manageEditInvoice = async (id, body, user) => {
   if (invoice.status === 'cancelled') throw new AppError('Cannot edit a cancelled invoice', 400);
   if (invoice.dbeInvoiceId) return editDealerInvoice(invoice, body, user);
   await assertManageable(invoice);
+  const before = invoiceHistory.snapshot(invoice);
 
   const {
     lineItems, invoiceDiscount,
@@ -1160,6 +1193,7 @@ const manageEditInvoice = async (id, body, user) => {
   await auditService.log('invoice', invoice._id, 'update', user?._id || user?.id, {
     after: { invoiceNumber: invoice.invoiceNumber, totalAmount: invoice.totalAmount },
   });
+  await invoiceHistory.record({ action: 'edit', source: 'Super Admin edit', before, after: invoice, user });
   return invoice;
 };
 
@@ -1202,6 +1236,8 @@ const manageDeleteInvoice = async (id, user) => {
   await auditService.log('invoice', invoice._id, 'delete', user?._id || user?.id, {
     before: { invoiceNumber: invoice.invoiceNumber, totalAmount: invoice.totalAmount },
   });
+  const before = invoiceHistory.snapshot(invoice);
+  await invoiceHistory.record({ action: 'delete', source: 'Super Admin delete', before, user, changes: deletedSummary(before) });
 };
 
 module.exports = {

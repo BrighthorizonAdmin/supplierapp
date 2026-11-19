@@ -68,7 +68,8 @@ const getQuotes = async (query = {}) => {
 
 const getQuoteById = async (id) => {
   const quote = await Quote.findById(id)
-    .populate('dealerId', 'businessName dealerCode email address phone')
+    // state/gstin/gstNumber: decide CGST + SGST vs IGST on the quote
+    .populate('dealerId', 'businessName dealerCode email address phone state gstin gstNumber')
     .lean();
   if (!quote) throw new AppError('Quote not found', 404);
   return quote;

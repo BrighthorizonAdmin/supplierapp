@@ -1,4 +1,5 @@
 const invoiceService = require('./invoice.service');
+const invoiceHistory = require('./invoiceHistory.service');
 const asyncHandler   = require('../../utils/asyncHandler');
 const { success, paginated } = require('../../utils/response');
 
@@ -19,20 +20,25 @@ const updateInvoice   = asyncHandler(async (req, res) => {
   return success(res, inv, 'Invoice updated');
 });
 const issueInvoice    = asyncHandler(async (req, res) => {
-  const inv = await invoiceService.issueInvoice(req.params.id);
+  const inv = await invoiceService.issueInvoice(req.params.id, req.user);
   return success(res, inv, 'Invoice issued');
 });
 const cancelInvoice   = asyncHandler(async (req, res) => {
-  const inv = await invoiceService.cancelInvoice(req.params.id);
+  const inv = await invoiceService.cancelInvoice(req.params.id, req.user);
   return success(res, inv, 'Invoice cancelled');
 });
 const deleteInvoice   = asyncHandler(async (req, res) => {
-  await invoiceService.deleteInvoice(req.params.id);
+  await invoiceService.deleteInvoice(req.params.id, req.user);
   return success(res, null, 'Invoice deleted');
 });
 const saveSerialNumbers = asyncHandler(async (req, res) => {
-  const inv = await invoiceService.saveSerialNumbers(req.params.id, req.body.lineSerials);
+  const inv = await invoiceService.saveSerialNumbers(req.params.id, req.body.lineSerials, req.user);
   return success(res, inv, 'Serial numbers saved');
+});
+
+const getInvoiceHistory = asyncHandler(async (req, res) => {
+  const { data, pagination } = await invoiceHistory.list(req.query);
+  return paginated(res, data, pagination, 'Invoice history fetched');
 });
 
 const manageEditInvoice = asyncHandler(async (req, res) => {
@@ -46,5 +52,5 @@ const manageDeleteInvoice = asyncHandler(async (req, res) => {
 
 module.exports = {
   getInvoices, getInvoiceById, createInvoice, updateInvoice, issueInvoice, cancelInvoice, deleteInvoice, saveSerialNumbers,
-  manageEditInvoice, manageDeleteInvoice,
+  manageEditInvoice, manageDeleteInvoice, getInvoiceHistory,
 };

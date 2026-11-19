@@ -148,9 +148,15 @@ export default function InvoiceDetailPage() {
     : addlTotal > 0 ? [{ label: inv.additionalLabel || 'Additional Charges', amount: addlTotal }] : [];
 
   // GST split: same state → CGST + SGST, different states → IGST.
-  // Retail invoices are the dealer's own sale (seller GSTIN not on record) —
-  // left as intra-state.
-  const sellerState = isRetail ? null : resolveStateCode({ gstins: [COMPANY.gstin], texts: [COMPANY.address] });
+  // Retail invoices are the dealer's own sale, so the dealer is the seller there
+  // (unknown dealer state → intra-state, as before).
+  const retailSeller = isRetail && inv.dealerId && typeof inv.dealerId === 'object' ? inv.dealerId : null;
+  const sellerState = isRetail
+    ? (retailSeller ? resolveStateCode({
+        gstins: [retailSeller.gstin, retailSeller.gstNumber],
+        texts:  [retailSeller.address?.state, retailSeller.state],
+      }) : null)
+    : resolveStateCode({ gstins: [COMPANY.gstin], texts: [COMPANY.address] });
   const buyerState  = resolveStateCode({
     gstins: [billGST],
     texts:  [inv.shippingAddress?.state, dealerState, billAddress],

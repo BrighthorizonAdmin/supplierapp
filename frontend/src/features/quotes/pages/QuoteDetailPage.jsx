@@ -5,6 +5,7 @@ import { fetchQuoteById, deleteQuote, updateQuote } from '../quoteSlice';
 import { fetchSettings } from '../../notifications/settingsSlice';
 import { format } from 'date-fns';
 import { Printer, ArrowLeft, Edit2, Trash2 } from 'lucide-react';
+import { resolveStateCode, isInterState, gstSummaryRows } from '../../../utils/gst';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const fmtDt  = (d) => (d ? format(new Date(d), 'dd/MM/yyyy') : '—');
@@ -142,6 +143,21 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
   // never show the Supplier's own bank details or company name, so Settings
   // is not used as a fallback here at all.
   const isDealerSourced = q.source === 'dealer';
+
+  // GST split: same state → CGST + SGST, different states → IGST (unknown → CGST + SGST).
+  // Supplier quotes: company sells to the dealer/party. Dealer-app quotes: the dealer sells to the party.
+  const quoteDealer = q.dealerId && typeof q.dealerId === 'object' ? q.dealerId : null;
+  const dealerStateCode = quoteDealer ? resolveStateCode({
+    gstins: [quoteDealer.gstin, quoteDealer.gstNumber],
+    texts:  [quoteDealer.address?.state, quoteDealer.state],
+  }) : null;
+  const sellerState = isDealerSourced
+    ? dealerStateCode
+    : resolveStateCode({ gstins: [COMPANY.gstin], texts: [COMPANY.address] });
+  const partyState  = resolveStateCode({ gstins: [q.partyGST], texts: [q.partyAddress] });
+  const buyerState  = isDealerSourced ? partyState : (partyState || dealerStateCode);
+  const interState  = isInterState(sellerState, buyerState);
+  const taxRowsByRate = Object.fromEntries(Object.entries(taxBreakdown).map(([rate, { tax }]) => [rate, tax]));
 
   // Bank details: quote's own values first, fall back to company settings
   // (only for the supplier's own quotes — never for dealer-sourced ones).
@@ -380,22 +396,13 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
                 <span>Taxable Amount</span>
                 <span>₹ {fmtNum(q.subtotal)}</span>
               </div>
-              {/* Per-rate CGST + SGST */}
-              {Object.entries(taxBreakdown).map(([rate, { tax }]) => {
-                const half = +(tax / 2).toFixed(2);
-                return (
-                  <div key={rate}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#374151', marginBottom: '4px' }}>
-                      <span>CGST @{rate / 2}%</span>
-                      <span>₹ {fmtNum(half)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#374151', marginBottom: '4px' }}>
-                      <span>SGST @{rate / 2}%</span>
-                      <span>₹ {fmtNum(half)}</span>
-                    </div>
-                  </div>
-                );
-              })}
+              {/* Per-rate CGST + SGST (IGST when inter-state) */}
+              {gstSummaryRows(taxRowsByRate, interState).map(({ label, amount }) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#374151', marginBottom: '4px' }}>
+                  <span>{label}</span>
+                  <span>₹ {fmtNum(+amount.toFixed(2))}</span>
+                </div>
+              ))}
               {/* Additional Charges */}
               {(q.additionalCharges || []).filter(c => Number(c.amount) > 0).map((c, i) => (
                 <div key={i}>

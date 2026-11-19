@@ -17,6 +17,7 @@ const SALES_CHILDREN = [
   { to: '/invoices',          label: 'Sales Invoice',    perm: 'invoices:read' },
   { to: '/quotes',            label: 'Quotes',           perm: 'invoices:read' },
   { to: '/delivery-challan',  label: 'Delivery Challan', perm: 'invoices:read' },
+  { to: '/invoice-history',   label: 'Invoice History',  perm: 'invoices:read' },
 ];
 
 const FINANCE_CHILDREN = [
