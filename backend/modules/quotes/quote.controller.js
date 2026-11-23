@@ -12,7 +12,12 @@ const getNextQuoteNumber = asyncHandler(async (req, res) => {
   return success(res, data, 'Next quote number reserved');
 });
 
-const getQuoteById = asyncHandler(async (req, res) => {
+const getSalesmen = asyncHandler(async (req, res) => {
+  const data = await quoteService.getSalesmen();
+  return success(res, data, 'Salesmen fetched');
+});
+
+const getQuoteById =asyncHandler(async (req, res) => {
   const q = await quoteService.getQuoteById(req.params.id);
   return success(res, q, 'Quote fetched');
 });
@@ -23,7 +28,7 @@ const createQuote  = asyncHandler(async (req, res) => {
 });
 
 const updateQuote  = asyncHandler(async (req, res) => {
-  const q = await quoteService.updateQuote(req.params.id, req.body);
+  const q = await quoteService.updateQuote(req.params.id, req.body, req.user);
   return success(res, q, 'Quote updated');
 });
 
@@ -32,4 +37,4 @@ const deleteQuote  = asyncHandler(async (req, res) => {
   return success(res, null, 'Quote deleted');
 });
 
-module.exports = { getQuotes, getQuoteById, createQuote, updateQuote, deleteQuote, getNextQuoteNumber };
+module.exports = { getQuotes, getQuoteById, createQuote, updateQuote, deleteQuote, getNextQuoteNumber, getSalesmen };

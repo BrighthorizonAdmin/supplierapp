@@ -830,6 +830,19 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
                 {customerEmail && <p className="text-sm text-slate-500 mt-0.5">{customerEmail}</p>}
                 {customerPhone && <p className="text-sm text-slate-500">{customerPhone}</p>}
               </div>
+              {order.placedBy?.type && (
+                <div className="pt-3 border-t border-slate-100">
+                  <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide mb-1.5">Placed By</p>
+                  {order.placedBy.type === 'team' ? (
+                    <>
+                      <p className="text-sm text-slate-700">{order.placedBy.name || 'Team member'} <span className="text-xs text-slate-400">(Team member)</span></p>
+                      {order.placedBy.phone && <p className="text-sm text-slate-500">{order.placedBy.phone}</p>}
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-700">Owner</p>
+                  )}
+                </div>
+              )}
               {(addr.fullAddress || addr.city) && (
                 <div className="pt-3 border-t border-slate-100">
                   <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide mb-1.5">Shipping Address</p>

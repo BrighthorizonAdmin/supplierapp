@@ -41,6 +41,18 @@ const settingsSchema = new mongoose.Schema(
     bankAccount: { type: String, default: '' },
     bankBranch: { type: String, default: '' },
     termsAndConditions: { type: String, default: '' },
+    // Item-wise discount limits (%) — default for all products; a product's own
+    // minDiscount/maxDiscount overrides these. Super Admin is not limited.
+    minItemDiscount: { type: Number, default: 0, min: 0, max: 100 },
+    maxItemDiscount: { type: Number, default: 100, min: 0, max: 100 },
+    // Per pricing-tier limits (%). Empty = use min/maxItemDiscount above.
+    // A dealer's own minDiscount/maxDiscount overrides its tier.
+    tierDiscounts: {
+      standard: { min: { type: Number, default: null }, max: { type: Number, default: null } },
+      silver:   { min: { type: Number, default: null }, max: { type: Number, default: null } },
+      gold:     { min: { type: Number, default: null }, max: { type: Number, default: null } },
+      platinum: { min: { type: Number, default: null }, max: { type: Number, default: null } },
+    },
   },
   { timestamps: true, versionKey: false }
 );

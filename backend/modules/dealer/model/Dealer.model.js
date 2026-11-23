@@ -129,6 +129,10 @@ const dealerSchema = new mongoose.Schema(
       },
       default: 'standard',
     },
+    // Optional quote discount limit (%) for this dealer only. Empty = use the
+    // limit of the dealer's pricing tier from Settings.
+    minDiscount: { type: Number, default: null, min: 0, max: 100 },
+    maxDiscount: { type: Number, default: null, min: 0, max: 100 },
     requestUpdatedAt: { type: Date },
     paymentTerms: { type: String, default: '' },
     bankDetails: {

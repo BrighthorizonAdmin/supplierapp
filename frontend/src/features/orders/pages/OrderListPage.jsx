@@ -545,7 +545,20 @@ const filteredOrders = useMemo(() => {
                           {order.customerId?.name || order.customerName || '—'}
                           <p className="text-xs font-normal text-slate-400">Customer{order.customerPhone ? ` · ${order.customerPhone}` : ''}</p>
                         </>
-                      ) : (order.dealerId?.businessName || order.dealerId?.name || '—')}
+                      ) : (
+                        <>
+                          {order.dealerId?.businessName || order.dealerId?.name || '—'}
+                          {/* Who placed it in the dealer app — owner or team member */}
+                          {order.placedBy?.type && (
+                            <p className="text-xs font-normal text-slate-400">
+                              Placed by: {order.placedBy.type === 'team'
+                                ? `${order.placedBy.name || 'Team member'} (Team)`
+                                : 'Owner'}
+                              {order.placedBy.type === 'team' && order.placedBy.phone ? ` · ${order.placedBy.phone}` : ''}
+                            </p>
+                          )}
+                        </>
+                      )}
                     </td>
 
                     {/* Date & Time */}

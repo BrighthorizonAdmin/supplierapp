@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS = {
   autoBlockOnBreach: true, gracePeriod: '3',
   minOrderValue: '10000', paymentMethods: ['cash', 'card', 'upi'], allowPartialOrders: false,
   allowBackorders: '6', maxBackorderDays: '3', defaultPriceTier: 'tier1', dealerOrderOverride: true,
+  minItemDiscount: 0, maxItemDiscount: 100,
 };
 
 const NotificationPage = () => {
@@ -53,7 +54,21 @@ const NotificationPage = () => {
   }, [savedSettings]);
 
   const set = (key, val) => setSettings((s) => ({ ...s, [key]: val }));
-  const handleSave = () => { dispatch(saveSettings(settings)); };
+  const handleSave = () => {
+    const payload = {
+      ...settings,
+      minItemDiscount: settings.minItemDiscount === '' ? 0 : Number(settings.minItemDiscount),
+      maxItemDiscount: settings.maxItemDiscount === '' ? 100 : Number(settings.maxItemDiscount),
+    };
+    const tierBad = Object.values(payload.tierDiscounts || {}).some(
+      (r) => r && r.min != null && r.max != null && Number(r.min) > Number(r.max)
+    );
+    if (payload.minItemDiscount > payload.maxItemDiscount || tierBad) {
+      setActiveTab(3);
+      return;
+    }
+    dispatch(saveSettings(payload));
+  };
   const handleCancel = () => {
     setSettings(savedSettings ? { ...DEFAULT_SETTINGS, ...savedSettings } : DEFAULT_SETTINGS);
   };
@@ -358,6 +373,78 @@ const NotificationPage = () => {
                 <div className="flex items-center justify-between">
                   <label className="text-sm text-slate-600">Dealer-Specific order override</label>
                   <Toggle checked={settings.dealerOrderOverride} onChange={(v) => set('dealerOrderOverride', v)} />
+                </div>
+
+                {/* Item-wise discount limit — used on Quotes (Super Admin is not limited) */}
+                <div className="pt-5 border-t border-slate-100">
+                  <h4 className="text-sm font-semibold text-slate-800">Item Discount Limit</h4>
+                  <p className="text-xs text-slate-400 mt-0.5 mb-4">
+                    Default allowed discount per item on Quotes, for all dealers. Tier and dealer limits below can change it per dealer; a product's own limit (Product Catalog) also applies, and the stricter one wins. Super Admin is not limited.
+                  </p>
+                  <div className="space-y-4">
+                    {[
+                      { key: 'minItemDiscount', label: 'Minimum Discount' },
+                      { key: 'maxItemDiscount', label: 'Maximum Discount' },
+                    ].map(({ key, label }) => (
+                      <div key={key} className="flex items-center justify-between">
+                        <label className="text-sm text-slate-600">{label}</label>
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden w-36">
+                          <input type="number" min="0" max="100" step="0.01"
+                            value={settings[key] ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              set(key, v === '' ? '' : Math.min(100, Math.max(0, Number(v))));
+                            }}
+                            className="flex-1 px-3 py-1.5 text-sm focus:outline-none w-0" />
+                          <span className="px-3 py-1.5 text-sm text-slate-500 bg-slate-50 border-l border-slate-200">%</span>
+                        </div>
+                      </div>
+                    ))}
+                    {Number(settings.minItemDiscount) > Number(settings.maxItemDiscount) && (
+                      <p className="text-xs text-red-500">Minimum discount cannot be more than maximum discount.</p>
+                    )}
+                  </div>
+
+                  {/* Per pricing tier — blank uses the default above */}
+                  <div className="mt-6">
+                    <h4 className="text-sm font-semibold text-slate-800">Discount Limit by Dealer Tier</h4>
+                    <p className="text-xs text-slate-400 mt-0.5 mb-3">
+                      Leave blank to use the default above. A dealer's own limit (Dealer Management → Edit) overrides its tier.
+                    </p>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-slate-500">
+                          <th className="text-left font-medium pb-2">Tier</th>
+                          <th className="text-left font-medium pb-2">Min %</th>
+                          <th className="text-left font-medium pb-2">Max %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {['standard', 'silver', 'gold', 'platinum'].map((tier) => {
+                          const row = settings.tierDiscounts?.[tier] || {};
+                          const setTier = (k, v) => set('tierDiscounts', {
+                            ...(settings.tierDiscounts || {}),
+                            [tier]: { ...row, [k]: v === '' ? null : Math.min(100, Math.max(0, Number(v))) },
+                          });
+                          const bad = row.min != null && row.max != null && Number(row.min) > Number(row.max);
+                          return (
+                            <tr key={tier}>
+                              <td className="py-1.5 capitalize text-slate-600">{tier}</td>
+                              {['min', 'max'].map((k) => (
+                                <td key={k} className="py-1.5 pr-3">
+                                  <input type="number" min="0" max="100" step="0.01"
+                                    value={row[k] ?? ''}
+                                    placeholder={k === 'min' ? String(settings.minItemDiscount ?? 0) : String(settings.maxItemDiscount ?? 100)}
+                                    onChange={(e) => setTier(k, e.target.value)}
+                                    className={`w-24 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${bad ? 'border-red-300' : 'border-slate-200'}`} />
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>

@@ -107,6 +107,10 @@ const productSchema = new mongoose.Schema(
       default: 18,
       min: [0, 'Tax rate cannot be negative'],
     },
+    // Optional item discount limits (%) for this product. Empty = use the
+    // default from Settings (minItemDiscount / maxItemDiscount).
+    minDiscount: { type: Number, default: null, min: [0, 'Min discount cannot be negative'], max: [100, 'Min discount cannot exceed 100%'] },
+    maxDiscount: { type: Number, default: null, min: [0, 'Max discount cannot be negative'], max: [100, 'Max discount cannot exceed 100%'] },
     hsnCode: {
       type: String,
       trim: true,

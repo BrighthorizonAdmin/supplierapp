@@ -53,6 +53,13 @@ const orderSchema = new mongoose.Schema(
     customerName:  { type: String, trim: true },
     customerEmail: { type: String, lowercase: true, trim: true },
     customerPhone: { type: String, trim: true },
+    // Dealer-app orders: who placed it — the dealer owner or a team member.
+    placedBy: {
+      type:         { type: String, enum: ['owner', 'team'] },
+      teamMemberId: { type: String },
+      name:         { type: String, trim: true },
+      phone:        { type: String, trim: true },
+    },
     status: {
       type: String,
       enum: {

@@ -276,7 +276,7 @@ router.post('/dealer-order', async (req, res) => {
       dbeOrderId, orderNumber, dealerId: dealerRef,
       dealerEmail, dealerName, dealerPhone,
       items, subtotal, taxAmount, netAmount, paymentMethod, paymentStatus,
-      splitPayNowAmount, splitCreditAmount, deliveryAddress,
+      splitPayNowAmount, splitCreditAmount, deliveryAddress, placedBy,
     } = req.body;
  
     const Order = require('../orders/model/Order.model');
@@ -350,6 +350,15 @@ router.post('/dealer-order', async (req, res) => {
             splitCreditAmount: Number(splitCreditAmount || 0),
             // D-BE always sends it; without it the invoice has no ship-to address
             ...(deliveryAddress ? { deliveryAddress } : {}),
+            // Who placed it in the dealer app (owner / team member)
+            ...(placedBy && placedBy.type ? {
+              placedBy: {
+                type: placedBy.type,
+                teamMemberId: placedBy.teamMemberId ? String(placedBy.teamMemberId) : undefined,
+                name: placedBy.name || '',
+                phone: placedBy.phone || '',
+              },
+            } : {}),
             notes: `Dealer order: ${orderNumber}`,
           },
         },

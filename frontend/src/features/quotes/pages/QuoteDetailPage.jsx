@@ -143,6 +143,8 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
   // never show the Supplier's own bank details or company name, so Settings
   // is not used as a fallback here at all.
   const isDealerSourced = q.source === 'dealer';
+  // Supplier quote past its validity date: can't be Sent/Accepted until renewed
+  const isExpiredLocked = !isDealerSourced && q.status === 'expired';
 
   // GST split: same state → CGST + SGST, different states → IGST (unknown → CGST + SGST).
   // Supplier quotes: company sells to the dealer/party. Dealer-app quotes: the dealer sells to the party.
@@ -175,6 +177,11 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
     <div className="min-h-screen bg-gray-100 pb-10">
 
       {/* ── Toolbar ── */}
+      {isExpiredLocked && (
+        <div className="bg-orange-50 border-b border-orange-200 px-6 py-2 text-sm text-orange-700">
+          This quote expired on {fmtDt(q.expiryDate)}. To reuse it, click <b>Edit</b> and set a new validity date — it will go back to Draft.
+        </div>
+      )}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/quotes')} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 transition-colors">
@@ -214,11 +221,14 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
               <select
                 value={q.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
-                title="Change status"
+                title={isExpiredLocked ? 'Expired — edit and set a new validity date to renew' : 'Change status'}
                 className="px-3 py-2 text-sm font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors capitalize"
               >
                 {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                  <option key={s} value={s}
+                    disabled={isExpiredLocked && ['draft', 'sent', 'accepted'].includes(s)}>
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </option>
                 ))}
               </select>
               <button

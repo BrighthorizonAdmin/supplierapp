@@ -100,10 +100,7 @@ function AddItemModal({ products, existingItems, onAdd, onClose }) {
              p.name?.toLowerCase() === q
     );
     if (found) {
-      const remaining = getRemainingStock(found);
-      const curr      = selections[found._id] || 0;
-      if (remaining <= 0) { setScanError('No stock remaining for this product.'); return; }
-      if (curr >= remaining) { setScanError(`Max remaining stock reached (${remaining} units).`); return; }
+      // Quotes are not limited by stock — the modal shows a warning instead.
       setSelections((prev) => ({ ...prev, [found._id]: (prev[found._id] || 0) + 1 }));
       setScanSuccess(`Added: ${found.name}`);
       setScanError('');
@@ -151,11 +148,8 @@ function AddItemModal({ products, existingItems, onAdd, onClose }) {
   };
 
   const bump = (id, delta) => setSelections((prev) => {
-    const product       = (products || []).find((p) => p._id === id);
-    const remaining     = getRemainingStock(product);
     const next          = (prev[id] || 0) + delta;
     if (next <= 0) { const { [id]: _, ...rest } = prev; return rest; }
-    if (next > remaining) return prev;
     return { ...prev, [id]: next };
   });
 
@@ -294,9 +288,9 @@ function AddItemModal({ products, existingItems, onAdd, onClose }) {
                           <button onClick={() => bump(p._id, -1)} className="w-7 h-7 rounded border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 font-semibold">−</button>
                           <div className="text-center">
                             <span className="w-8 inline-block text-center font-bold text-gray-800">{qty}</span>
-                            {atMax && <div className="text-xs text-orange-500 leading-none mt-0.5">Max</div>}
+                            {atMax && <div className="text-xs text-orange-500 leading-none mt-0.5 whitespace-nowrap">Only {remaining} in stock</div>}
                           </div>
-                          <button onClick={() => bump(p._id, 1)} disabled={atMax} className={`w-7 h-7 rounded border flex items-center justify-center font-semibold transition-colors ${atMax ? 'border-gray-200 text-gray-300 cursor-not-allowed' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>{'+'}</button>
+                          <button onClick={() => bump(p._id, 1)} className="w-7 h-7 rounded border border-gray-300 flex items-center justify-center font-semibold transition-colors text-gray-600 hover:bg-gray-100">{'+'}</button>
                           <span className="text-xs text-gray-400">PCS</span>
                         </div>
                       </td>
@@ -332,7 +326,7 @@ function AddItemModal({ products, existingItems, onAdd, onClose }) {
                 const outOfStock = stock != null && remaining <= 0;
                 return (
                   <tr key={p._id}
-                      className={`transition-colors ${qty > 0 ? 'bg-blue-50' : outOfStock ? 'opacity-50' : 'hover:bg-gray-50'}`}>
+                      className={`transition-colors ${qty > 0 ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
                     <td className="px-6 py-3 font-medium text-gray-800">{p.name}</td>
                     <td className="px-4 py-3 text-center text-gray-500 text-xs">
                       {p.productCode || '-'}
@@ -349,17 +343,15 @@ function AddItemModal({ products, existingItems, onAdd, onClose }) {
                     </td>
                     <td className="px-4 py-3 text-center">
                       {qty === 0 ? (
-                        <button
-                          onClick={() => !outOfStock && bump(p._id, 1)}
-                          disabled={outOfStock}
-                          className={`px-4 py-1.5 text-xs font-semibold border rounded-lg transition-colors ${
-                            outOfStock
-                              ? 'text-gray-400 border-gray-200 cursor-not-allowed'
-                              : 'text-blue-600 border-blue-300 hover:bg-blue-50'
-                          }`}
-                        >
-                          {outOfStock ? 'Out of Stock' : '+ Add'}
-                        </button>
+                        <>
+                          <button
+                            onClick={() => bump(p._id, 1)}
+                            className="px-4 py-1.5 text-xs font-semibold border rounded-lg transition-colors text-blue-600 border-blue-300 hover:bg-blue-50"
+                          >
+                            + Add
+                          </button>
+                          {outOfStock && <div className="text-xs text-red-500 mt-0.5">Out of stock</div>}
+                        </>
                       ) : (
                         <div className="flex items-center justify-center gap-2">
                           <button
@@ -369,17 +361,12 @@ function AddItemModal({ products, existingItems, onAdd, onClose }) {
                           <div className="text-center">
                             <span className="w-8 inline-block text-center font-bold text-gray-800">{qty}</span>
                             {atMax && (
-                              <div className="text-xs text-orange-500 leading-none mt-0.5">Max</div>
+                              <div className="text-xs text-orange-500 leading-none mt-0.5 whitespace-nowrap">Only {remaining} in stock</div>
                             )}
                           </div>
                           <button
                             onClick={() => bump(p._id, 1)}
-                            disabled={atMax}
-                            className={`w-7 h-7 rounded border flex items-center justify-center font-semibold transition-colors ${
-                              atMax
-                                ? 'border-gray-200 text-gray-300 cursor-not-allowed'
-                                : 'border-gray-300 text-gray-600 hover:bg-gray-100'
-                            }`}
+                            className="w-7 h-7 rounded border border-gray-300 flex items-center justify-center font-semibold transition-colors text-gray-600 hover:bg-gray-100"
                           >{'+'}</button>
                           <span className="text-xs text-gray-400">PCS</span>
                         </div>
@@ -447,6 +434,9 @@ export default function QuoteFormPage() {
   const { list: products = [] } = useSelector((s) => s.product);
   const { selectedQuote, loading } = useSelector((s) => s.quotes);
   const settingsData = useSelector((s) => s.settings?.data || {});
+  const currentUser  = useSelector((s) => s.auth.user);
+  const isSuperAdmin = [].concat(currentUser?.role || []).includes('super-admin');
+
   // Editing a quote synced from the Dealer app: customer and bank details stay the
   // dealer's (locked here); items, dates, status and notes sync back to the dealer.
   const isDealerQuote = isEdit && selectedQuote?._id === id && selectedQuote?.source === 'dealer';
@@ -525,6 +515,14 @@ export default function QuoteFormPage() {
   // never when editing an existing one. This does not reserve/advance the
   // sequence, so opening this form and navigating away without saving never
   // burns a number.
+  // Salesman dropdown: users who can manage invoices (from backend).
+  const [salesmen, setSalesmen] = useState([]);
+  useEffect(() => {
+    api.get('/quotes/salesmen')
+      .then(({ data }) => setSalesmen(Array.isArray(data?.data) ? data.data : []))
+      .catch(() => setSalesmen([]));
+  }, []);
+
   useEffect(() => {
     if (isEdit) return;
     api.get('/quotes/next-number')
@@ -628,13 +626,9 @@ export default function QuoteFormPage() {
     setItems((prev) => {
       const n = [...prev];
       let it = { ...n[idx], [field]: val };
-      // Quantity can't exceed available stock — the "add product" picker
-      // already enforces this via +/- buttons, but this table's free-text
-      // quantity field didn't, so it silently let quantities past stock through.
+      // Quotes are not limited by stock; a warning shows under the field instead.
       if (field === 'quantity') {
-        const product = products.find((p) => p._id === it.productId);
-        const maxQty = product?.currentStockQty ?? Infinity;
-        it.quantity = Math.min(Math.max(1, toNum(val)), maxQty);
+        it.quantity = Math.max(1, toNum(val));
       }
       // If qty or price changed and a % discount exists, recalculate flat discount
       if ((field === 'quantity' || field === 'unitPrice') && toNum(it.discountPercent) > 0) {
@@ -645,6 +639,23 @@ export default function QuoteFormPage() {
       return n;
     });
   }, [products]);
+
+  // Item discount limit (%) — same rule as backend utils/discountLimit.js:
+  //   party limit = dealer's own min/max → its tier (Settings) → Settings default → 0–100
+  //   product limit (Product Catalog) also applies; the stricter one wins.
+  // Super Admin is never limited.
+  const getDiscountLimit = useCallback((productId) => {
+    const n = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? null : Number(v));
+    const d = dealer?._id ? (dealers.find((x) => x._id === dealer._id) || dealer) : null;
+    const tier = settingsData.tierDiscounts?.[d?.pricingTier || 'standard'] || {};
+    let min = n(d?.minDiscount) ?? n(tier.min) ?? n(settingsData.minItemDiscount) ?? 0;
+    let max = n(d?.maxDiscount) ?? n(tier.max) ?? n(settingsData.maxItemDiscount) ?? 100;
+    const p = productId ? products.find((x) => x._id === productId) : null;
+    if (n(p?.minDiscount) !== null) min = Math.max(min, n(p.minDiscount));
+    if (n(p?.maxDiscount) !== null) max = Math.min(max, n(p.maxDiscount));
+    if (min > max) min = max;
+    return { min, max, limited: !isSuperAdmin && (min > 0 || max < 100) };
+  }, [dealer, dealers, products, settingsData.tierDiscounts, settingsData.minItemDiscount, settingsData.maxItemDiscount, isSuperAdmin]);
 
   const updateItemDiscount = useCallback((idx, field, val) => {
     setItems((prev) => {
@@ -658,10 +669,16 @@ export default function QuoteFormPage() {
         it.discountAmount  = toNum(val);
         it.discountPercent = base > 0 ? +(toNum(val) / base * 100).toFixed(2) : 0;
       }
+      // Can't go above the allowed max discount (min is checked on Save)
+      const { max, limited } = getDiscountLimit(it.productId);
+      if (limited && toNum(it.discountPercent) > max) {
+        it.discountPercent = max;
+        it.discountAmount  = base > 0 ? +(base * max / 100).toFixed(2) : 0;
+      }
       n[idx] = calcItem(it);
       return n;
     });
-  }, []);
+  }, [getDiscountLimit]);
 
   const removeRow = useCallback((idx) => {
     setItems((prev) => prev.filter((_, i) => i !== idx));
@@ -774,6 +791,17 @@ export default function QuoteFormPage() {
     const e = {};
     if (!dealer) e.dealer = 'Please select a party';
     if (items.length === 0 || items.every((i) => !i.productName?.trim())) e.items = 'Add at least one item';
+    if (!e.items) {
+      const bad = items.filter((i) => i.productName?.trim()).find((i) => {
+        const { min, max, limited } = getDiscountLimit(i.productId);
+        const pct = toNum(i.discountPercent);
+        return limited && (pct < min || pct > max);
+      });
+      if (bad) {
+        const { min, max } = getDiscountLimit(bad.productId);
+        e.items = `Discount for "${bad.productName}" must be between ${min}% and ${max}%.`;
+      }
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -1029,16 +1057,33 @@ export default function QuoteFormPage() {
                     </div>
                   </div>
                 </div>
+                {status === 'expired' && (
+                  <p className="text-xs text-orange-600 mt-2">
+                    This quote has expired. Set a validity date from today onwards and save to renew it (it goes back to Draft).
+                  </p>
+                )}
               </div>
             )}
 
             <div>
               <label className="text-xs text-gray-500 font-semibold block mb-1">Salesman:</label>
-              <input
-                className="w-full text-sm text-gray-800 bg-gray-100 rounded-lg px-3 py-2 outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 border border-transparent focus:border-blue-400 transition-all"
-                value={salesman}
-                onChange={(e) => setSalesman(e.target.value)}
-              />
+              <div className="relative">
+                <select
+                  className="w-full text-sm text-gray-800 bg-gray-100 rounded-lg px-3 py-2 pr-8 outline-none appearance-none cursor-pointer focus:bg-white focus:ring-1 focus:ring-blue-300 border border-transparent focus:border-blue-400 transition-all"
+                  value={salesman}
+                  onChange={(e) => setSalesman(e.target.value)}
+                >
+                  <option value="">Select salesman</option>
+                  {/* Keep an older quote's salesman visible even if that user is no longer in the list */}
+                  {salesman && !salesmen.some((u) => u.name === salesman) && (
+                    <option value={salesman}>{salesman}</option>
+                  )}
+                  {salesmen.map((u) => (
+                    <option key={u._id} value={u.name}>{u.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
             </div>
           </div>
         </div>
@@ -1109,13 +1154,18 @@ export default function QuoteFormPage() {
                       <td className="px-3 py-3">
                         <div className="flex items-center justify-center gap-1">
                           <input type="number" min="1"
-                            max={products.find((p) => p._id === item.productId)?.currentStockQty ?? undefined}
                             className="w-12 text-sm text-center outline-none bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-400 text-gray-800 transition-colors"
                             value={item.quantity}
                             onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                           />
                           <span className="text-xs text-gray-400">PCS</span>
                         </div>
+                        {(() => {
+                          const stockQty = products.find((p) => p._id === item.productId)?.currentStockQty;
+                          return stockQty != null && toNum(item.quantity) > stockQty ? (
+                            <div className="text-xs text-orange-500 text-center mt-0.5 whitespace-nowrap">Only {stockQty} in stock</div>
+                          ) : null;
+                        })()}
                       </td>
                       <td className="px-3 py-3">
                         <input type="number" min="0"
@@ -1141,6 +1191,16 @@ export default function QuoteFormPage() {
                             onChange={(e) => updateItemDiscount(idx, 'discountAmount', e.target.value)}
                           />
                         </div>
+                        {(() => {
+                          const { min, max, limited } = getDiscountLimit(item.productId);
+                          if (!limited) return null;
+                          const low = toNum(item.discountPercent) < min;
+                          return (
+                            <div className={`text-[10px] text-center mt-0.5 whitespace-nowrap ${low ? 'text-red-500' : 'text-gray-400'}`}>
+                              Allowed {min}–{max}%
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-3">
                         <select

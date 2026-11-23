@@ -4,6 +4,24 @@ const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const { reserveSeq, freeSeq, formatCode, peekSeq } = require('../../utils/numberSequence');
 const axios = require('axios');
+const User  = require('../auth/model/User.model');
+const Role  = require('../roles/role.model');
+const { assertItemDiscountsWithinLimits } = require('../../utils/discountLimit');
+
+// Salesman dropdown: active users whose role lets them create/edit invoices
+// (invoices:write, invoices:* or *). Super-admin always qualifies.
+const getSalesmen = async () => {
+  const roles = await Role.find({
+    isActive: true,
+    permissions: { $in: ['*', 'invoices:*', 'invoices:write'] },
+  }).select('name').lean();
+  const roleNames = [...new Set(['super-admin', ...roles.map((r) => r.name)])];
+  const users = await User.find({ isActive: true, role: { $in: roleNames } })
+    .select('name email role')
+    .sort({ name: 1 })
+    .lean();
+  return users.map((u) => ({ _id: u._id, name: u.name, email: u.email, role: u.role }));
+};
 
 // Preview only — does NOT reserve/advance the sequence, so opening the New
 // Quote form (and navigating away without saving) never burns a number. The
@@ -42,7 +60,25 @@ const calcTotals = (lineItems = []) => {
   };
 };
 
+// ── Quote expiry (supplier-created quotes only) ─────────────────────────────
+// A quote is valid through its expiryDate (stored as that day at 00:00 UTC).
+// Once the day has passed, Draft/Sent quotes become 'expired'. Accepted /
+// Rejected quotes and dealer-app quotes are never touched.
+const todayStart = () => {
+  const t = new Date();
+  return new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()));
+};
+const isOverdue = (expiryDate) => Boolean(expiryDate) && new Date(expiryDate) < todayStart();
+const SUPPLIER_SOURCE = { $or: [{ source: 'supplier' }, { source: { $exists: false } }] };
+
+const expireOverdueQuotes = () =>
+  Quote.updateMany(
+    { ...SUPPLIER_SOURCE, status: { $in: ['draft', 'sent'] }, expiryDate: { $lt: todayStart() } },
+    { $set: { status: 'expired' } }
+  ).catch((err) => console.error('[Quote] auto-expire failed:', err.message));
+
 const getQuotes = async (query = {}) => {
+  await expireOverdueQuotes();
   const { page, limit, skip } = getPagination(query);
   const match = {};
   if (query.status)   match.status   = query.status;
@@ -67,6 +103,7 @@ const getQuotes = async (query = {}) => {
 };
 
 const getQuoteById = async (id) => {
+  await expireOverdueQuotes();
   const quote = await Quote.findById(id)
     // state/gstin/gstNumber: decide CGST + SGST vs IGST on the quote
     .populate('dealerId', 'businessName dealerCode email address phone state gstin gstNumber')
@@ -88,6 +125,7 @@ const createQuote = async (body, user) => {
     ...rest
   } = body;
 
+  await assertItemDiscountsWithinLimits(lineItems, user, dealerId);
   const { items, subtotal, taxAmount } = calcTotals(lineItems);
 
   let { partyName, partyPhone, partyGST, partyAddress } = rest;
@@ -173,7 +211,7 @@ const syncQuoteToDealer = async (quote) => {
   });
 };
 
-const updateQuote = async (id, body) => {
+const updateQuote = async (id, body, user) => {
   const quote = await Quote.findById(id);
   if (!quote) throw new AppError('Quote not found', 404);
 
@@ -193,7 +231,26 @@ const updateQuote = async (id, body) => {
     ...rest
   } = body;
 
+  // ── Expiry rules (supplier quotes only) ──
+  //  • past validity date → Draft/Sent stay 'expired'; can't be marked Accepted
+  //  • renew: an expired quote saved with a new, valid expiryDate goes back to Draft
+  if (quote.source !== 'dealer') {
+    const effectiveExpiry = rest.expiryDate !== undefined ? rest.expiryDate : quote.expiryDate;
+    const overdue   = isOverdue(effectiveExpiry);
+    const requested = rest.status !== undefined ? rest.status : quote.status;
+    if (overdue) {
+      if (requested === 'accepted' && quote.status !== 'accepted') {
+        throw new AppError('This quote has expired. Edit it and set a new validity date to renew it first.', 400);
+      }
+      if (['draft', 'sent'].includes(requested)) rest.status = 'expired';
+    } else if (quote.status === 'expired' && rest.expiryDate !== undefined
+               && (rest.status === undefined || rest.status === 'expired')) {
+      rest.status = 'draft'; // renewed
+    }
+  }
+
   if (lineItems) {
+    await assertItemDiscountsWithinLimits(lineItems, user, rest.dealerId || quote.dealerId);
     const { items, subtotal, taxAmount } = calcTotals(lineItems);
     quote.lineItems  = items;
     quote.subtotal   = subtotal;
@@ -242,4 +299,4 @@ const deleteQuote = async (id) => {
   }
 };
 
-module.exports = { getQuotes, getQuoteById, createQuote, updateQuote, deleteQuote, getNextQuoteNumber };
+module.exports = { getQuotes, getQuoteById, createQuote, updateQuote, deleteQuote, getNextQuoteNumber, getSalesmen };

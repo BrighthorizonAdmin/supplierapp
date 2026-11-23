@@ -8,6 +8,7 @@ router.use(authenticate);
 
 router.get   ('/',    authorize('invoices:read'),  ctrl.getQuotes);
 router.get   ('/next-number', authorize('invoices:read'), ctrl.getNextQuoteNumber);
+router.get   ('/salesmen',    authorize('invoices:read'), ctrl.getSalesmen);
 router.get   ('/:id', authorize('invoices:read'),  ctrl.getQuoteById);
 router.post  ('/',    authorize('invoices:write'), ctrl.createQuote);
 router.put   ('/:id', authorize('invoices:write'), ctrl.updateQuote);

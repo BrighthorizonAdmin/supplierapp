@@ -458,6 +458,21 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
     const { stockDate, stockQty, specWeight, specDimensions, specColor, isActive, ...productData } = data;
     productData.isActive = isActiveValue;
 
+    // Optional discount limits: blank = use Settings default (sent as null)
+    ['minDiscount', 'maxDiscount'].forEach((k) => {
+      const v = productData[k];
+      productData[k] = v === '' || v == null || Number.isNaN(Number(v)) ? null : Number(v);
+    });
+    if (productData.minDiscount != null && productData.maxDiscount != null
+        && productData.minDiscount > productData.maxDiscount) {
+      toast.error('Min discount cannot be more than max discount.');
+      return;
+    }
+    if ([productData.minDiscount, productData.maxDiscount].some((v) => v != null && (v < 0 || v > 100))) {
+      toast.error('Discount must be between 0 and 100%.');
+      return;
+    }
+
     if (!isEdit) {
       productData.openingStockDate = stockDate || undefined;
       productData.openingStockQty  = Number(stockQty) || 0;
@@ -557,6 +572,13 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
            
             {/* <F label="Tax"          name="taxRate"   type="number" /> */}
             <F label="Base Price"   name="basePrice" type="number" step="0.01" required />
+            <div>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Min Discount (%)" name="minDiscount" type="number" step="0.01" />
+                <F label="Max Discount (%)" name="maxDiscount" type="number" step="0.01" />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Allowed discount on Quotes for this product. The dealer's limit also applies; the stricter one wins. Leave blank for no product limit.</p>
+            </div>
             <div>
               <F label="Buvvas Price" name="buvvasPrice" type="number" step="0.01" />
               <p className="text-xs text-gray-400 mt-1">Customer-facing price shown on the Buvvas Ecommerce site. Leave blank to fall back to Base Price.</p>

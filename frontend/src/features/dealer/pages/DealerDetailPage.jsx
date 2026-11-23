@@ -59,6 +59,9 @@ const DealerDetailPage = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editCredit, setEditCredit] = useState('');
   const [editPricingTier, setEditPricingTier] = useState('');
+  // Optional quote discount limit (%) for this dealer — blank = use tier limit
+  const [editMinDiscount, setEditMinDiscount] = useState('');
+  const [editMaxDiscount, setEditMaxDiscount] = useState('');
   const [editSaving, setEditSaving] = useState(false);
  
   const [showFullscreen, setShowFullscreen] = useState(false);
@@ -104,17 +107,32 @@ const DealerDetailPage = () => {
   const openEditModal = () => {
     setEditCredit(dealer?.creditLimit ?? '');
     setEditPricingTier(dealer?.pricingTier ?? 'standard');
+    setEditMinDiscount(dealer?.minDiscount ?? '');
+    setEditMaxDiscount(dealer?.maxDiscount ?? '');
     setShowEditModal(true);
   };
  
   /* ── save credit limit / tier ── */
   const handleSaveEdit = async () => {
+    const toPct = (v) => (v === '' || v == null ? null : Number(v));
+    const minD = toPct(editMinDiscount);
+    const maxD = toPct(editMaxDiscount);
+    if ([minD, maxD].some((v) => v != null && (Number.isNaN(v) || v < 0 || v > 100))) {
+      toast.error('Discount must be between 0 and 100%.');
+      return;
+    }
+    if (minD != null && maxD != null && minD > maxD) {
+      toast.error('Min discount cannot be more than max discount.');
+      return;
+    }
     setEditSaving(true);
     try {
       await dispatch(updateDealer({
         id,
         creditLimit: Number(editCredit),
         pricingTier: editPricingTier,
+        minDiscount: minD,
+        maxDiscount: maxD,
         businessType: dealer.businessType,
       })).unwrap();
       // Re-fetch dealer so all displayed fields (credit limit, tier, stats) are fresh
@@ -696,6 +714,30 @@ const DealerDetailPage = () => {
                   <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Quote discount limit for this dealer only */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Quote Discount Limit (%)
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="number" min="0" max="100" step="0.01"
+                  value={editMinDiscount}
+                  onChange={(e) => setEditMinDiscount(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                  placeholder="Min %"
+                />
+                <input
+                  type="number" min="0" max="100" step="0.01"
+                  value={editMaxDiscount}
+                  onChange={(e) => setEditMaxDiscount(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                  placeholder="Max %"
+                />
+              </div>
+              <p className="text-xs text-slate-400 mt-1">Only for this dealer. Leave blank to use the {editPricingTier || 'tier'} tier limit from Settings.</p>
             </div>
           </div>
  
