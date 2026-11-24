@@ -34,7 +34,7 @@ export const adjustStock = createAsyncThunk('inventory/adjust', async (body, { r
 export const editStockWithSerials = createAsyncThunk('inventory/editStockWithSerials', async (body, { rejectWithValue }) => {
   try {
     const { data } = await api.post('/inventory/edit-stock', body);
-    toast.success('Stock updated successfully');
+    toast.success('Serial numbers registered successfully');
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });
@@ -51,6 +51,14 @@ export const updateOpeningStock = createAsyncThunk('inventory/updateOpeningStock
   try {
     const { data } = await api.post('/inventory/opening-stock', body);
     toast.success('Opening stock updated successfully');
+    return data.data;
+  } catch (err) { return rejectWithValue(err.response?.data?.message); }
+});
+
+export const setStockQuantity = createAsyncThunk('inventory/setStockQuantity', async (body, { rejectWithValue }) => {
+  try {
+    const { data } = await api.post('/inventory/set-quantity', body);
+    toast.success('Stock quantity updated successfully');
     return data.data;
   } catch (err) { return rejectWithValue(err.response?.data?.message); }
 });

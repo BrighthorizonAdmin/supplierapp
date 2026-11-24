@@ -1,6 +1,6 @@
 const express = require('express');
 const {
-  createProduct, getProducts, getProductById, updateProduct,
+  createProduct, getProducts, getFeaturedProducts, getProductById, updateProduct,
   deleteProduct, updateProductStatus, addProductImage, deleteProductImage, setPrimaryImage, getCategories,
 } = require('./product.controller');
 const { authenticate } = require('../../middlewares/auth.middleware');
@@ -8,6 +8,8 @@ const { authorize } = require('../../middlewares/rbac.middleware');
 const { uploadProductImage } = require('../../config/multer');
 
 const router = express.Router();
+
+router.get('/featured', getFeaturedProducts);
 
 router.use(authenticate);
 

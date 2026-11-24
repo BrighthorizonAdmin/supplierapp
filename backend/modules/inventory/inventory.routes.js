@@ -1,5 +1,5 @@
 const express = require('express');
-const { getInventory, getInventoryStats, getInventoryById, adjustStock, upsertInventory, editStockWithSerials, updateOpeningStock, getInventoryDetails, softDeleteSerials, restoreSerials, getDeletedSerials } = require('./inventory.controller');
+const { getInventory, getInventoryStats, getInventoryById, adjustStock, upsertInventory, editStockWithSerials, updateOpeningStock, setStockQuantity, getInventoryDetails, softDeleteSerials, restoreSerials, getDeletedSerials } = require('./inventory.controller');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { authorize } = require('../../middlewares/rbac.middleware');
 const { error } = require('../../utils/response');
@@ -28,6 +28,7 @@ router.get('/:id',    authorize('inventory:read'),  getInventoryById);
 router.post('/adjust',          authorize('inventory:write'), adjustStock);
 router.post('/edit-stock',      authorize('inventory:write'), editStockWithSerials);
 router.post('/opening-stock',   authorize('inventory:write'), updateOpeningStock);
+router.post('/set-quantity',    authorize('inventory:write'), setStockQuantity);
 router.put('/upsert',           authorize('inventory:write'), upsertInventory);
 
 // Serial number soft-delete / restore — Super Admin only

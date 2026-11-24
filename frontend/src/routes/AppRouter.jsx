@@ -56,6 +56,8 @@ import DeliveryChallanPrintPage from '../features/deliveryChallan/pages/Delivery
 import AddNewDealerPage from '../features/dealer/pages/AddNewDealerPage';
 import HsnPage from '../features/hsn/pages/HsnPage';
 import LedgerPage from '../features/ledger/pages/LedgerPage';
+import SeoManagerPage from '../features/seo/pages/SeoManagerPage';
+import SeoPageFormPage from '../features/seo/pages/SeoPageFormPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -278,6 +280,21 @@ const AppRouter = () => {
           <Route path="blog/:id/edit" element={
             <ProtectedRoute permission="blog:write">
               <BlogFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="seo" element={
+            <ProtectedRoute permission="seo:read">
+              <SeoManagerPage />
+            </ProtectedRoute>
+          } />
+          <Route path="seo/new" element={
+            <ProtectedRoute permission="seo:write">
+              <SeoPageFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="seo/:id/edit" element={
+            <ProtectedRoute permission="seo:write">
+              <SeoPageFormPage />
             </ProtectedRoute>
           } />
           <Route path="warranty" element={

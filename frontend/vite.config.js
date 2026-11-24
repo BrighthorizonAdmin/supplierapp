@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || 'http://localhost:3001'
+
 export default defineConfig({
   base: "./",
   plugins: [react()],
@@ -8,11 +10,11 @@ export default defineConfig({
     port: 5001,
     proxy: {
       '/api': {
-        target: 'http://34.131.27.112:3001',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://34.131.27.112:3001',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       // Proxy dealer-app document files 

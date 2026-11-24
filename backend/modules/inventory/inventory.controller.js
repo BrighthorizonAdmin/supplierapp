@@ -48,6 +48,19 @@ const updateOpeningStock = asyncHandler(async (req, res) => {
   return success(res, result, 'Opening stock updated successfully');
 });
 
+const setStockQuantity = asyncHandler(async (req, res) => {
+  const { productId, warehouseId, stockQuantity } = req.body;
+  const quantity = Number(stockQuantity);
+  if (!productId || stockQuantity == null) {
+    throw new AppError('productId and stockQuantity are required', 400);
+  }
+  if (!Number.isInteger(quantity) || quantity < 0) {
+    throw new AppError('Stock quantity must be a non-negative whole number', 400);
+  }
+  const result = await inventoryService.setStockQuantity(productId, warehouseId || null, quantity, req.user.id);
+  return success(res, result, 'Stock quantity updated successfully');
+});
+
 // Warehouse controllers
 const createWarehouse = asyncHandler(async (req, res) => {
   const wh = await inventoryService.createWarehouse(req.body, req.user.id);
@@ -105,6 +118,6 @@ const getDeletedSerials = asyncHandler(async (req, res) => {
 
 module.exports = {
   getInventory, getInventoryStats, getInventoryById, getInventoryDetails, adjustStock, upsertInventory,
-  createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials, updateOpeningStock,
+  createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials, updateOpeningStock, setStockQuantity,
   softDeleteSerials, restoreSerials, getDeletedSerials,
 };

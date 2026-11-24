@@ -72,6 +72,10 @@ const ALL_PERMISSIONS = [
   { key: 'blog:read',           label: 'View Blog Posts',          group: 'Blog' },
   { key: 'blog:write',          label: 'Manage Blog Posts',        group: 'Blog' },
 
+  // Website SEO
+  { key: 'seo:read',            label: 'View SEO Manager',         group: 'Website SEO' },
+  { key: 'seo:write',           label: 'Manage Website SEO',       group: 'Website SEO' },
+
   // Flash Sale
   { key: 'flashsale:read',      label: 'View Flash Sales',         group: 'Flash Sale' },
   { key: 'flashsale:write',     label: 'Manage Flash Sales',       group: 'Flash Sale' },
@@ -105,9 +109,15 @@ const DEFAULT_ROLES = [
       'payments:read', 'payments:write', 'invoices:read', 'invoices:write',
       'notifications:read', 'audit:read', 'finance:read', 'admin:read', 'admin:write',
       'support:read', 'support:write', 'enquiries:read', 'enquiries:write',
-      'blog:read', 'blog:write', 'flashsale:read', 'flashsale:write',
+      'blog:read', 'blog:write', 'seo:read', 'seo:write', 'flashsale:read', 'flashsale:write',
     ],
     isSystem: true,
+  },
+  {
+    name: 'seo-manager',
+    description: 'Manages website SEO metadata and page content.',
+    permissions: ['seo:read', 'seo:write'],
+    isSystem: false,
   },
   {
     name: 'finance',

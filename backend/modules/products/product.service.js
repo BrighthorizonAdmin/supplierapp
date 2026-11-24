@@ -1,9 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const sanitizeHtml = require('sanitize-html');
 const Product = require('./model/Product.model');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
+const { SERVER_URL, UPLOAD_PATH } = require('../../config/env');
 const auditService = require('../audit/audit.service');
 const notificationService = require('../notifications/notification.service');
 const User = require('../auth/model/User.model');
@@ -11,13 +13,37 @@ const { emitToRole } = require('../../websocket/socket');
 const { PRODUCT_CREATED, PRODUCT_UPDATED } = require('../../websocket/events');
 const logger = require('../../utils/logger');
 
-// Recompute image url from filePath so the full server URL is always returned,
-// regardless of what was stored (handles legacy records missing the base URL).
+const productDescriptionOptions = {
+  allowedTags: ['b', 'br', 'em', 'i', 'li', 'ol', 'p', 's', 'strong', 'u', 'ul'],
+  allowedAttributes: {},
+};
+
+const sanitizeProductDescription = (description) => (
+  typeof description === 'string'
+    ? sanitizeHtml(
+      description.replace(
+        /&lt;(\/?)(p|ul|ol|li|strong|b|em|i|u|br)\b([\s\S]*?)&gt;/gi,
+        '<$1$2$3>'
+      ),
+      productDescriptionOptions
+    )
+    : description
+);
+
+// Recompute image URLs from the stored path so legacy records use the current server URL.
 const resolveImageUrl = (img) => {
-  if (!img.filePath) return img;
-  const clean = img.filePath.replace(/\\/g, '/').replace(/^\.\//, '');
-  const baseUrl = process.env.SERVER_URL || 'http://localhost:3001';
-  return { ...img, url: `${baseUrl}/${clean}` };
+  const clean = (img.filePath || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  const uploadsIndex = clean.toLowerCase().lastIndexOf('uploads/');
+  const relativePath = img.fileName
+    ? `uploads/products/${encodeURIComponent(img.fileName)}`
+    : uploadsIndex >= 0
+      ? clean.slice(uploadsIndex)
+      : clean.replace(/^\/+/, '');
+  if (!relativePath) return img;
+
+  const urlPath = `/${relativePath}`;
+  const baseUrl = SERVER_URL.replace(/\/+$/, '');
+  return { ...img, filePath: relativePath, url: baseUrl ? `${baseUrl}${urlPath}` : urlPath };
 };
 
 const withResolvedImages = (product) => {
@@ -41,6 +67,7 @@ const notifyDealersAboutProduct = async (product, action) => {
       brand: product.brand,
       basePrice: product.basePrice,
       isActive: product.isActive,
+      isFeatured: product.isFeatured,
     });
 
     const dealerUsers = await User.find({ role: 'dealer', isActive: true }).select('_id').lean();
@@ -65,6 +92,7 @@ const notifyDealersAboutProduct = async (product, action) => {
           category: product.category,
           brand: product.brand,
           basePrice: product.basePrice,
+          isFeatured: product.isFeatured,
           sku: product.sku,
           warrantyPeriod: product.warrantyPeriod || '',
         },
@@ -94,7 +122,12 @@ const assertUniqueName = async (name, excludeId) => {
 const createProduct = async (data, userId) => {
   await assertUniqueName(data.name);
   // Seed currentStockQty from openingStockQty so live stock starts at the opening value
-  const payload = { ...data, createdBy: userId };
+  const payload = {
+    ...data,
+    description: sanitizeProductDescription(data.description),
+    aboutProduct: sanitizeProductDescription(data.aboutProduct),
+    createdBy: userId,
+  };
   if (payload.currentStockQty === undefined) {
     payload.currentStockQty = payload.openingStockQty ?? 0;
   }
@@ -109,6 +142,7 @@ const getProducts = async (query = {}) => {
   const match = {};
 
   if (query.isActive !== undefined) match.isActive = query.isActive === 'true';
+  if (query.isFeatured !== undefined) match.isFeatured = query.isFeatured === 'true';
   if (query.category) match.category = query.category;
   if (query.brand) match.brand = query.brand;
   if (query.search) match.$text = { $search: query.search };
@@ -128,6 +162,15 @@ const getProducts = async (query = {}) => {
   return { data: data.map(withResolvedImages), pagination: buildMeta(total, page, limit) };
 };
 
+const getFeaturedProducts = async () => {
+  const products = await Product.find({ isActive: true, isFeatured: true })
+    .select('name description aboutProduct category subCategory brand sku buvvasPrice mrp warrantyPeriod specifications images interfaceGroups tags isActive isFeatured')
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  return products.map(withResolvedImages);
+};
+
 const getProductById = async (id) => {
   const product = await Product.findById(id).lean();
   if (!product) throw new AppError('Product not found', 404);
@@ -142,6 +185,12 @@ const updateProduct = async (id, updates, userId) => {
 
   // openingStockQty is immutable after creation — strip it from any update payload
   const { openingStockQty: _ignored, ...safeUpdates } = updates;
+  if (safeUpdates.description !== undefined) {
+    safeUpdates.description = sanitizeProductDescription(safeUpdates.description);
+  }
+  if (safeUpdates.aboutProduct !== undefined) {
+    safeUpdates.aboutProduct = sanitizeProductDescription(safeUpdates.aboutProduct);
+  }
   if (typeof safeUpdates.name === 'string'
       && safeUpdates.name.trim().toLowerCase() !== (product.name || '').trim().toLowerCase()) {
     await assertUniqueName(safeUpdates.name, product._id);
@@ -168,8 +217,8 @@ const addProductImage = async (id, file, userId) => {
   if (!product) throw new AppError('Product not found', 404);
 
   const isPrimary = product.images.length === 0;
-  const normalizedPath = file.path.replace(/\\/g, '/').replace(/^\.\//, '');
-  const baseUrl = process.env.SERVER_URL || 'http://localhost:3001';
+  const normalizedPath = `uploads/products/${file.filename}`;
+  const baseUrl = SERVER_URL.replace(/\/+$/, '');
   const url = `${baseUrl}/${normalizedPath}`;
   product.images.push({ fileName: file.filename, filePath: normalizedPath, url, isPrimary });
 
@@ -188,8 +237,10 @@ const deleteProductImage = async (id, fileName, userId) => {
   const [removed] = product.images.splice(imgIndex, 1);
 
   // Delete physical file from disk
-  if (removed.filePath) {
-    const absPath = path.resolve(removed.filePath);
+  const storedFileName = removed.fileName
+    || path.posix.basename((removed.filePath || '').replace(/\\/g, '/'));
+  if (storedFileName) {
+    const absPath = path.join(UPLOAD_PATH, 'products', storedFileName);
     fs.unlink(absPath, () => {}); // silent — file may already be gone
   }
 
@@ -229,6 +280,6 @@ const getCategories = async () => {
 };
 
 module.exports = {
-  createProduct, getProducts, getProductById, updateProduct,
+  createProduct, getProducts, getFeaturedProducts, getProductById, updateProduct,
   deleteProduct, addProductImage, deleteProductImage, setPrimaryImage, getCategories,
 };

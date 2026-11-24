@@ -1,4 +1,5 @@
 const multer = require('multer');
+const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { MAX_FILE_SIZE, UPLOAD_PATH } = require('./env');
@@ -6,7 +7,13 @@ const { MAX_FILE_SIZE, UPLOAD_PATH } = require('./env');
 const createStorage = (subfolder) =>
   multer.diskStorage({
     destination: (req, file, cb) => {
-      cb(null, path.join(UPLOAD_PATH, subfolder));
+      const destination = path.join(UPLOAD_PATH, subfolder);
+      try {
+        fs.mkdirSync(destination, { recursive: true });
+        cb(null, destination);
+      } catch (err) {
+        cb(err);
+      }
     },
     filename: (req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
