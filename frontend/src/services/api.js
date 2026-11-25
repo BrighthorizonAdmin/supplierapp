@@ -2,7 +2,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 
 const api = axios.create({
-  baseURL: 'https://supplier.dealerkart.biz/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
 
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },

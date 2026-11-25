@@ -2,18 +2,20 @@ const productService = require('./product.service');
 const asyncHandler = require('../../utils/asyncHandler');
 const { success, paginated } = require('../../utils/response');
 const { AppError } = require('../../middlewares/error.middleware');
+const { SERVER_URL } = require('../../config/env');
 
-const buildImageUrl = (url) => {
+const buildImageUrl = (url, req) => {
   if (!url) return url;
   if (url.startsWith('http')) return url;
-  const base = (process.env.SERVER_URL || 'http://localhost:3001').replace(/\/$/, '');
-  return `${base}/${url}`;
+  const base = SERVER_URL.replace(/\/+$/, '') || `${req.protocol}://${req.get('host')}`;
+  const urlPath = `/${url.replace(/^\/+/, '')}`;
+  return `${base}${urlPath}`;
 };
 
-const rewriteImages = (product) => {
+const rewriteImages = (product, req) => {
   if (!product) return product;
   if (product.images) {
-    product.images = product.images.map(img => ({ ...img, url: buildImageUrl(img.url) }));
+    product.images = product.images.map(img => ({ ...img, url: buildImageUrl(img.url, req) }));
   }
   return product;
 };
@@ -25,12 +27,17 @@ const createProduct = asyncHandler(async (req, res) => {
 
 const getProducts = asyncHandler(async (req, res) => {
   const { data, pagination } = await productService.getProducts(req.query);
-  return paginated(res, data.map(rewriteImages), pagination, 'Products fetched');
+  return paginated(res, data.map(product => rewriteImages(product, req)), pagination, 'Products fetched');
+});
+
+const getFeaturedProducts = asyncHandler(async (req, res) => {
+  const products = await productService.getFeaturedProducts();
+  return success(res, products.map(product => rewriteImages(product, req)), 'Featured products fetched');
 });
 
 const getProductById = asyncHandler(async (req, res) => {
   const product = await productService.getProductById(req.params.id);
-  return success(res, rewriteImages(product), 'Product fetched');
+  return success(res, rewriteImages(product, req), 'Product fetched');
 });
 
 const updateProduct = asyncHandler(async (req, res) => {
@@ -72,6 +79,6 @@ const getCategories = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  createProduct, getProducts, getProductById, updateProduct,
+  createProduct, getProducts, getFeaturedProducts, getProductById, updateProduct,
   deleteProduct, updateProductStatus, addProductImage, deleteProductImage, setPrimaryImage, getCategories,
 };

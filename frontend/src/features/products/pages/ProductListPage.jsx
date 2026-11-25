@@ -4,18 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { fetchProducts, fetchCategories, updateProductStatus } from '../productSlice';
 import Pagination from '../../../components/ui/Pagination';
 import { Plus, Search, Package, Pencil, ChevronLeft, ChevronRight, ToggleLeft, ToggleRight } from 'lucide-react';
+import { getProductImageUrl } from '../../../utils/productImage';
+import { productDescriptionText } from '../../../utils/productDescription';
 
 // Build a URL from a single image object (handles Windows backslashes, leading "./")
-const buildSrc = (img) => {
-  if (!img) return null;
-  if (img.filePath) {
-    const clean = img.filePath.replace(/\\/g, '/').replace(/^\.\//, '');
-    return '/' + clean;
-  }
-  if (img.fileName) return '/uploads/products/' + img.fileName;
-  if (img.url) return img.url;
-  return null;
-};
+const buildSrc = getProductImageUrl;
 
 // Returns all valid image URLs for a product (images is an array in the schema)
 const getImageSrcs = (product) => {
@@ -122,6 +115,7 @@ const ProductCard = ({ product, onEdit, onToggleStatus, togglingId }) => {
   const status = getStockStatus(cur, open);
   const isActive = product.isActive !== false;
   const isToggling = togglingId === product._id;
+  const description = productDescriptionText(product.description);
 
   return (
     <div className={`card overflow-hidden group hover:shadow-md transition-shadow ${!isActive ? 'opacity-60' : ''}`}>
@@ -147,8 +141,8 @@ const ProductCard = ({ product, onEdit, onToggleStatus, togglingId }) => {
           {product.name}
         </h3>
         <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-2 min-h-[2.5rem]">
-          {product.description || product.brand
-            ? `${product.description || ''}${product.description && product.brand ? ' · ' : ''}${product.brand || ''}`
+          {description || product.brand
+            ? `${description}${description && product.brand ? ' · ' : ''}${product.brand || ''}`
             : 'No description available.'}
         </p>
 

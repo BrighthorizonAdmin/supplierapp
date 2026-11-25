@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import api from '../../../services/api';
+import { productDescriptionText } from '../../../utils/productDescription';
  
 const InventoryDetailsPage = () => {
   const { id } = useParams();
@@ -201,7 +202,7 @@ console.log(isSuperAdmin)
             </div>
             <div className="space-y-1">
               <p className="text-xs text-slate-500">Item Description</p>
-              <p className="text-sm text-slate-600 leading-relaxed">{prod.description || '—'}</p>
+              <p className="text-sm text-slate-600 leading-relaxed">{productDescriptionText(prod.description) || '—'}</p>
             </div>
           </div>
         </div>

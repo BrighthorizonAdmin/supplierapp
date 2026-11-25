@@ -23,7 +23,7 @@ supplierapp/
 | Dashboard | KPI cards, revenue charts, real-time Socket.io updates |
 | Dealers | Onboarding, approval (GST/PAN validation), KYC, credit limit |
 | Inventory | Multi-warehouse stock, allocation tracking, low-stock alerts |
-| Products | Catalog with tier pricing, image upload |
+| Products | Catalog with tier pricing, image upload, and featured-deal visibility |
 | B2B Orders | Create, confirm (with credit + stock check), cancel |
 | Retail Orders | Dealer-to-customer orders |
 | Returns | 30-day RMA, inventory restore, refund processing |
@@ -73,7 +73,7 @@ npm run dev
 ```env
 NODE_ENV=development
 PORT=3001
-MONGODB_URI=mongodb://localhost:27017/supplierDB
+MONGODB_URI=mongodb://localhost:27017/dealer_app
 JWT_SECRET=your_strong_secret_here
 JWT_EXPIRES_IN=8h
 FRONTEND_URL=http://localhost:5001
@@ -81,7 +81,18 @@ MAX_FILE_SIZE=5242880
 UPLOAD_PATH=./uploads
 ```
 
+The Vite development server proxies `/api` and `/uploads` to the local backend at
+`http://localhost:3001`. Set `VITE_API_PROXY_TARGET` when the backend runs elsewhere.
+The frontend uses same-origin `/api` requests by default; set `VITE_API_BASE_URL`
+only when the frontend is hosted separately from the API.
+
 ## API Endpoints
+
+### Featured Products
+```
+GET /api/products/featured
+```
+Returns only active products enabled for Featured Deals, with public storefront fields.
 
 ### Auth
 ```
@@ -89,6 +100,20 @@ POST /api/auth/login          { email, password }
 POST /api/auth/register       { name, email, password, role }
 GET  /api/auth/me
 ```
+
+### Website SEO
+The supplier app stores page-specific SEO and editable page copy in MongoDB. Authenticated
+SEO managers can create records for fixed routes or templates such as `/products/:slug`.
+The separate ecommerce site can fetch a published record with
+`GET /api/seo/public?path=/products/example`; exact routes override matching templates,
+and templates return route parameters for tokens such as `{{slug}}`.
+Published records can override visible page headings, descriptions, and existing section
+copy on the About, brand, dealer, support, quote, partner, careers, privacy, product-listing,
+blog-listing, and solution pages. Product descriptions and blog post bodies remain in their
+existing editors. The `/` home record also supports hero banner image URLs/paths, the stats strip,
+Featured Hardware copy, and the Why Choose Buvvas section. `contentHtml` and custom page
+sections remain available for additional formatted or plain-text content. Canonical URLs
+and image alt text are applied by the storefront.
 
 ### Dealers
 ```

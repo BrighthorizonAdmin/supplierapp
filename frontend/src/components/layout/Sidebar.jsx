@@ -7,6 +7,7 @@ import {
   RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
   UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText, ShieldCheck as WarrantyIcon,
   MessageSquare, Zap,
+  Search, Star,
 } from 'lucide-react';
 import { toggleSidebar } from '../../store/uiSlice';
 import { usePermission } from '../../routes/ProtectedRoute';
@@ -56,6 +57,8 @@ const NAV_ITEMS = [
   { to: '/support', icon: Headphones, label: 'Support Tickets', perm: 'support:read' },
   { to: '/website-enquiries', icon: MessageSquare, label: 'Website Enquiries', perm: 'enquiries:read' },
   { to: '/blog', icon: FileText, label: 'Blog', perm: 'blog:read' },
+  { to: '/seo', icon: Search, label: 'SEO Manager', perm: 'seo:read' },
+  { to: '/product-reviews', icon: Star, label: 'Product Reviews', perm: 'reviews:read' },
 ];
 
 const Sidebar = () => {
