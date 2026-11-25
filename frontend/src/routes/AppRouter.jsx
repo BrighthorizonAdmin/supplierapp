@@ -58,6 +58,7 @@ import HsnPage from '../features/hsn/pages/HsnPage';
 import LedgerPage from '../features/ledger/pages/LedgerPage';
 import SeoManagerPage from '../features/seo/pages/SeoManagerPage';
 import SeoPageFormPage from '../features/seo/pages/SeoPageFormPage';
+import ProductReviewsPage from '../features/productReviews/pages/ProductReviewsPage';
 
 const AppRouter = () => {
   const { isAuthenticated } = useSelector((s) => s.auth);
@@ -295,6 +296,11 @@ const AppRouter = () => {
           <Route path="seo/:id/edit" element={
             <ProtectedRoute permission="seo:write">
               <SeoPageFormPage />
+            </ProtectedRoute>
+          } />
+          <Route path="product-reviews" element={
+            <ProtectedRoute permission="reviews:read">
+              <ProductReviewsPage />
             </ProtectedRoute>
           } />
           <Route path="warranty" element={

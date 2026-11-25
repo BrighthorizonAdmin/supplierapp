@@ -45,6 +45,7 @@ const challanRoutes        = require('./modules/deliveryChallan/deliveryChallan.
 const blogRoutes           = require('./modules/blog/blog.routes');
 const flashSaleRoutes      = require('./modules/flashSale/flashSale.routes');
 const seoRoutes            = require('./modules/seo/seo.routes');
+const productReviewRoutes  = require('./modules/productReviews/productReview.routes');
 const ledgerRoutes         = require('./modules/ledger/ledger.routes');
 const customerLedgerRoutes = require('./modules/customerLedger/customerLedger.routes');
 
@@ -166,6 +167,7 @@ app.use('/api/support',  supportRoutes);
 app.use('/api/website-enquiries', enquiryRoutes);
 app.use('/api/blog', blogRoutes);
 app.use('/api/seo', seoRoutes);
+app.use('/api/product-reviews', productReviewRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);
@@ -224,24 +226,28 @@ const seedDefaultRoles = async () => {
   }
 
   const seoManagerRole = DEFAULT_ROLES.find((role) => role.name === 'seo-manager');
-  const hasSeoManagerRole = await Role.exists({ name: seoManagerRole.name });
-  if (!hasSeoManagerRole) {
+  const existingSeoManagerRole = await Role.findOne({ name: seoManagerRole.name });
+  if (!existingSeoManagerRole) {
     await Role.create(seoManagerRole);
     logger.info('SEO Manager role seeded successfully');
   }
 
+  // Roles created before a permission group existed get its new permissions here.
+  const addMissingPermissions = async (role, defaults, prefixes) => {
+    if (!role || !defaults) return;
+    const missing = defaults.permissions.filter(
+      (permission) => prefixes.some((prefix) => permission.startsWith(prefix)) && !role.permissions.includes(permission)
+    );
+    if (!missing.length) return;
+    role.permissions.push(...missing);
+    await role.save();
+    logger.info(`Added ${missing.join(', ')} to the ${role.name} role`);
+  };
+
   const adminRole = await Role.findOne({ name: 'admin', isSystem: true });
   const defaultAdminRole = DEFAULT_ROLES.find((role) => role.name === 'admin');
-  if (adminRole && defaultAdminRole) {
-    const newPermissions = defaultAdminRole.permissions.filter(
-      (permission) => permission.startsWith('seo:') && !adminRole.permissions.includes(permission)
-    );
-    if (newPermissions.length) {
-      adminRole.permissions.push(...newPermissions);
-      await adminRole.save();
-      logger.info('SEO permissions added to the admin role');
-    }
-  }
+  await addMissingPermissions(adminRole, defaultAdminRole, ['seo:', 'reviews:']);
+  await addMissingPermissions(existingSeoManagerRole, seoManagerRole, ['reviews:']);
 };
 
 // Bootstrap

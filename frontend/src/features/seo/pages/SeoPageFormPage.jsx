@@ -549,8 +549,13 @@ const SeoPageFormPage = () => {
   const pageLayout = getPageLayout(routePath);
   const layoutSectionKeys = getLayoutSectionKeys(pageLayout);
   const sectionIndexByKey = new Map(sectionFields.map((field, index) => [field.key, index]));
+  // Sections keyed faq-… are the page's FAQs (shown with Google FAQ markup on the website).
+  const isFaqKey = (key) => String(key || '').startsWith('faq-');
   const extraSectionIndexes = sectionFields
-    .map((field, index) => (layoutSectionKeys.has(field.key) ? -1 : index))
+    .map((field, index) => (layoutSectionKeys.has(field.key) || isFaqKey(field.key) ? -1 : index))
+    .filter((index) => index >= 0);
+  const faqSectionIndexes = sectionFields
+    .map((field, index) => (isFaqKey(field.key) && !layoutSectionKeys.has(field.key) ? index : -1))
     .filter((index) => index >= 0);
   const selectedWebsitePage = WEBSITE_PAGE_OPTIONS.find(
     ([path]) => path.toLowerCase() === String(routePath || '').trim().toLowerCase()
@@ -964,6 +969,55 @@ const SeoPageFormPage = () => {
               <div>
                 <label className={LABEL_CLASS}>Paragraphs / description</label>
                 <RichDescriptionField control={control} name={`pageSections.${index}.description`} />
+              </div>
+            </div>
+          ))}
+        </section>
+
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-semibold text-slate-800">FAQs</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Questions buyers ask about this page&apos;s products. Shown as a
+                &ldquo;Frequently asked questions&rdquo; block near the bottom of the page, with FAQ
+                markup for Google and AI assistants. Answer in 40–80 words; the first sentence should answer directly.
+              </p>
+            </div>
+            <button type="button" onClick={() => appendSection({
+              key: `faq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              label: 'FAQ',
+              heading: '',
+              description: '',
+            })}
+              disabled={sectionFields.length >= 60}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <Plus size={14} /> Add FAQ
+            </button>
+          </div>
+          {faqSectionIndexes.length === 0 && (
+            <p className="rounded-lg bg-slate-50 px-3 py-3 text-xs text-slate-500">No FAQs added.</p>
+          )}
+          {faqSectionIndexes.map((index, position) => (
+            <div key={sectionFields[index].id} className="space-y-3 rounded-lg border border-slate-100 p-3">
+              <input type="hidden" {...register(`pageSections.${index}.key`)} />
+              <input type="hidden" {...register(`pageSections.${index}.label`)} />
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700">Question {position + 1}</p>
+                <button type="button" onClick={() => removeSection(index)}
+                  className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label={`Remove FAQ ${position + 1}`}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>Question</label>
+                <input {...register(`pageSections.${index}.heading`, { maxLength: 160 })} className={INPUT_CLASS}
+                  placeholder="e.g. Which receipt printer is best for a small shop?" />
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>Answer</label>
+                <textarea {...register(`pageSections.${index}.description`, { maxLength: 2000 })} rows={4}
+                  className={INPUT_CLASS} placeholder="Answer in plain text, 40–80 words." />
               </div>
             </div>
           ))}
