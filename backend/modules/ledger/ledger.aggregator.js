@@ -14,7 +14,7 @@ const { addDays } = require('date-fns');
  * a paymentType ('credit' | 'cash') so callers can filter on it.
  */
 
-const coll = (name) => mongoose.connection.collection(name);
+const coll = (name) => mongoose.connection.collection(name); 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const oid = (v) => (v instanceof mongoose.Types.ObjectId ? v : new mongoose.Types.ObjectId(String(v)));
 

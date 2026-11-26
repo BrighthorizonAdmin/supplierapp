@@ -38,6 +38,10 @@ const dispatchedUnitSchema = new mongoose.Schema(
       default: 'dispatched',
     },
     isDeleted: { type: Boolean, default: false, index: true },
+    // Typed on an invoice without being in stock first (a unit never counted in
+    // Product.currentStockQty). If it comes off the invoice it joins the stock
+    // count once, and the flag is cleared.
+    addedOnInvoice: { type: Boolean, default: false },
     deletedAt: { type: Date },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     deletedReason: { type: String, trim: true },

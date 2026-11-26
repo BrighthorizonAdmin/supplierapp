@@ -44,6 +44,8 @@ const categoryRoutes       = require('./modules/categories/category.routes');
 const challanRoutes        = require('./modules/deliveryChallan/deliveryChallan.routes');
 const blogRoutes           = require('./modules/blog/blog.routes');
 const flashSaleRoutes      = require('./modules/flashSale/flashSale.routes');
+const seoRoutes            = require('./modules/seo/seo.routes');
+const productReviewRoutes  = require('./modules/productReviews/productReview.routes');
 const ledgerRoutes         = require('./modules/ledger/ledger.routes');
 const customerLedgerRoutes = require('./modules/customerLedger/customerLedger.routes');
 
@@ -60,7 +62,7 @@ app.use(helmet({
 app.use('/uploads', cors({ origin: '*' }), (req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
-}, express.static(path.join(__dirname, 'uploads')));
+}, express.static(env.UPLOAD_PATH));
 
 // Proxy dealer document files to D-BE — mirrors the Vite dev proxy for production.
 // The frontend uses /dealer-uploads/... URLs. In dev, Vite rewrites them to D-BE.
@@ -93,15 +95,27 @@ const webhookCors = cors({
 app.use('/api/webhooks', webhookCors);
 app.use('/api/dealers/webhook', webhookCors); // dealership application webhook uses this path
 
-// CORS — API routes are restricted to the supplier frontend only
-app.use(
-  cors({
-    origin: env.FRONTEND_URL,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-webhook-secret', 'x-api-key'],
-  })
-);
+// The curated featured-products feed is public; other APIs remain restricted to
+// the configured frontend and local development origins.
+app.use((req, res, next) => {
+  const isFeaturedFeed = req.path === '/api/products/featured';
+  const isPublicSeoPage = req.path === '/api/seo/public';
+  const options = isFeaturedFeed || isPublicSeoPage
+    ? {
+        origin: '*',
+        methods: ['GET', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+      }
+    : {
+        origin: env.isDev
+          ? [env.FRONTEND_URL, 'http://localhost:5001', 'http://127.0.0.1:5001']
+          : env.FRONTEND_URL,
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'x-webhook-secret', 'x-api-key'],
+      };
+  cors(options)(req, res, next);
+});
 
 // Auth rate limit (100 req / 15 min)
 const authLimiter = rateLimit({
@@ -152,6 +166,8 @@ app.get('/health', (req, res) => {
 app.use('/api/support',  supportRoutes);
 app.use('/api/website-enquiries', enquiryRoutes);
 app.use('/api/blog', blogRoutes);
+app.use('/api/seo', seoRoutes);
+app.use('/api/product-reviews', productReviewRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/documents', documentRoutes);
@@ -203,10 +219,35 @@ const seedDefaultRoles = async () => {
   const { DEFAULT_ROLES } = require('./utils/permissions');
 
   const count = await Role.countDocuments();
-  if (count > 0) return;
+  if (count === 0) {
+    await Role.insertMany(DEFAULT_ROLES);
+    logger.info('Default roles seeded successfully');
+    return;
+  }
 
-  await Role.insertMany(DEFAULT_ROLES);
-  logger.info('Default roles seeded successfully');
+  const seoManagerRole = DEFAULT_ROLES.find((role) => role.name === 'seo-manager');
+  const existingSeoManagerRole = await Role.findOne({ name: seoManagerRole.name });
+  if (!existingSeoManagerRole) {
+    await Role.create(seoManagerRole);
+    logger.info('SEO Manager role seeded successfully');
+  }
+
+  // Roles created before a permission group existed get its new permissions here.
+  const addMissingPermissions = async (role, defaults, prefixes) => {
+    if (!role || !defaults) return;
+    const missing = defaults.permissions.filter(
+      (permission) => prefixes.some((prefix) => permission.startsWith(prefix)) && !role.permissions.includes(permission)
+    );
+    if (!missing.length) return;
+    role.permissions.push(...missing);
+    await role.save();
+    logger.info(`Added ${missing.join(', ')} to the ${role.name} role`);
+  };
+
+  const adminRole = await Role.findOne({ name: 'admin', isSystem: true });
+  const defaultAdminRole = DEFAULT_ROLES.find((role) => role.name === 'admin');
+  await addMissingPermissions(adminRole, defaultAdminRole, ['seo:', 'reviews:']);
+  await addMissingPermissions(existingSeoManagerRole, seoManagerRole, ['reviews:']);
 };
 
 // Bootstrap

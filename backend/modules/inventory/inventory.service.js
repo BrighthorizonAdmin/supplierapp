@@ -10,6 +10,7 @@ const auditService = require('../audit/audit.service');
 const { emitToRole } = require('../../websocket/socket');
 const { LOW_STOCK_ALERT } = require('../../websocket/events');
 const logger = require('../../utils/logger');
+const { withTransaction } = require('../../utils/transaction');
 
 const pushStockAlertToDealers = async (productId, quantityAvailable, reorderLevel) => {
   const dealerApiUrl = process.env.DEALER_API_URL;
@@ -538,6 +539,72 @@ const updateOpeningStock = async (productId, warehouseId, newOpeningQty, reason,
   return { productId, oldOpeningQty: oldOpening, newOpeningQty, delta };
 };
 
+const setStockQuantity = async (productId, warehouseId, newQuantity, userId) => {
+  return withTransaction(async (session) => {
+    const productQuery = Product.findById(productId).select('currentStockQty');
+    if (session) productQuery.session(session);
+    const product = await productQuery.lean();
+    if (!product) throw new AppError('Product not found', 404);
+
+    const serialCountQuery = DispatchedUnit.countDocuments({
+      productId,
+      status: 'in_stock',
+      isDeleted: { $ne: true },
+    });
+    if (session) serialCountQuery.session(session);
+    const serialCount = await serialCountQuery;
+    if (newQuantity < serialCount) {
+      throw new AppError(`Stock quantity cannot be lower than the ${serialCount} registered in-stock serial numbers`, 400);
+    }
+
+    const oldQuantity = product.currentStockQty || 0;
+    const delta = newQuantity - oldQuantity;
+
+    if (warehouseId && delta !== 0) {
+      const filter = { productId, warehouseId };
+      if (delta < 0) {
+        filter.$expr = {
+          $gte: [{ $add: ['$quantityOnHand', delta] }, '$quantityAllocated'],
+        };
+      }
+
+      const inventory = await Inventory.findOneAndUpdate(
+        filter,
+        {
+          $inc: { quantityOnHand: delta },
+          ...(delta > 0 ? { lastRestockedAt: new Date(), lastRestockedBy: userId } : {}),
+        },
+        {
+          new: true,
+          upsert: delta > 0,
+          setDefaultsOnInsert: true,
+          ...(session ? { session } : {}),
+        }
+      );
+      if (!inventory) {
+        throw new AppError('Stock quantity cannot be lower than the allocated quantity in this warehouse', 400);
+      }
+    }
+
+    if (delta !== 0) {
+      const updatedProduct = await Product.findByIdAndUpdate(
+        productId,
+        { currentStockQty: newQuantity },
+        { new: true, runValidators: true, ...(session ? { session } : {}) }
+      );
+      if (!updatedProduct) throw new AppError('Product not found', 404);
+
+      await auditService.log('inventory', productId, 'update', userId, {
+        before: { currentStockQty: oldQuantity },
+        after: { currentStockQty: newQuantity },
+        reason: 'Stock quantity manually adjusted',
+      });
+    }
+
+    return { productId, oldQuantity, newQuantity, delta };
+  });
+};
+
 const softDeleteSerialNumbers = async (serialIds, reason, userId) => {
   if (!Array.isArray(serialIds) || serialIds.length === 0)
     throw new AppError('At least one serial number ID is required', 400);
@@ -650,5 +717,5 @@ module.exports = {
   adjustStock, allocateStock, releaseAllocation, getInventory, getInventoryStats,
   getInventoryById, upsertInventory, getOrCreateInventory,
   createWarehouse, getWarehouses, updateWarehouse, editStockWithSerials, updateOpeningStock,
-  softDeleteSerialNumbers, restoreSerialNumbers, getDeletedSerialNumbers,
+  setStockQuantity, softDeleteSerialNumbers, restoreSerialNumbers, getDeletedSerialNumbers,
 };

@@ -1,6 +1,8 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import {
   createProduct, updateProduct, fetchProductById,
   uploadProductImages, deleteProductImage, setPrimaryImage,
@@ -9,13 +11,59 @@ import { fetchHsnCategories } from '../../hsn/hsnSlice';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import Modal from '../../../components/ui/Modal';
+import { getProductImageUrl } from '../../../utils/productImage';
 
-// filePath on disk → browser-loadable URL
-const toPreviewUrl = (filePath) => {
-  if (!filePath) return null;
-  if (filePath.startsWith('http')) return filePath;
-  const clean = filePath.replace(/\\/g, '/').replace(/^\.\//, '');
-  return '/' + clean;
+const toPreviewUrl = (image) => getProductImageUrl(image);
+
+const DESCRIPTION_MODULES = {
+  toolbar: [
+    ['bold', 'italic', 'underline'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['clean'],
+  ],
+};
+
+const decodeDescriptionMarkup = (text = '') => text.replace(
+  /&lt;(\/?)(p|ul|ol|li|strong|b|em|i|u|br)\b([\s\S]*?)&gt;/gi,
+  '<$1$2$3>'
+);
+
+const descriptionForEditor = (description = '') => {
+  const decodedDescription = decodeDescriptionMarkup(description);
+  if (!decodedDescription || /<\w[\s\S]*>/.test(decodedDescription)) return decodedDescription;
+  return decodedDescription
+    .split(/\r?\n/)
+    .map((line) => `<p>${line ? line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '<br>'}</p>`)
+    .join('');
+};
+
+const normalizeDescriptionLists = (html = '') => {
+  const decodedHtml = decodeDescriptionMarkup(html);
+  const doc = new DOMParser().parseFromString(decodedHtml, 'text/html');
+  Array.from(doc.querySelectorAll('ol, ul')).reverse().forEach((list) => {
+    const items = Array.from(list.children).filter((child) => child.tagName === 'LI');
+    if (!items.some((item) => item.hasAttribute('data-list'))) return;
+
+    const fragment = doc.createDocumentFragment();
+    let activeType = '';
+    let activeList;
+    items.forEach((item) => {
+      const type = item.getAttribute('data-list') === 'bullet' ? 'ul' : 'ol';
+      if (type !== activeType) {
+        activeList = doc.createElement(type);
+        fragment.appendChild(activeList);
+        activeType = type;
+      }
+
+      const normalizedItem = item.cloneNode(true);
+      normalizedItem.removeAttribute('data-list');
+      normalizedItem.removeAttribute('class');
+      normalizedItem.querySelectorAll('.ql-ui').forEach((marker) => marker.remove());
+      activeList.appendChild(normalizedItem);
+    });
+    list.replaceWith(fragment);
+  });
+  return doc.body.innerHTML;
 };
 
 // ─── Image Upload Component ───────────────────────────────────────────────────
@@ -369,12 +417,33 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
   const [productImages,   setProductImages]   = useState([]);
   const [interfaceGroups, setInterfaceGroups] = useState([]);
   const [hsnValue,        setHsnValue]        = useState('');
+  const descriptionEditorRef = useRef(null);
+  const aboutProductEditorRef = useRef(null);
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isDirty } } = useForm({ defaultValues: { isActive: true } });
+  const { register, handleSubmit, reset, watch, setValue, control, formState: { errors, isDirty } } = useForm({
+    defaultValues: { isActive: true, isFeatured: false, description: '', aboutProduct: '' },
+  });
   const isActiveValue = watch('isActive');
+  const isFeaturedValue = watch('isFeatured');
   const { ref: catRef, onChange: catRhfChange, ...catRest } = register('category', { required: 'Required' });
 
   const isEdit = !!id;
+
+  const handleRichTextPaste = (event, editorRef) => {
+    const clipboardText = event.clipboardData?.getData('text/plain') || '';
+    const pastedMarkup = decodeDescriptionMarkup(clipboardText);
+    if (!/<\/?(?:p|ul|ol|li|strong|b|em|i|u|br)\b/i.test(pastedMarkup)) return;
+
+    const editor = editorRef.current?.getEditor();
+    if (!editor) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const selection = editor.getSelection(true);
+    const index = selection?.index ?? editor.getLength() - 1;
+    if (selection?.length) editor.deleteText(index, selection.length, 'user');
+    editor.clipboard.dangerouslyPasteHTML(index, pastedMarkup, 'user');
+  };
 
   useEffect(() => {
     dispatch(fetchHsnCategories());
@@ -387,6 +456,9 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
       setHsnValue(selected.hsnCode || cat?.hsnCode || '');
       reset({
         ...selected,
+        description: descriptionForEditor(selected.description),
+        aboutProduct: descriptionForEditor(selected.aboutProduct),
+        isFeatured: selected.isFeatured === true,
         stockDate:      selected.openingStockDate
                           ? new Date(selected.openingStockDate).toISOString().split('T')[0]
                           : '',
@@ -401,7 +473,7 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
           id:        `existing-${i}-${img.fileName}`,
           fileName:  img.fileName,
           filePath:  img.filePath,
-          preview:   toPreviewUrl(img.filePath),
+          preview:   toPreviewUrl(img),
           isPrimary: img.isPrimary,
           isNew:     false,
         }))
@@ -428,7 +500,7 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
           id:        `existing-${i}-${img.fileName}`,
           fileName:  img.fileName,
           filePath:  img.filePath,
-          preview:   toPreviewUrl(img.filePath),
+          preview:   toPreviewUrl(img),
           isPrimary: img.isPrimary,
           isNew:     false,
         }))
@@ -457,6 +529,9 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
 
     const { stockDate, stockQty, specWeight, specDimensions, specColor, isActive, ...productData } = data;
     productData.isActive = isActiveValue;
+    productData.isFeatured = isFeaturedValue;
+    productData.description = normalizeDescriptionLists(productData.description);
+    productData.aboutProduct = normalizeDescriptionLists(productData.aboutProduct);
 
     // Optional discount limits: blank = use Settings default (sent as null)
     ['minDiscount', 'maxDiscount'].forEach((k) => {
@@ -699,6 +774,27 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
               </button>
             </div>
 
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Featured Deals</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {isFeaturedValue ? 'Shown in featured deals' : 'Hidden from featured deals'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={Boolean(isFeaturedValue)}
+                aria-label="Show product in featured deals"
+                onClick={() => setValue('isFeatured', !isFeaturedValue, { shouldDirty: true })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isFeaturedValue ? 'bg-green-500' : 'bg-gray-300'}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isFeaturedValue ? 'translate-x-6' : 'translate-x-1'}`}
+                />
+              </button>
+            </div>
+
             <div className="flex-1 flex flex-col gap-3">
               <div>
                 <label className="label">Warranty Period</label>
@@ -706,7 +802,45 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
               </div>
               <div className="flex-1 flex flex-col">
                 <label className="label">Description</label>
-                <textarea className="input resize-none flex-1" placeholder="Enter product description..." {...register('description')} />
+                <p className="text-xs text-gray-400 mb-2">Format text with bold and add ordered or bullet points.</p>
+                <div onPasteCapture={(event) => handleRichTextPaste(event, descriptionEditorRef)}>
+                  <Controller
+                    name="description"
+                    control={control}
+                    render={({ field }) => (
+                      <ReactQuill
+                        ref={descriptionEditorRef}
+                        theme="snow"
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        modules={DESCRIPTION_MODULES}
+                        placeholder="Enter product description..."
+                        className="bg-white [&_.ql-container]:min-h-[150px] [&_.ql-container]:text-sm"
+                      />
+                    )}
+                  />
+                </div>
+                <div className="mt-4">
+                  <label className="label">About this product</label>
+                  <p className="text-xs text-gray-400 mb-2">Shown in the website’s Product overview section, separate from the description above.</p>
+                  <div onPasteCapture={(event) => handleRichTextPaste(event, aboutProductEditorRef)}>
+                    <Controller
+                      name="aboutProduct"
+                      control={control}
+                      render={({ field }) => (
+                        <ReactQuill
+                          ref={aboutProductEditorRef}
+                          theme="snow"
+                          value={field.value || ''}
+                          onChange={field.onChange}
+                          modules={DESCRIPTION_MODULES}
+                          placeholder="Enter the product overview..."
+                          className="bg-white [&_.ql-container]:min-h-[150px] [&_.ql-container]:text-sm"
+                        />
+                      )}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>

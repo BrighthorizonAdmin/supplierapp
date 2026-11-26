@@ -72,6 +72,14 @@ const ALL_PERMISSIONS = [
   { key: 'blog:read',           label: 'View Blog Posts',          group: 'Blog' },
   { key: 'blog:write',          label: 'Manage Blog Posts',        group: 'Blog' },
 
+  // Website SEO
+  { key: 'seo:read',            label: 'View SEO Manager',         group: 'Website SEO' },
+  { key: 'seo:write',           label: 'Manage Website SEO',       group: 'Website SEO' },
+
+  // Product reviews (Buvvas website)
+  { key: 'reviews:read',        label: 'View Product Reviews',     group: 'Product Reviews' },
+  { key: 'reviews:write',       label: 'Moderate Product Reviews', group: 'Product Reviews' },
+
   // Flash Sale
   { key: 'flashsale:read',      label: 'View Flash Sales',         group: 'Flash Sale' },
   { key: 'flashsale:write',     label: 'Manage Flash Sales',       group: 'Flash Sale' },
@@ -105,9 +113,16 @@ const DEFAULT_ROLES = [
       'payments:read', 'payments:write', 'invoices:read', 'invoices:write',
       'notifications:read', 'audit:read', 'finance:read', 'admin:read', 'admin:write',
       'support:read', 'support:write', 'enquiries:read', 'enquiries:write',
-      'blog:read', 'blog:write', 'flashsale:read', 'flashsale:write',
+      'blog:read', 'blog:write', 'seo:read', 'seo:write', 'flashsale:read', 'flashsale:write',
+      'reviews:read', 'reviews:write',
     ],
     isSystem: true,
+  },
+  {
+    name: 'seo-manager',
+    description: 'Manages website SEO metadata, page content and product reviews.',
+    permissions: ['seo:read', 'seo:write', 'reviews:read', 'reviews:write'],
+    isSystem: false,
   },
   {
     name: 'finance',

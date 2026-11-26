@@ -573,9 +573,9 @@ export default function QuoteFormPage() {
     setBankBranch(q.bankDetails?.bankBranch     || settingsData.bankBranch  || '');
 
     const d = q.dealerId;
-    if (q.source === 'dealer') setDealer({ businessName: q.partyName || 'Customer', phone: q.partyPhone, _id: d?._id || d });
+    if (q.source === 'dealer') setDealer({ businessName: q.partyName || 'Customer', phone: q.partyPhone, partyGST: q.partyGST, _id: d?._id || d });
     else if (d && typeof d === 'object') setDealer(d);
-    else if (q.partyName) setDealer({ businessName: q.partyName, _id: q.dealerId });
+    else if (q.partyName) setDealer({ businessName: q.partyName, partyGST: q.partyGST, _id: q.dealerId });
 
     const pre = (q.lineItems || []).map((li) => calcItem({ ...EMPTY_ITEM, ...li }));
     setItems(pre);
@@ -608,6 +608,7 @@ export default function QuoteFormPage() {
   // ── Filtered dealers ─────────────────────────────────────────────────────
   const filteredDealers = useMemo(() =>
     (dealers || [])
+      .filter((d) => d?.status === 'active') // party list: active dealers only
       .filter((d) => d?.businessName?.toLowerCase().includes((dealerSearch || '').toLowerCase()))
       .slice(0, 50),
     [dealers, dealerSearch]
@@ -832,7 +833,7 @@ export default function QuoteFormPage() {
       dealerId:   dealer?._id    || '',
       partyName:  dealer?.businessName || '',
       partyPhone: dealer?.phone  || '',
-      partyGST:   dealer?.gstin  || '',
+      partyGST:   dealer?.gstNumber || dealer?.gstin || dealer?.partyGST || '',
       partyAddress: dealer?.address
         ? [dealer.address.street, dealer.address.city, dealer.address.state, dealer.address.pincode].filter(Boolean).join(', ')
         : '',
@@ -958,7 +959,10 @@ export default function QuoteFormPage() {
                           onClick={() => selectDealer(d)}
                           className="w-full flex items-center justify-between px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-0 text-left transition-colors"
                         >
-                          <span className="text-sm font-medium text-gray-800">{d.businessName}</span>
+                          <span className="text-sm font-medium text-gray-800">
+                            {d.businessName}
+                            {(d.gstNumber || d.gstin) && <span className="block text-xs font-normal text-gray-400">GSTIN: {d.gstNumber || d.gstin}</span>}
+                          </span>
                           <span className="text-sm text-gray-500">₹ 0</span>
                         </button>
                       ))}
@@ -981,6 +985,9 @@ export default function QuoteFormPage() {
                   </p>
                 )}
                 {dealer.phone && <p className="text-sm text-gray-400 mt-0.5">{dealer.phone}</p>}
+                {(dealer.gstNumber || dealer.gstin || dealer.partyGST) && (
+                  <p className="text-xs text-gray-400 mt-0.5">GSTIN: {dealer.gstNumber || dealer.gstin || dealer.partyGST}</p>
+                )}
                 {isDealerQuote ? (
                   <p className="mt-2 text-xs text-orange-600 font-medium">
                     Dealer quote{selectedQuote?.dealerId?.businessName ? ` via ${selectedQuote.dealerId.businessName}` : ''}. Customer can only be changed by the dealer.

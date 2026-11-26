@@ -84,10 +84,35 @@ const syncOrderPaymentStatus = async (invoice) => {
 const lockSerials = (units) => DispatchedUnit.bulkWrite(units.map((du) => ({
   updateOne: {
     filter: { serialNumber: du.serialNumber },
-    update: { $set: { ...du, status: 'dispatched' } },
+    // a serial not in stock before is created here — mark it (see addedOnInvoice)
+    update: { $set: { ...du, status: 'dispatched' }, $setOnInsert: { addedOnInvoice: true } },
     upsert: true,
   },
 })));
+
+// ── Serials typed on an invoice without being in stock first ────────────────
+const serialsOf = (lines = []) =>
+  lines.flatMap((li) => (li.serialNumbers || []).map((s) => String(s).trim().toUpperCase()).filter(Boolean));
+
+const flaggedSerials = async (serials) => {
+  if (!serials.length) return new Set();
+  const units = await DispatchedUnit.find({ serialNumber: { $in: serials }, addedOnInvoice: true })
+    .select('serialNumber').lean();
+  return new Set(units.map((u) => u.serialNumber));
+};
+
+// Units each product's counted stock gives up for these lines: the quantity,
+// less serials that were never part of the count (flagged)
+const countedByProduct = (lines = [], flagged = new Set()) => {
+  const map = new Map();
+  for (const li of lines) {
+    if (!li.productId) continue;
+    const pid = String(li.productId);
+    const fresh = (li.serialNumbers || []).filter((s) => flagged.has(String(s).trim().toUpperCase())).length;
+    map.set(pid, (map.get(pid) || 0) + Math.max(0, (Number(li.quantity) || 0) - fresh));
+  }
+  return map;
+};
 
 // ── Serial uniqueness helper ──────────────────────────────────
 // Validates:
@@ -248,6 +273,7 @@ const createInvoice = async (body, user) => {
     bankDetails, paymentMode, paymentReceivedIn,
     shippingAddress,
     invoicePrefix, invoiceSequence,
+    stockDeductedAt: _stockDeductedAt, // set only by the stock logic, never from the request
     ...rest
   } = body;
 
@@ -363,7 +389,54 @@ const createInvoice = async (body, user) => {
     await lockSerials(dispatchedUnits);
   }
 
+  // Direct invoice (no order): it takes the stock itself, as a confirmed order does
+  await deductInvoiceStock(invoice);
+
   return invoice;
+};
+
+// ── Stock for direct invoices ───────────────────────────────────────────────
+// An invoice made in Sales Invoice without an order sells the supplier's own
+// stock, so it reduces Product.currentStockQty once (claimed via stockDeductedAt,
+// like an order's), and puts it back if cancelled or deleted. Order invoices
+// leave stock to the order; dealer retail / dealer-app invoices are the dealer's.
+const takesOwnStock = (invoice) =>
+  !invoice.orderId && !invoice.dbeInvoiceId && invoice.invoiceType !== 'retail';
+
+const deductInvoiceStock = async (invoice) => {
+  if (!takesOwnStock(invoice)) return;
+  const claim = await Invoice.findOneAndUpdate(
+    { _id: invoice._id, stockDeductedAt: null },
+    { $set: { stockDeductedAt: new Date() } }
+  );
+  if (!claim) return; // already taken
+  invoice.stockDeductedAt = new Date();
+  // Serials typed new on the invoice were never in the count — don't take them out of it
+  const flagged = await flaggedSerials(serialsOf(invoice.lineItems));
+  const take = new Map([...countedByProduct(invoice.lineItems, flagged)].map(([pid, q]) => [pid, -q]));
+  await adjustProductStock(take);
+};
+
+const restoreInvoiceStock = async (invoice) => {
+  if (!invoice.stockDeductedAt) return;
+  const claim = await Invoice.findOneAndUpdate(
+    { _id: invoice._id, stockDeductedAt: { $ne: null } },
+    { $set: { stockDeductedAt: null } }
+  );
+  if (!claim) return; // already put back
+  invoice.stockDeductedAt = null;
+  const flagged = await flaggedSerials(serialsOf(claim.lineItems));
+  await adjustProductStock(countedByProduct(claim.lineItems, flagged));
+};
+
+// Old minus new counted units per product: positive puts stock back, negative takes more
+const stockDelta = (oldItems = [], newItems = [], oldFlagged = new Set(), newFlagged = new Set()) => {
+  const oldQty = countedByProduct(oldItems, oldFlagged), newQty = countedByProduct(newItems, newFlagged);
+  const delta = new Map();
+  for (const pid of new Set([...oldQty.keys(), ...newQty.keys()])) {
+    delta.set(pid, (oldQty.get(pid) || 0) - (newQty.get(pid) || 0));
+  }
+  return delta;
 };
 
 const updateInvoice = async (id, body, user) => {
@@ -393,6 +466,7 @@ const updateInvoice = async (id, body, user) => {
     bankDetails, paymentMode, paymentReceivedIn,
     shippingAddress,
     invoicePrefix, invoiceSequence,
+    stockDeductedAt: _stockDeductedAt, // set only by the stock logic, never from the request
     ...rest
   } = body;
 
@@ -415,9 +489,11 @@ const updateInvoice = async (id, body, user) => {
     // Reject new serials already dispatched in OTHER invoices
     await checkSerialUniqueness(added, invoice._id);
 
-    // Remove stale DispatchedUnit records
-    if (removed.length > 0)
-      await DispatchedUnit.deleteMany({ serialNumber: { $in: removed }, invoiceId: invoice._id });
+    // Which of the current serials were typed new (never counted) — before release clears it
+    const oldFlagged = await flaggedSerials(oldSerials);
+
+    // Serials taken off the invoice go back to stock (one typed new joins the count)
+    if (removed.length > 0) await releaseSerials(invoice, removed);
 
     // Create DispatchedUnit records for newly added serials
     if (added.length > 0) {
@@ -451,6 +527,11 @@ const updateInvoice = async (id, body, user) => {
     const ro = roundOff !== undefined ? roundOff : invoice.roundOff;
     const { items, subtotal, taxAmount, discountAmt, totalAmount, roundOffAmt } =
       calcTotals(lineItems, Number(invoiceDiscount ?? invoice.discountAmt) || 0, addl, ro);
+    // A direct invoice that took stock: apply the change in counted units
+    if (invoice.stockDeductedAt) {
+      const newFlagged = await flaggedSerials(newSerials);
+      await adjustProductStock(stockDelta(invoice.lineItems, items, oldFlagged, newFlagged));
+    }
     invoice.lineItems = items;
     invoice.subtotal = subtotal;
     invoice.taxAmount = taxAmount;
@@ -503,6 +584,7 @@ const cancelInvoice = async (id, user) => {
   invoice.status = 'cancelled';
   invoice.cancelledAt = new Date();
   await invoice.save();
+  await restoreInvoiceStock(invoice); // a cancelled direct invoice gives its stock back
   await invoiceHistory.record({ action: 'cancel', source: 'Cancel invoice', before, after: invoice, user });
   return invoice;
 };
@@ -512,6 +594,7 @@ const deleteInvoice = async (id, user) => {
   if (!invoice) throw new AppError('Invoice not found', 404);
   if (invoice.status !== 'draft') throw new AppError('Only draft invoices can be deleted', 400);
   const before = invoiceHistory.snapshot(invoice);
+  await restoreInvoiceStock(invoice); // a deleted direct invoice gives its stock back
   await invoice.deleteOne();
   await invoiceHistory.record({ action: 'delete', source: 'Delete draft', before, user, changes: deletedSummary(before) });
 };
@@ -564,6 +647,10 @@ const saveSerialNumbers = async (id, lineSerials, user) => {
   const removed = [...oldSet].filter(s => !newSet.has(s));
   const added   = [...newSet].filter(s => !oldSet.has(s));
 
+  // For a direct invoice's stock: lines + serials typed new, as they were before this save
+  const oldLines   = invoice.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity, serialNumbers: [...(li.serialNumbers || [])] }));
+  const oldFlagged = await flaggedSerials(oldSerials);
+
   // Write serials onto the invoice line items
   for (const entry of lineSerials) {
     invoice.lineItems[entry.index].serialNumbers = entry._resolved;
@@ -571,9 +658,8 @@ const saveSerialNumbers = async (id, lineSerials, user) => {
   invoice.markModified('lineItems');
   await invoice.save();
 
-  // Remove stale DispatchedUnit records for serials no longer in this invoice
-  if (removed.length > 0)
-    await DispatchedUnit.deleteMany({ serialNumber: { $in: removed }, invoiceId: invoice._id });
+  // Serials no longer on this invoice go back to stock (one typed new joins the count)
+  if (removed.length > 0) await releaseSerials(invoice, removed);
 
   // Create DispatchedUnit records only for newly added serials
   const dispatchedUnits = [];
@@ -603,11 +689,17 @@ const saveSerialNumbers = async (id, lineSerials, user) => {
     const ops = dispatchedUnits.map((du) => ({
       updateOne: {
         filter: { serialNumber: du.serialNumber },
-        update: { $set: { ...du, status: 'dispatched' } },
+        update: { $set: { ...du, status: 'dispatched' }, $setOnInsert: { addedOnInvoice: true } },
         upsert: true,
       },
     }));
     await DispatchedUnit.bulkWrite(ops);
+  }
+
+  // A direct invoice that took stock: swapping serials can change what's counted
+  if (invoice.stockDeductedAt) {
+    const newFlagged = await flaggedSerials(allSerials);
+    await adjustProductStock(stockDelta(oldLines, invoice.lineItems, oldFlagged, newFlagged));
   }
 
   await invoiceHistory.record({ action: 'serials', source: 'Save serial numbers', before, after: invoice, user });
@@ -666,17 +758,27 @@ const releaseSerials = async (invoice, serials) => {
   // Linked to this invoice, or assigned on its order before the invoice existed
   const owner = [{ invoiceId: invoice._id }];
   if (invoice.orderId) owner.push({ orderId: invoice.orderId, invoiceId: { $in: [null] } });
+  // Serials typed on the invoice that were never counted — they join the stock now
+  const fresh = await DispatchedUnit.find({ serialNumber: { $in: serials }, $or: owner, addedOnInvoice: true })
+    .select('productId').lean();
   await DispatchedUnit.updateMany(
     { serialNumber: { $in: serials }, $or: owner },
     {
-      $set: { status: 'in_stock' },
+      $set: { status: 'in_stock', addedOnInvoice: false },
       $unset: { invoiceId: '', invoiceNumber: '', orderId: '', dealerId: '', dispatchedAt: '' },
     }
   );
+  const joined = new Map();
+  fresh.forEach((u) => { if (u.productId) joined.set(String(u.productId), (joined.get(String(u.productId)) || 0) + 1); });
+  for (const [pid, n] of joined) {
+    await Product.findByIdAndUpdate(pid, { $inc: { currentStockQty: n, openingStockQty: n } });
+  }
 };
 
 // Returns true when the invoice's order already deducted product stock
 const orderDeductedStock = async (invoice) => {
+  // A direct invoice that took the stock itself (see deductInvoiceStock)
+  if (invoice.stockDeductedAt) return true;
   if (!invoice.orderId) return false;
   const order = await Order.findById(invoice.orderId).select('stockDeductedAt orderType status').lean();
   // A cancelled order already put its stock back
@@ -1019,6 +1121,7 @@ const manageEditInvoice = async (id, body, user) => {
     bankDetails, paymentMode, paymentReceivedIn,
     shippingAddress,
     invoicePrefix, invoiceSequence,
+    stockDeductedAt: _stockDeductedAt, // set only by the stock logic, never from the request
     // never let an edit re-link the invoice or change its type
     orderId: _orderId, dbeInvoiceId: _dbeInvoiceId, invoiceType: _invoiceType,
     // a generated invoice never goes back to draft; status follows the amounts
@@ -1110,8 +1213,11 @@ const manageEditInvoice = async (id, body, user) => {
 
     // Stock count: only when the linked order deducted stock in the first place
     if (await orderDeductedStock(invoice)) {
-      const oldQty = qtyByProduct(invoice.lineItems);
-      const newQty = qtyByProduct(lineItems);
+      // Direct invoice: serials typed new were never counted, so they don't count here
+      // (order invoices keep counting by quantity, as before)
+      const fl = invoice.stockDeductedAt ? await flaggedSerials(oldSerials) : new Set();
+      const oldQty = countedByProduct(invoice.lineItems, fl);
+      const newQty = countedByProduct(lineItems, fl);
       const delta = new Map();
       for (const pid of new Set([...oldQty.keys(), ...newQty.keys()])) {
         delta.set(pid, (oldQty.get(pid) || 0) - (newQty.get(pid) || 0));
@@ -1219,8 +1325,11 @@ const manageDeleteInvoice = async (id, user) => {
   if (delivered) await assertDealerHasStock(order, dealerDelta);
 
   // Stock goes back only if the linked order actually took it
+  // (a direct invoice puts back what it took; serials typed new join the count in releaseSerials)
   if (await orderDeductedStock(invoice)) {
-    await adjustProductStock(qtyByProduct(invoice.lineItems));
+    await adjustProductStock(invoice.stockDeductedAt
+      ? countedByProduct(invoice.lineItems, await flaggedSerials(serials))
+      : qtyByProduct(invoice.lineItems));
   }
   await releaseSerials(invoice, serials);
   if (delivered) await applyDealerStock(order, dealerDelta);

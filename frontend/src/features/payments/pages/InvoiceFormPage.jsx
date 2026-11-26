@@ -285,6 +285,8 @@ export default function InvoiceFormPage() {
           });
         })
       );
+      // In-stock serials to pick from for each line
+      fromOrder.items.forEach((item, i) => { if (item.productId) loadStockSerials(i, item.productId); });
     }
     // Link the new invoice back to its order so the order's Invoice button
     // opens it next time instead of creating another one.
@@ -414,12 +416,15 @@ export default function InvoiceFormPage() {
   };
   // Dealer invoices pick from the dealer's own serials (checked in the dealer app)
   const pickSerials = canManage && !selectedInvoice?.dbeInvoiceId;
+  // New invoices also list the product's in-stock serials to pick from
+  // (display only — serials stay optional on a new invoice, as before)
+  const showStockSerials = pickSerials || !isEdit;
 
   const pickProduct = (idx, p) => {
     // A different product can't keep the old product's serials
     if (String(items[idx]?.productId || '') !== String(p._id)) {
       setSerialInputs((s) => ({ ...s, [idx]: '' }));
-      if (pickSerials) loadStockSerials(idx, p._id);
+      if (showStockSerials) loadStockSerials(idx, p._id);
     }
     setProdQuery((q) => ({ ...q, [idx]: '' }));
     setItems((prev) => { const n=[...prev]; n[idx]=calcItem({...n[idx],productId:p._id,productName:p.name,unitPrice:p.basePrice||0,taxRate:p.taxRate||0,unit:(p.unit||'PCS').toUpperCase(),hsnCode:p.hsnCode||'',discountValue:0}); return n; });
@@ -466,6 +471,10 @@ export default function InvoiceFormPage() {
     const ps = {};
     newRows.forEach((row, i) => { ps[items.filter(x=>x.productName?.trim()).length + i] = row.productName; });
     setProdSearch((p) => ({ ...p, ...ps }));
+    if (showStockSerials) {
+      const base = items.filter((x) => x.productName?.trim()).length;
+      newRows.forEach((row, i) => loadStockSerials(base + i, row.productId));
+    }
     setSelectedModalItems({});
     setItemModalSearch('');
     setShowItemModal(false);
@@ -499,7 +508,7 @@ export default function InvoiceFormPage() {
   const keptParty   = isEdit && !dealer ? selectedInvoice : null; // B2C edit keeps its party snapshot
   const sellerState = resolveStateCode({ gstins: [companySettings.companyGSTIN], texts: [companySettings.companyAddress] });
   const buyerState  = resolveStateCode({
-    gstins: [dealer?.gstin, keptParty?.partyGST],
+    gstins: [dealer?.gstNumber, dealer?.gstin, keptParty?.partyGST],
     texts:  [shipAddress?.state, dealer?.address?.state, keptParty?.partyAddress],
   });
   const interState  = isInterState(sellerState, buyerState);
@@ -549,7 +558,7 @@ export default function InvoiceFormPage() {
         ? `${invoicePrefix||''}-${invoiceSequence||1}`
         : (invoiceNo || undefined),
       partyAddress: dealer ? [dealer.address?.street,dealer.address?.city,dealer.address?.state,dealer.address?.pincode].filter(Boolean).join(', ') : '',
-      partyGST:     dealer?.gstin||'',
+      partyGST:     dealer?.gstNumber||dealer?.gstin||'',
       partyPhone:   dealer?.phone||'',
       invoiceDate,
       dueDate,
@@ -609,7 +618,7 @@ export default function InvoiceFormPage() {
     if (result.error) savingRef.current = false;
     if (!result.error) {
       if (andNew) {
-        setDealer(null); setDealerSearch(''); setItems([{...EMPTY_ITEM}]); setProdSearch({});
+        setDealer(null); setDealerSearch(''); setItems([{...EMPTY_ITEM}]); setProdSearch({}); setStockSerials({});
         setNotes(''); setWarrantyPeriod(''); setSalesmanName(''); setInvoiceDisc(0); setAmtReceived(0); setMarkPaid(false);
         setShowDisc(false); setShowNotes(false); setInvoiceNo(''); setInvoiceDate(today);
         setAddlCharges(0); setShowAddlChg(false); setBankAccount(null); setErrors({});
@@ -619,7 +628,8 @@ export default function InvoiceFormPage() {
   };
 
   // ── Filtered lists ────────────────────────────────────────────────────────
-  const filteredDealers = (dealers||[]).filter((d)=>{const q=(dealerSearch||'').toLowerCase();return !q||partyLabel(d).toLowerCase().includes(q)||String(d?.phone||'').includes(q)||String(d?.dealerCode||'').toLowerCase().includes(q);}).slice(0,8);
+  // Party list: active dealers only
+  const filteredDealers = (dealers||[]).filter((d)=>d?.status==='active').filter((d)=>{const q=(dealerSearch||'').toLowerCase();return !q||partyLabel(d).toLowerCase().includes(q)||String(d?.phone||'').includes(q)||String(d?.dealerCode||'').toLowerCase().includes(q);}).slice(0,8);
   // Empty box or just focused: every product; typing narrows it down
   const getFilteredProds = (idx) => { const q=(prodQuery[idx]||'').toLowerCase().trim(); const list=(products||[]).filter((p)=>!q||p?.name?.toLowerCase().includes(q)||p?.productCode?.toLowerCase().includes(q)); return list.slice(0,100); };
 
@@ -685,7 +695,7 @@ export default function InvoiceFormPage() {
                     {dealer.ownerName && <p className="text-sm text-gray-500 mt-0.5">{dealer.ownerName}</p>}
                     {dealer.phone     && <p className="text-sm text-gray-500">{dealer.phone}</p>}
                     {dealer.address?.city && <p className="text-sm text-gray-500">{[dealer.address.street,dealer.address.city,dealer.address.state,dealer.address.pincode].filter(Boolean).join(', ')}</p>}
-                    {dealer.gstin && <p className="text-xs text-gray-400 mt-1">GSTIN: {dealer.gstin}</p>}
+                    {(dealer.gstNumber || dealer.gstin) && <p className="text-xs text-gray-400 mt-1">GSTIN: {dealer.gstNumber || dealer.gstin}</p>}
                     <button onClick={()=>{setDealer(null);setDealerSearch('');}} className="absolute top-0 right-0 p-1 text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><X size={14}/></button>
                   </div>
                 ) : (
@@ -711,6 +721,7 @@ export default function InvoiceFormPage() {
                             className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors">
                             <p className="text-sm font-semibold text-gray-800">{partyLabel(d)}</p>
                             <p className="text-xs text-gray-400">{d.dealerCode}{d.phone?` · ${d.phone}`:''}</p>
+                            {(d.gstNumber || d.gstin) && <p className="text-xs text-gray-400">GSTIN: {d.gstNumber || d.gstin}</p>}
                           </button>
                         ))}
                       </div>
@@ -876,7 +887,7 @@ export default function InvoiceFormPage() {
                                 {canManage && (
                                   <p className="text-xs text-blue-600 mt-0.5">Remove or replace a serial — removed serials go back to available stock.</p>
                                 )}
-                                {pickSerials && stockSerials[idx]?.length > 0 && (
+                                {showStockSerials && stockSerials[idx]?.length > 0 && (
                                   <div className="flex flex-wrap items-center gap-1 mt-1">
                                     <span className="text-xs text-gray-500">In stock for this product:</span>
                                     {stockSerials[idx].filter((sn) => !(serialInputs[idx] || '').split(',').map((s) => s.trim().toUpperCase()).includes(sn)).slice(0, 30).map((sn) => (

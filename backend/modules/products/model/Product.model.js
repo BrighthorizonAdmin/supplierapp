@@ -52,6 +52,10 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    aboutProduct: {
+      type: String,
+      trim: true,
+    },
     category: {
       type: String,
       required: [true, 'Category is required'],
@@ -158,6 +162,10 @@ const productSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    isFeatured: {
+      type: Boolean,
+      default: false,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

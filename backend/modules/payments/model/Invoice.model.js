@@ -139,6 +139,10 @@ const invoiceSchema = new mongoose.Schema({
   },
   issuedAt: { type: Date },
   cancelledAt: { type: Date },
+
+  // Set when this invoice itself took the stock (an invoice made directly in
+  // Sales Invoice, not from an order). Order invoices leave it to the order.
+  stockDeductedAt: { type: Date, default: null },
 }, {
   timestamps: true,
   versionKey: false,
