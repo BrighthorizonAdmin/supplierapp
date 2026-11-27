@@ -6,6 +6,8 @@ import Pagination from '../../../components/ui/Pagination';
 import { Plus, Search, Package, Pencil, ChevronLeft, ChevronRight, ToggleLeft, ToggleRight } from 'lucide-react';
 import { getProductImageUrl } from '../../../utils/productImage';
 import { productDescriptionText } from '../../../utils/productDescription';
+import PageHeader from '../../../components/ui/PageHeader';
+import { STOCK_STATUS_META, getStockStatus as stockStatusFor } from '../../../utils/stockLevels';
 
 // Build a URL from a single image object (handles Windows backslashes, leading "./")
 const buildSrc = getProductImageUrl;
@@ -86,26 +88,17 @@ const ImageCarousel = ({ srcs, name }) => {
 };
 // ─── Product Card ─────────────────────────────────────────────────────────────
 
-// Stock thresholds:
-//   No Stock  → currentStockQty <= 0
-//   Low Stock → > 0 but ≤ 25% of openingStockQty (or ≤ 10 when no opening qty set)
-//   In Stock  → everything else
-const getStockStatus = (cur = 0, open = 0) => {
-  if (cur === 0) return 'no-stock';
-  if (open > 0 && cur <= open * 0.25) return 'low-stock';
-  if (open === 0 && cur <= 10) return 'low-stock';
-  return 'in-stock';
-};
+// Stock status uses the app-wide rule: 0 = out of stock, 1–15 = low stock, more = in stock.
+const getStockStatus = (cur = 0) => stockStatusFor(cur);
 
 const StockBadge = ({ product }) => {
   const cur = product.currentStockQty ?? 0;
   const open = product.openingStockQty ?? 0;
   const status = getStockStatus(cur, open);
 
-  const label = status === 'no-stock' ? 'Out of Stock' : status === 'low-stock' ? 'Low Stock' : 'In Stock';
-  const cls = status === 'no-stock' ? 'badge-red' : status === 'low-stock' ? 'badge-yellow' : 'badge-green';
+  const meta = STOCK_STATUS_META[status];
 
-  return <span className={cls}>{label}</span>;
+  return <span className={meta.badge} title={meta.rule}>{meta.label}</span>;
 };
 
 const ProductCard = ({ product, onEdit, onToggleStatus, togglingId }) => {
@@ -228,21 +221,14 @@ const ProductListPage = () => {
   return (
     <div className="space-y-5">
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Product Catalog</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate('/products/new')}
-            className="btn-primary flex items-center gap-2 text-sm py-2 px-4"
-          >
-            <Plus size={14} /> Add Product
-          </button>
-        </div>
-      </div>
+      <PageHeader icon={Package} title="Product catalog" subtitle="Products, prices and stock shown to dealers and on the website">
+        <button onClick={() => navigate('/products/new')} className="btn-primary">
+          <Plus size={16} /> Add product
+        </button>
+      </PageHeader>
 
       {/* ── Filters ── */}
-      <div className="flex flex-wrap gap-3">
+      <div className="card flex flex-wrap gap-3 p-4">
         <div className="relative flex-1 min-w-48">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input

@@ -6,8 +6,10 @@ import { fetchOrders, cancelOrder, fetchOrderById, confirmOrder } from '../order
 import Pagination from '../../../components/ui/Pagination';
 import {
   Search, Download, Eye,
-  Clock, Truck, CheckCircle, XCircle, ShoppingBag, Package,
+  Clock, Truck, CheckCircle, XCircle, ShoppingBag, Package, ShoppingCart,
 } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
+import KPICard from '../../../components/ui/KPICard';
 import { format } from 'date-fns';
 import api from '../../../services/api';
 import { useMemo } from 'react';
@@ -101,23 +103,6 @@ const RowActions = ({ row, onView }) => (
   </button>
 );
 
-// ─── Stats card ───────────────────────────────────────────────────────────────
-const StatCard = ({ label, value, icon: Icon, cardCls, iconCls, valueCls, labelCls }) => (
-  <div
-    className={`flex items-center justify-between p-3 rounded-lg border ${cardCls}`}
-  >
-    <div className="flex flex-col">
-      <p className={`text-xs font-medium ${labelCls}`}>{label}</p>
-      <p className={`text-lg font-semibold ${valueCls}`}>{value ?? "—"}</p>
-    </div>
-
-    <div
-      className={`w-8 h-8 rounded-lg flex items-center justify-center ml-3 ${iconCls}`}
-    >
-      <Icon size={16} />
-    </div>
-  </div>
-);
 // ─── Main page ────────────────────────────────────────────────────────────────
 const OrderListPage = () => {
   const dispatch  = useDispatch();
@@ -282,79 +267,34 @@ const filteredOrders = useMemo(() => {
   return (
     <div className="space-y-5">
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Order Management</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Track and manage all dealer and Buvvas Ecommerce orders</p>
+      <PageHeader
+        icon={ShoppingCart}
+        title="Orders"
+        subtitle="Track and manage dealer and Buvvas ecommerce orders"
+      >
+        <div className="segmented">
+          {TYPE_TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { setTypeTab(t.id); setPage(1); }}
+              className={`segmented-item whitespace-nowrap ${typeTab === t.id ? 'segmented-item-active' : ''}`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
+        <button onClick={handleExport} disabled={exporting} className="btn-primary">
+          <Download size={15} /> {exporting ? 'Exporting…' : 'Export'}
+        </button>
+      </PageHeader>
 
-        <div className="flex items-center gap-3">
-          {/* Type tab group */}
-          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 gap-0.5">
-            {TYPE_TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => { setTypeTab(t.id); setPage(1); }}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
-                  typeTab === t.id
-                    ? 'bg-primary-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="btn-primary flex items-center gap-2 text-sm py-2 px-4 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <Download size={14} /> {exporting ? 'Exporting...' : 'Export'}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Stats row ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        <StatCard
-          label="Confirmed" value={counts.confirmed} icon={Package}
-          cardCls="bg-indigo-50 border-indigo-100"
-          iconCls="bg-indigo-500 text-white"
-          valueCls="text-indigo-700" labelCls="text-indigo-600"
-        />
-        <StatCard
-          label="Processing" value={counts.processing} icon={Clock}
-          cardCls="bg-blue-50 border-blue-100"
-          iconCls="bg-blue-500 text-white"
-          valueCls="text-blue-700" labelCls="text-blue-600"
-        />
-        <StatCard
-          label="Shipped" value={counts.shipped} icon={Truck}
-          cardCls="bg-purple-50 border-purple-100"
-          iconCls="bg-purple-500 text-white"
-          valueCls="text-purple-700" labelCls="text-purple-600"
-        />
-        <StatCard
-          label="Delivered" value={counts.delivered} icon={CheckCircle}
-          cardCls="bg-green-50 border-green-100"
-          iconCls="bg-green-500 text-white"
-          valueCls="text-green-700" labelCls="text-green-600"
-        />
-        <StatCard
-          label="Cancelled" value={counts.cancelled} icon={XCircle}
-          cardCls=""
-          iconCls="bg-slate-100 text-slate-500"
-          valueCls="text-slate-900" labelCls="text-slate-500"
-        />
-        <StatCard
-          label="Total Orders" value={counts.total} icon={ShoppingBag}
-          cardCls="bg-primary-50 border-primary-100"
-          iconCls="bg-primary-100 text-primary-600"
-          valueCls="text-primary-700" labelCls="text-primary-600"
-        />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <KPICard title="Total orders" value={counts.total ?? '—'} icon={ShoppingBag} color="blue" />
+        <KPICard title="Confirmed" value={counts.confirmed ?? '—'} icon={Package} color="purple" />
+        <KPICard title="Processing" value={counts.processing ?? '—'} icon={Clock} color="yellow" />
+        <KPICard title="Shipped" value={counts.shipped ?? '—'} icon={Truck} color="orange" />
+        <KPICard title="Delivered" value={counts.delivered ?? '—'} icon={CheckCircle} color="green" />
+        <KPICard title="Cancelled" value={counts.cancelled ?? '—'} icon={XCircle} color="red" />
       </div>
 
       {/* ── Table card ── */}
@@ -382,9 +322,9 @@ const filteredOrders = useMemo(() => {
               <button
                 key={t.id}
                 onClick={() => { setStatusTab(t.id); setPage(1); }}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                   statusTab === t.id
-                    ? 'bg-primary-600 text-white'
+                    ? 'bg-primary-50 text-primary-700 ring-1 ring-inset ring-primary-200'
                     : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
                 }`}
               >

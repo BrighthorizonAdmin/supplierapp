@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchQuotes, deleteQuote } from '../quoteSlice';
-import { Plus, Search, Eye, Edit2, Trash2, FileText, Lock } from 'lucide-react';
+import { Plus, Search, Eye, Edit2, Trash2, FileText, Lock, FileSignature } from 'lucide-react';
 import { format } from 'date-fns';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_COLORS = {
   draft:    'bg-gray-100 text-gray-600',
@@ -57,19 +58,13 @@ export default function QuoteListPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quotes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage quotations for your customers and view dealer quotes</p>
-        </div>
-        <button
-          onClick={() => navigate('/quotes/new')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 shadow transition-colors"
-        >
-          <Plus size={16} /> Create Quote
-        </button>
+    <div>
+      <div className="mb-5">
+        <PageHeader icon={FileSignature} title="Quotes" subtitle="Quotations for your customers, plus quotes synced from the dealer app">
+          <button onClick={() => navigate('/quotes/new')} className="btn-primary">
+            <Plus size={16} /> Create quote
+          </button>
+        </PageHeader>
       </div>
 
       {/* Tabs */}

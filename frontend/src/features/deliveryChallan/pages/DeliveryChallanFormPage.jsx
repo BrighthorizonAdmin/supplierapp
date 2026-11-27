@@ -645,21 +645,21 @@ export default function DeliveryChallanFormPage() {
   };
 
   return (
-    <div className="bg-gray-50 flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 148px)' }}>
+    <div className="flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 116px)' }}>
 
       {/* Top bar */}
-      <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between flex-shrink-0 shadow-sm">
+      <div className="mb-4 flex flex-shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-primary-50/70 via-white to-white px-5 py-3.5 shadow-card">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/delivery-challan')} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 transition-colors">
+          <button onClick={() => navigate('/delivery-challan')} className="btn-ghost p-2">
             <ArrowLeft size={18} />
           </button>
-          <h1 className="text-lg font-bold text-gray-800">{isEdit ? 'Edit Delivery Challan' : 'Create Delivery Challan'}</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">{isEdit ? 'Edit delivery challan' : 'Create delivery challan'}</h1>
         </div>
         <div className="flex items-center gap-2">
           {isEdit && (
             <>
               <select
-                className="text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white focus:border-indigo-400"
+                className="input w-auto"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
               >
@@ -667,17 +667,17 @@ export default function DeliveryChallanFormPage() {
                 <option value="closed">Closed</option>
               </select>
               <button onClick={() => navigate(`/delivery-challan/${id}/print`)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                className="btn-secondary">
                 <Printer size={14} /> Print
               </button>
             </>
           )}
           <button onClick={() => handleSave(true)} disabled={loading}
-            className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+            className="btn-secondary">
             Save &amp; New
           </button>
           <button onClick={() => handleSave(false)} disabled={loading}
-            className="px-5 py-2 text-sm font-bold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 disabled:opacity-50 shadow transition-colors">
+            className="btn-primary">
             {loading ? 'Saving…' : 'Save'}
           </button>
         </div>
@@ -700,7 +700,7 @@ export default function DeliveryChallanFormPage() {
                     <span className="text-blue-500 font-semibold text-sm">+ Add Party</span>
                   </div>
                 ) : (
-                  <div className="absolute left-0 top-0 z-50 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
+                  <div className="absolute left-0 top-0 z-50 w-80 card shadow-2xl overflow-hidden">
                     <div className="p-2 border-b border-gray-100">
                       <div className="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 focus-within:border-indigo-400">
                         <input

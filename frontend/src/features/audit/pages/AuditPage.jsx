@@ -4,10 +4,11 @@ import {
   PieChart, Pie, Cell, Legend, ComposedChart, Line, ReferenceLine,
 } from 'recharts';
 import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays } from 'date-fns';
-import { RefreshCw, Download, X, ChevronDown, Search, Check } from 'lucide-react';
+import { RefreshCw, Download, X, ChevronDown, Search, Check, BarChart3 } from 'lucide-react';
 import api from '../../../services/api';
 import { resolveStateCode } from '../../../utils/gst';
 import { buildGstRows, printGstReport } from '../gstReport';
+import PageHeader from '../../../components/ui/PageHeader';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const fmtL  = (v) => `₹${((v || 0) / 100000).toFixed(2)}L`;
@@ -146,7 +147,7 @@ const MultiSelect = ({ allLabel, noun, options = [], value = null, onChange }) =
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-slate-200 rounded-xl shadow-xl z-50">
+        <div className="absolute top-full left-0 mt-1 w-64 card shadow-xl z-50">
           <div className="p-2 border-b border-slate-100">
             <div className="flex items-center gap-2 px-2 py-1.5 bg-slate-50 rounded-lg">
               <Search size={12} className="text-slate-400 flex-shrink-0" />
@@ -526,31 +527,20 @@ const AuditPage = () => {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Sales Analytics</h1>
-          <p className="text-xs text-slate-500 mt-0.5">{kpis?.invoiceCount ?? '—'} invoices · {displayDateRange}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleExportCSV}
-            className="flex items-center gap-1.5 text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50">
-            <Download size={13} /> Export CSV
-          </button>
-          <button onClick={handleExportGstPdf} disabled={gstExporting}
-            title="GSTR-1 style sales register for the current filters"
-            className="flex items-center gap-1.5 text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-            <Download size={13} /> {gstExporting ? 'Preparing…' : 'GST Report (PDF)'}
-          </button>
-          <button onClick={fetchAll} disabled={loading}
-            className="flex items-center gap-1.5 text-xs bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50">
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Live Data
-          </button>
-        </div>
-      </div>
+      <PageHeader icon={BarChart3} title="Sales analytics" subtitle={`${kpis?.invoiceCount ?? '—'} invoices · ${displayDateRange}`}>
+        <button onClick={handleExportCSV} className="btn-secondary">
+          <Download size={15} /> Export CSV
+        </button>
+        <button onClick={handleExportGstPdf} disabled={gstExporting} title="GSTR-1 style sales register for the current filters" className="btn-secondary">
+          <Download size={15} /> {gstExporting ? 'Preparing…' : 'GST report (PDF)'}
+        </button>
+        <button onClick={fetchAll} disabled={loading} className="btn-primary">
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Live data
+        </button>
+      </PageHeader>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+      <div className="card p-4 space-y-3">
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-1">Date Range</span>
           {DATE_PRESETS.map(p => (
@@ -622,7 +612,7 @@ const AuditPage = () => {
 
           <div className="grid md:grid-cols-2 gap-4">
             {/* Donut — Invoice Type Split */}
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="card p-5">
               <h3 className="font-semibold text-slate-800 text-sm mb-1">Invoice Type Split</h3>
               <p className="text-xs text-slate-400 mb-2">Revenue by B2B vs Retail</p>
               {typeSplit.length > 0 ? (
@@ -662,7 +652,7 @@ const AuditPage = () => {
             </div>
 
             {/* Payment Method Mix — horizontal bars */}
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="card p-5">
               <h3 className="font-semibold text-slate-800 text-sm mb-1">Payment Method Mix</h3>
               <p className="text-xs text-slate-400 mb-2">Revenue by payment mode</p>
               {paymentMix.length > 0 ? (
@@ -684,7 +674,7 @@ const AuditPage = () => {
           </div>
 
           {/* Weekly Revenue */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="card p-5">
             <h3 className="font-semibold text-slate-800 text-sm mb-1">Weekly Revenue</h3>
             <p className="text-xs text-slate-400 mb-4">Total invoiced per week</p>
             {weeklyRevenue.length > 0 ? (
@@ -725,7 +715,7 @@ const AuditPage = () => {
           </div>
 
           {/* Chart 1: Revenue bars + WoW % line */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="card p-5">
             <h3 className="font-semibold text-slate-800 text-sm mb-1">Weekly Revenue + WoW Change</h3>
             <p className="text-xs text-slate-400 mb-4">Columns = revenue · Line = WoW %</p>
             {weeklyStats.withWoW.length > 0 ? (
@@ -788,7 +778,7 @@ const AuditPage = () => {
           </div>
 
           {/* Chart 2: Sales by Week with average line */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="card p-5">
             <h3 className="font-semibold text-slate-800 text-sm mb-1">Sales by Week</h3>
             <p className="text-xs text-slate-400 mb-4">Revenue per week as individual columns — compare weeks side by side</p>
             {weeklyRevenue.length > 0 ? (
@@ -856,7 +846,7 @@ const AuditPage = () => {
           </div>
 
           {/* Calendar heatmap */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="card p-5">
             <h3 className="font-semibold text-slate-800 text-sm mb-1">Daily Sales Calendar</h3>
             <p className="text-xs text-slate-400 mb-4">Each cell = one day · colour = revenue · hover for details</p>
             <CalendarHeatmap daily={heatmapStats.daily} />
@@ -864,7 +854,7 @@ const AuditPage = () => {
 
           {/* Monthly Revenue + Sales by Day of Week */}
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="card p-5">
               <h3 className="font-semibold text-slate-800 text-sm mb-1">Monthly Revenue</h3>
               <p className="text-xs text-slate-400 mb-4">Month comparison</p>
               {heatmapStats.monthChartData.length > 0 ? (
@@ -883,7 +873,7 @@ const AuditPage = () => {
               ) : <EmptyChart />}
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="card p-5">
               <h3 className="font-semibold text-slate-800 text-sm mb-1">Sales by Day of Week</h3>
               <p className="text-xs text-slate-400 mb-4">Total + avg/active day</p>
               {heatmapStats.dowChartData.some(d => d.revenue > 0) ? (
@@ -905,7 +895,7 @@ const AuditPage = () => {
           </div>
 
           {/* Top 10 Revenue Days */}
-          <div className="bg-white rounded-xl border border-slate-200">
+          <div className="card">
             <div className="px-5 py-4 border-b border-slate-100">
               <h3 className="font-semibold text-slate-800 text-sm">Top 10 Revenue Days</h3>
               <p className="text-xs text-slate-400">Ranked by daily total</p>
@@ -960,7 +950,7 @@ const AuditPage = () => {
       {activeTab === 'Products' && (
         <div className="space-y-4">
           {/* Chart: Revenue bars + Units line */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="card p-5">
             <h3 className="font-semibold text-slate-800 text-sm mb-1">Top Products — Revenue &amp; Units</h3>
             <p className="text-xs text-slate-400 mb-3">Bar = revenue · Line = units · hover for unit economics</p>
             {topProducts.length > 0 ? (
@@ -1015,7 +1005,7 @@ const AuditPage = () => {
           </div>
 
           {/* Product Ranking table */}
-          <div className="bg-white rounded-xl border border-slate-200">
+          <div className="card">
             <div className="px-5 py-4 border-b border-slate-100">
               <h3 className="font-semibold text-slate-800 text-sm">Product Ranking</h3>
               <p className="text-xs text-slate-400">Click headers to sort</p>
@@ -1088,7 +1078,7 @@ const AuditPage = () => {
             {/* Row 1: Invoice Status donut + Top Salespeople bar */}
             <div className="grid md:grid-cols-2 gap-4">
               {/* Invoice Status */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="card p-5">
                 <h3 className="font-semibold text-slate-800 text-sm mb-1">Invoice Status</h3>
                 <p className="text-xs text-slate-400 mb-2">Revenue by status</p>
                 {statusSplit.length > 0 ? (
@@ -1132,7 +1122,7 @@ const AuditPage = () => {
               </div>
 
               {/* Top Salespeople */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="card p-5">
                 <h3 className="font-semibold text-slate-800 text-sm mb-1">Top Salespeople</h3>
                 <p className="text-xs text-slate-400 mb-4">By attributed revenue</p>
                 {topSalespeople.length > 0 ? (
@@ -1156,7 +1146,7 @@ const AuditPage = () => {
             </div>
 
             {/* Customer Revenue table */}
-            <div className="bg-white rounded-xl border border-slate-200">
+            <div className="card">
               <div className="px-5 py-4 border-b border-slate-100">
                 <h3 className="font-semibold text-slate-800 text-sm">Customer Revenue</h3>
                 <p className="text-xs text-slate-400">By total invoiced value</p>
@@ -1198,7 +1188,7 @@ const AuditPage = () => {
 
       {/* ── Invoices ── */}
       {activeTab === 'Invoices' && (
-        <div className="bg-white rounded-xl border border-slate-200">
+        <div className="card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
             <h3 className="font-semibold text-slate-800 text-sm">
               Invoice List <span className="text-slate-400 font-normal ml-1">({invoiceTotal})</span>
@@ -1255,7 +1245,7 @@ const KpiCard = ({ label, value, sub, color }) => {
   const borders = { blue: 'border-t-blue-500', green: 'border-t-green-500', orange: 'border-t-orange-500', red: 'border-t-red-500', purple: 'border-t-purple-500' };
   const texts   = { blue: 'text-blue-600', green: 'text-green-600', orange: 'text-orange-600', red: 'text-red-600', purple: 'text-purple-600' };
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 border-t-4 ${borders[color]} p-4`}>
+    <div className={`card border-t-4 ${borders[color]} p-4`}>
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{label}</p>
       <p className={`text-xl font-bold ${texts[color]}`}>{value}</p>
       <p className="text-xs text-slate-400 mt-1">{sub}</p>

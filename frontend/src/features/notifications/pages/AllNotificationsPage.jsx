@@ -7,6 +7,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from '../notificationSlice';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const TYPE_COLORS = {
   order: 'bg-blue-100 text-blue-700',
@@ -96,43 +97,20 @@ const AllNotificationsPage = () => {
 
   return (
     <div className="space-y-4">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Notifications</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {unreadCount > 0 ? (
-              <span>
-                You have{' '}
-                <span className="font-semibold text-blue-600">{unreadCount} unread</span>{' '}
-                notification{unreadCount !== 1 ? 's' : ''}
-              </span>
-            ) : (
-              "You're all caught up!"
-            )}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Unread badge */}
-          {unreadCount > 0 && (
-            <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-full px-3 py-1">
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-              <span className="text-xs font-semibold text-red-600">{unreadCount} unread</span>
-            </div>
-          )}
-
-          {unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllRead}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors font-medium"
-            >
-              <CheckCheck size={15} />
-              Mark all as read
-            </button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        icon={Bell}
+        title="Notifications"
+        subtitle={unreadCount > 0
+          ? `You have ${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`
+          : "You're all caught up."}
+        badge={unreadCount > 0 && <span className="badge-red">{unreadCount} unread</span>}
+      >
+        {unreadCount > 0 && (
+          <button onClick={handleMarkAllRead} className="btn-secondary">
+            <CheckCheck size={15} /> Mark all as read
+          </button>
+        )}
+      </PageHeader>
 
       {/* Filter tabs */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1">
@@ -143,8 +121,8 @@ const AllNotificationsPage = () => {
             onClick={() => handleFilterChange(f.value)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               activeFilter === f.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-primary-600 text-white shadow-brand'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
             {f.label}

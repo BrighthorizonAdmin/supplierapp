@@ -3,6 +3,7 @@ const OrderItem = require('./model/OrderItem.model');
 const Invoice = require('../payments/model/Invoice.model');
 const Dealer = require('../dealer/model/Dealer.model');
 const Product = require('../products/model/Product.model');
+const stockLevels = require('../../utils/stockLevels');
 const { AppError } = require('../../middlewares/error.middleware');
 const { getPagination, buildMeta } = require('../../utils/pagination');
 const { withTransaction } = require('../../utils/transaction');
@@ -111,12 +112,10 @@ async function pushStockStatusAfterConfirm(orderItems, orderNumber, dealerId) {
  
       if (!product) continue;
  
-      const isOutOfStock = product.currentStockQty <= 0;
-      const lowStockThreshold =
-        product.openingStockQty > 0 ? product.openingStockQty * 0.2 : product.currentStockQty;
+      // Shared stock rule (utils/stockLevels.js): 0 = out of stock, 1–15 = low stock.
+      const isOutOfStock = stockLevels.isOutOfStock(product.currentStockQty);
  
-      const isLowStock =
-        !isOutOfStock && product.currentStockQty < lowStockThreshold;
+      const isLowStock = stockLevels.isLowStock(product.currentStockQty);
  
       if (!isOutOfStock && !isLowStock) continue;
  

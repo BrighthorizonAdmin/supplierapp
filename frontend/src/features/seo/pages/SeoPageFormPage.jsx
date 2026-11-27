@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
-import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Trash2, Search } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../../services/api';
@@ -14,6 +14,7 @@ import {
   getLayoutSectionKeys,
   getPageLayout,
 } from '../seoPageLayouts';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const PAGE_TYPES = [
   ['home', 'Home'],
@@ -725,21 +726,17 @@ const SeoPageFormPage = () => {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      <button onClick={() => navigate('/seo')}
-        className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft size={15} /> Back to SEO Manager
-      </button>
-
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">{isEdit ? 'Edit SEO Page' : 'Add SEO Page'}</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Add SEO settings for an existing website route. This will not create a new ecommerce page.
-        </p>
-      </div>
+      <PageHeader
+        compact
+        icon={Search}
+        title={isEdit ? 'Edit SEO page' : 'Add SEO page'}
+        subtitle="SEO settings and page copy for an existing website route. This does not create a new website page."
+        back={{ label: 'SEO manager', onClick: () => navigate('/seo') }}
+      />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="font-semibold text-slate-800">Page</h2>
+          <h2 className="section-title">Page</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className={LABEL_CLASS}>Page name *</label>
@@ -788,7 +785,7 @@ const SeoPageFormPage = () => {
         </section>
 
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="font-semibold text-slate-800">Search engine metadata</h2>
+          <h2 className="section-title">Search engine metadata</h2>
           <div>
             <label className={LABEL_CLASS}>Meta title</label>
             <input {...register('metaTitle', { maxLength: 70 })} className={INPUT_CLASS}
@@ -826,7 +823,7 @@ const SeoPageFormPage = () => {
         </section>
 
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="font-semibold text-slate-800">Social sharing</h2>
+          <h2 className="section-title">Social sharing</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className={LABEL_CLASS}>Social title</label>
@@ -847,7 +844,7 @@ const SeoPageFormPage = () => {
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="font-semibold text-slate-800">Image alt text</h2>
+              <h2 className="section-title">Image alt text</h2>
               <p className="mt-1 text-xs text-slate-500">Add an image URL or path and its accessible description.</p>
             </div>
             <button type="button" onClick={() => append({ imageUrl: '', altText: '' })}
@@ -875,7 +872,7 @@ const SeoPageFormPage = () => {
         {(!isHomeRoute || pageLayout.groups.length > 0) && (
           <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div>
-              <h2 className="font-semibold text-slate-800">{isHomeRoute ? 'Homepage content' : 'Page content'}</h2>
+              <h2 className="section-title">{isHomeRoute ? 'Homepage content' : 'Page content'}</h2>
               <p className="mt-1 text-xs text-slate-500">
                 Arranged in the same order as the website page and prefilled with its current copy.
                 Clear a field to keep the website’s built-in text.
@@ -925,7 +922,7 @@ const SeoPageFormPage = () => {
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="font-semibold text-slate-800">Additional sections</h2>
+              <h2 className="section-title">Additional sections</h2>
               <p className="mt-1 text-xs text-slate-500">
                 Extra heading and paragraph blocks shown at the bottom of the page, after its existing content.
               </p>
@@ -977,7 +974,7 @@ const SeoPageFormPage = () => {
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="font-semibold text-slate-800">FAQs</h2>
+              <h2 className="section-title">FAQs</h2>
               <p className="mt-1 text-xs text-slate-500">
                 Questions buyers ask about this page&apos;s products. Shown as a
                 &ldquo;Frequently asked questions&rdquo; block near the bottom of the page, with FAQ
@@ -1026,7 +1023,7 @@ const SeoPageFormPage = () => {
         {isHomeRoute && (
           <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div>
-              <h2 className="font-semibold text-slate-800">Homepage sections</h2>
+              <h2 className="section-title">Homepage sections</h2>
               <p className="mt-1 text-xs text-slate-500">
                 Defaults match the React storefront. Relative image paths resolve on the storefront; leave a section empty to keep its current content.
               </p>
@@ -1153,7 +1150,7 @@ const SeoPageFormPage = () => {
         )}
 
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-1 font-semibold text-slate-800">Additional page content</h2>
+          <h2 className="section-title mb-1">Additional page content</h2>
           <p className="mb-3 text-xs text-slate-500">
             Add formatted content below the page’s existing sections. Use this for additional headings, descriptions, lists, and links.
           </p>

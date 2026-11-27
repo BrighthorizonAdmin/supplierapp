@@ -631,23 +631,23 @@ export default function InvoiceFormPage() {
   //  RENDER
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden">
 
       {/* ── Top bar ── */}
-      <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between flex-shrink-0 shadow-sm z-50">
+      <div className="relative z-50 mb-4 flex flex-shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-primary-50/70 via-white to-white px-5 py-3.5 shadow-card">
         <div className="flex items-center gap-3">
-          <button onClick={()=>navigate('/invoices')} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 transition-colors"><ArrowLeft size={18}/></button>
-          <h1 className="text-lg font-bold text-gray-800">{isEdit?(selectedInvoice?.dbeInvoiceId?'Edit Dealer Invoice (also updates DealerKart)':'Edit Sales Invoice'):'Create Sales Invoice'}</h1>
+          <button onClick={()=>navigate('/invoices')} className="btn-ghost p-2" title="Back to invoices"><ArrowLeft size={18}/></button>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">{isEdit?(selectedInvoice?.dbeInvoiceId?'Edit Dealer Invoice (also updates DealerKart)':'Edit Sales Invoice'):'Create Sales Invoice'}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={()=>setShowSettingsModal(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button onClick={()=>setShowSettingsModal(true)} className="btn-secondary">
             <Settings size={15}/> Settings <span className="w-1.5 h-1.5 rounded-full bg-red-500 ml-0.5"/>
           </button>
           {/* Save & New only when creating — on edit it would save a generated invoice as a draft */}
           {!isEdit && (
-            <button onClick={()=>handleSave(true,true)} disabled={loading} className="px-4 py-2 text-sm font-semibold text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors">Save & New</button>
+            <button onClick={()=>handleSave(true,true)} disabled={loading} className="btn-secondary text-primary-700">Save & New</button>
           )}
-          <button onClick={()=>handleSave(false,false)} disabled={loading} className="px-5 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 shadow transition-colors">{loading?'Saving…':'Save'}</button>
+          <button onClick={()=>handleSave(false,false)} disabled={loading} className="btn-primary">{loading?'Saving…':'Save'}</button>
         </div>
       </div>
 
@@ -699,7 +699,7 @@ export default function InvoiceFormPage() {
                       onBlur={(e)=>{ if (!e.target.value.trim()) restoreParty(); }}
                     />
                     {showDealerDrop && filteredDealers.length>0 && (
-                      <div className="absolute z-50 left-0 mt-1 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
+                      <div className="absolute z-50 left-0 mt-1 w-80 card shadow-2xl overflow-hidden">
                         {filteredDealers.map((d)=>(
                           <button key={d._id} onMouseDown={(e)=>e.preventDefault()}
                             onClick={()=>{setDealer(d);
@@ -776,7 +776,7 @@ export default function InvoiceFormPage() {
                               onFocus={()=>{setProdQuery((q)=>({...q,[idx]:''}));setShowProdDrop((p)=>({...p,[idx]:true}));}}
                             />
                             {showProdDrop[idx] && filteredProd.length>0 && (
-                              <div className="absolute z-40 left-0 mt-0.5 w-72 max-h-72 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-2xl">
+                              <div className="absolute z-40 left-0 mt-0.5 w-72 max-h-72 overflow-y-auto card shadow-2xl">
                                 {filteredProd.map((p)=>(
                                   <button key={p._id} onMouseDown={(e)=>e.preventDefault()} onClick={()=>pickProduct(idx,p)}
                                     className="w-full text-left px-3 py-2.5 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors">

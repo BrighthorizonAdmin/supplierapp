@@ -5,17 +5,18 @@ const Pagination = ({ pagination, onPageChange }) => {
   const { page, totalPages, total, limit } = pagination;
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3">
       <p className="text-sm text-slate-500">
-        Showing <span className="font-medium">{(page - 1) * limit + 1}</span>–
-        <span className="font-medium">{Math.min(page * limit, total)}</span> of{' '}
-        <span className="font-medium">{total}</span> results
+        Showing <span className="font-semibold text-slate-700">{(page - 1) * limit + 1}</span>–
+        <span className="font-semibold text-slate-700">{Math.min(page * limit, total)}</span> of{' '}
+        <span className="font-semibold text-slate-700">{total}</span>
       </p>
       <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={!pagination.hasPrevPage}
-          className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Previous page"
         >
           <ChevronLeft size={16} />
         </button>
@@ -25,8 +26,8 @@ const Pagination = ({ pagination, onPageChange }) => {
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                p === page ? 'bg-primary-600 text-white' : 'hover:bg-slate-100 text-slate-600'
+              className={`h-8 min-w-[32px] rounded-lg px-2 text-sm font-semibold tabular-nums transition-colors ${
+                p === page ? 'bg-primary-600 text-white shadow-brand' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
               {p}
@@ -36,7 +37,8 @@ const Pagination = ({ pagination, onPageChange }) => {
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={!pagination.hasNextPage}
-          className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Next page"
         >
           <ChevronRight size={16} />
         </button>

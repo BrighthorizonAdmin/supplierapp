@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { fetchWarrantyById, updateWarrantyStatus } from '../warrantySlice';
 import { format } from 'date-fns';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_COLORS = {
   pending:  'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -48,27 +49,20 @@ export default function WarrantyDetailPage() {
   const isPending = req.status === 'pending';
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {/* Back */}
-      <button
-        onClick={() => navigate('/warranty')}
-        className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 text-sm mb-5"
-      >
-        <ArrowLeft size={16} /> Back to Warranty Requests
-      </button>
-
-      {/* Title bar */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <ShieldCheck size={22} className="text-blue-600" />
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">{req.claimNumber}</h1>
-            <p className="text-sm text-slate-500">Invoice: {req.invoiceNumber || '—'}</p>
-          </div>
-        </div>
-        <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${STATUS_COLORS[req.status] || 'bg-slate-100 text-slate-600'}`}>
-          {req.status?.charAt(0).toUpperCase() + req.status?.slice(1)}
-        </span>
+    <div className="mx-auto max-w-5xl">
+      <div className="mb-5">
+        <PageHeader
+          compact
+          icon={ShieldCheck}
+          title={req.claimNumber}
+          subtitle={`Invoice: ${req.invoiceNumber || '—'}`}
+          badge={(
+            <span className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${STATUS_COLORS[req.status] || 'bg-slate-100 text-slate-600'}`}>
+              {req.status?.charAt(0).toUpperCase() + req.status?.slice(1)}
+            </span>
+          )}
+          back={{ label: 'Warranty requests', onClick: () => navigate('/warranty') }}
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

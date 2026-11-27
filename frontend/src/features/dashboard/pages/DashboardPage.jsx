@@ -1,480 +1,434 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
-  Users, ShoppingCart, DollarSign, Package, RotateCcw,
-  AlertTriangle, TrendingUp, AlertCircle, ArrowRight,
-  ChevronRight, FileText, UserCheck, ShieldAlert,
+  LayoutDashboard, IndianRupee, ShoppingCart, Store, UserPlus, ReceiptText, RotateCcw, Boxes,
+  TrendingUp, Plus, PackageX, PackageMinus, Truck, LifeBuoy, ShieldCheck, CheckCircle2,
+  FilePen, Trash2, BadgeCheck, XCircle, Ban, Undo2, Activity, CircleDot,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 import {
-  fetchKPIs, fetchSalesChart, fetchTopDealers, fetchRecentOrders, setChartPeriod,
+  fetchKPIs, fetchSalesChart, fetchTopDealers, fetchRecentOrders, fetchRecentActivity, setChartPeriod,
 } from '../dashboardSlice';
 import KPICard from '../../../components/ui/KPICard';
+import PageHeader from '../../../components/ui/PageHeader';
+import SectionCard from '../../../components/ui/SectionCard';
 import StatusBadge from '../../../components/ui/StatusBadge';
-import { format } from 'date-fns';
 import { usePermission } from '../../../routes/ProtectedRoute';
+import { LOW_STOCK_THRESHOLD } from '../../../utils/stockLevels';
 
 const CHART_PERIODS = [
-  { value: 'week',  label: 'Last 7 days' },
+  { value: 'week', label: 'Last 7 days' },
   { value: 'month', label: 'This month' },
-  { value: 'year',  label: 'This year' },
+  { value: 'year', label: 'This year' },
 ];
 
-const ORDER_STATUS_CLASS = {
-  pending:    'badge-solid-amber',
-  confirmed:  'badge-solid-blue',
-  processing: 'badge-solid-purple',
-  shipped:    'badge-solid-blue',
-  delivered:  'badge-solid-green',
-  cancelled:  'badge-solid-red',
-  draft:      'badge-solid-gray',
-};
-
-// Format a rupee amount: ₹1.2M / ₹45K / ₹500
+// ₹1.42 Cr / ₹39.4 L / ₹45K / ₹500 — Indian number units, as used across the business.
 const fmtMoney = (v) => {
   const n = Number(v) || 0;
-  if (n >= 1_000_000) return `₹${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `₹${(n / 1_000).toFixed(0)}K`;
+  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)} Cr`;
+  if (n >= 1_00_000) return `₹${(n / 1_00_000).toFixed(1)} L`;
+  if (n >= 1_000) return `₹${(n / 1_000).toFixed(0)}K`;
   return `₹${n.toLocaleString('en-IN')}`;
 };
+const count = (v) => (Number(v) || 0).toLocaleString('en-IN');
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-// Render trend chip — green for positive, red for negative
-const Trend = ({ value, label }) => {
-  if (value === null || value === undefined) return null;
-  const positive = value >= 0;
-  return (
-    <span className={`text-xs font-semibold ${positive ? 'text-green-600' : 'text-red-500'}`}>
-      {positive ? '↑' : '↓'} {Math.abs(value)}% {label}
-    </span>
-  );
+// Bar colours for the top-dealer ranking, in order.
+const RANK_COLORS = ['bg-amber-600', 'bg-emerald-600', 'bg-primary-600', 'bg-violet-600', 'bg-teal-600', 'bg-rose-500'];
+const RANK_CHIPS = [
+  'bg-amber-50 text-amber-700 ring-amber-200/70',
+  'bg-emerald-50 text-emerald-700 ring-emerald-200/70',
+  'bg-primary-50 text-primary-700 ring-primary-200/70',
+  'bg-violet-50 text-violet-700 ring-violet-200/70',
+  'bg-teal-50 text-teal-700 ring-teal-200/70',
+  'bg-rose-50 text-rose-700 ring-rose-200/70',
+];
+
+const ATTENTION_TONES = {
+  red: 'bg-red-50 text-red-600 ring-red-100',
+  amber: 'bg-amber-50 text-amber-600 ring-amber-100',
+  blue: 'bg-primary-50 text-primary-600 ring-primary-100',
+  teal: 'bg-teal-50 text-teal-600 ring-teal-100',
+};
+
+// Activity feed wording for audit log entries.
+const ACTION_VERBS = {
+  create: 'created', update: 'updated', delete: 'deleted', approve: 'approved', reject: 'rejected',
+  suspend: 'suspended', confirm: 'confirmed', cancel: 'cancelled', allocate: 'allocated stock for',
+  refund: 'refunded', logCall: 'logged a call on', requestDocuments: 'requested documents for',
+  advancePipeline: 'moved forward', request_update: 'requested an update on',
+  password_change: 'changed the password of', password_reset: 'reset the password of',
+  'serial-soft-delete': 'removed a serial from', 'serial-restore': 'restored a serial on',
+};
+const ENTITY_LABELS = {
+  dealer: 'dealer', order: 'order', payment: 'payment', return: 'return', product: 'product',
+  inventory: 'inventory item', user: 'user', invoice: 'invoice', warehouse: 'warehouse',
+  retailOrder: 'retail order', marketingLead: 'marketing lead', flashSale: 'flash sale',
+};
+const ACTION_ICONS = {
+  create: { icon: Plus, tone: 'bg-primary-50 text-primary-600' },
+  update: { icon: FilePen, tone: 'bg-amber-50 text-amber-600' },
+  delete: { icon: Trash2, tone: 'bg-red-50 text-red-600' },
+  approve: { icon: BadgeCheck, tone: 'bg-emerald-50 text-emerald-600' },
+  confirm: { icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-600' },
+  reject: { icon: XCircle, tone: 'bg-red-50 text-red-600' },
+  cancel: { icon: Ban, tone: 'bg-red-50 text-red-600' },
+  suspend: { icon: Ban, tone: 'bg-red-50 text-red-600' },
+  refund: { icon: Undo2, tone: 'bg-violet-50 text-violet-600' },
 };
 
 const DashboardPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { kpis, salesChart, topDealers, recentOrders, loading, chartPeriod } = useSelector(
-    (s) => s.dashboard
-  );
+  const { kpis, salesChart, topDealers, recentOrders, activity, chartPeriod } = useSelector((s) => s.dashboard);
   const { hasPermission } = usePermission();
+  const canReadOrders = hasPermission('orders:read');
 
   useEffect(() => {
     dispatch(fetchKPIs());
-    dispatch(fetchSalesChart(chartPeriod));
     dispatch(fetchTopDealers());
-    if (hasPermission('orders:read')) {
-      dispatch(fetchRecentOrders());
-    }
+    dispatch(fetchRecentActivity(25));
+    if (canReadOrders) dispatch(fetchRecentOrders());
+  }, [dispatch, canReadOrders]);
+
+  useEffect(() => {
+    dispatch(fetchSalesChart(chartPeriod));
   }, [dispatch, chartPeriod]);
+
+  const k = kpis || {};
+
+  // Everything that needs a person to act, most urgent first.
+  const attention = [
+    k.outOfStockAlerts > 0 && {
+      icon: PackageX, tone: 'red', to: '/inventory?status=out-of-stock', cta: 'Restock',
+      title: `${plural(k.outOfStockAlerts, 'product')} out of stock`,
+      detail: '0 pieces left — dealers cannot order these',
+    },
+    k.overdueInvoices > 0 && {
+      icon: ReceiptText, tone: 'red', to: '/invoices', cta: 'Open',
+      title: `${plural(k.overdueInvoices, 'invoice')} past due`,
+      detail: k.overdueAmount > 0 ? `${fmtMoney(k.overdueAmount)} outstanding` : 'Follow up on payment',
+    },
+    k.delayedOrders > 0 && {
+      icon: Truck, tone: 'amber', to: '/orders?status=processing', cta: 'Track',
+      title: `${plural(k.delayedOrders, 'order')} stuck in processing`,
+      detail: 'No movement for more than 3 days',
+    },
+    k.lowStockAlerts > 0 && {
+      icon: PackageMinus, tone: 'amber', to: '/inventory?status=low-stock', cta: 'Review',
+      title: `${plural(k.lowStockAlerts, 'product')} running low`,
+      detail: `${LOW_STOCK_THRESHOLD} pieces or fewer left — reorder soon`,
+    },
+    k.pendingApprovals > 0 && {
+      icon: UserPlus, tone: 'blue', to: '/onboarding', cta: 'Review',
+      title: `${plural(k.pendingApprovals, 'dealer')} waiting for KYC approval`,
+      detail: 'Documents submitted and ready to review',
+    },
+    k.serviceRequests > 0 && {
+      icon: LifeBuoy, tone: 'blue', to: '/support', cta: 'Open',
+      title: `${plural(k.serviceRequests, 'service request')} open`,
+      detail: 'Dealers are waiting for a response',
+    },
+    k.pendingReturns > 0 && {
+      icon: RotateCcw, tone: 'teal', to: '/returns', cta: 'Review',
+      title: `${plural(k.pendingReturns, 'return')} to process`,
+      detail: 'Inspect, approve or reject',
+    },
+    k.warrantyPending > 0 && {
+      icon: ShieldCheck, tone: 'teal', to: '/warranty', cta: 'Review',
+      title: `${plural(k.warrantyPending, 'warranty claim')} awaiting review`,
+      detail: 'Check serials and approve replacements',
+    },
+  ].filter(Boolean);
+
+  const feed = (activity || [])
+    .filter((entry) => !['login', 'logout'].includes(entry.action))
+    .slice(0, 7);
+
+  const maxDealerRevenue = Math.max(...topDealers.map((d) => d.totalRevenue || 0), 1);
 
   return (
     <div className="space-y-6 pb-6">
+      <PageHeader
+        icon={LayoutDashboard}
+        title="Business overview"
+        subtitle={`${format(new Date(), 'EEEE, d MMMM yyyy')} · all channels`}
+      >
+        <div className="segmented">
+          {CHART_PERIODS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => dispatch(setChartPeriod(p.value))}
+              className={`segmented-item ${chartPeriod === p.value ? 'segmented-item-active' : ''}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {hasPermission('invoices:write') && (
+          <button onClick={() => navigate('/invoices/new')} className="btn-primary">
+            <Plus size={16} /> New invoice
+          </button>
+        )}
+      </PageHeader>
 
-      {/* ── Row 1: Revenue + Inventory + Orders + Dealers ──────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Headline numbers */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KPICard
-          title="Year Revenue"
-          value={fmtMoney(kpis?.yearRevenue)}
-          icon={DollarSign}
-          color="green"
-          subtitle={<Trend value={kpis?.yearRevTrend} label="vs last year" />}
-        />
-        <KPICard
-          title="Inventory Value"
-          value={fmtMoney(kpis?.inventoryValue)}
-          icon={Package}
-          color="red"
-        />
-        <KPICard
-          title="Total Orders"
-          value={(kpis?.totalOrders ?? 0).toLocaleString()}
-          icon={ShoppingCart}
+          title="Revenue this month"
+          value={fmtMoney(k.monthRevenue)}
+          icon={IndianRupee}
           color="blue"
-          subtitle={<Trend value={kpis?.ordersTrend} label="vs last month" />}
+          trend={k.revenueTrend ?? undefined}
+          trendLabel="vs last month"
         />
         <KPICard
-          title="Active Dealers"
-          value={(kpis?.activeDealers ?? 0).toLocaleString()}
-          icon={Users}
-          color="orange"
-          subtitle={
-            (kpis?.serviceRequests ?? 0) > 0
-              ? `${kpis.serviceRequests} service request${kpis.serviceRequests > 1 ? 's' : ''} pending`
-              : 'No open service requests'
-          }
-        />
-      </div>
-
-      {/* ── Row 2: KYC + Total Dealers + Returns + Outstanding ─────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          title="Pending KYCs"
-          value={(kpis?.pendingApprovals ?? 0).toLocaleString()}
-          icon={AlertTriangle}
-          color="yellow"
-          subtitle={
-            (kpis?.pendingApprovals ?? 0) > 0
-              ? `${kpis.pendingApprovals} dealer${kpis.pendingApprovals > 1 ? 's' : ''} need review`
-              : 'All dealers reviewed'
-          }
-        />
-        <KPICard
-          title="Total Dealers"
-          value={(kpis?.totalDealers ?? 0).toLocaleString()}
-          icon={UserCheck}
-          color="blue"
-          subtitle={<Trend value={kpis?.dealersTrend} label="vs last month" />}
-        />
-        <KPICard
-          title="Pending Returns"
-          value={(kpis?.pendingReturns ?? 0).toLocaleString()}
-          icon={RotateCcw}
-          color="red"
-        />
-        <KPICard
-          title="Overdue Invoices"
-          value={(kpis?.overdueInvoices ?? 0).toLocaleString()}
+          title="Revenue this year"
+          value={fmtMoney(k.yearRevenue)}
           icon={TrendingUp}
+          color="green"
+          trend={k.yearRevTrend ?? undefined}
+          trendLabel="vs last year"
+        />
+        <KPICard
+          title="Total orders"
+          value={count(k.totalOrders)}
+          icon={ShoppingCart}
           color="purple"
-          subtitle={
-            (kpis?.overdueAmount ?? 0) > 0
-              ? `${fmtMoney(kpis.overdueAmount)} outstanding`
-              : undefined
-          }
+          trend={k.ordersTrend ?? undefined}
+          trendLabel="vs last month"
+          onClick={canReadOrders ? () => navigate('/orders') : undefined}
+        />
+        <KPICard
+          title="Active dealers"
+          value={count(k.activeDealers)}
+          icon={Store}
+          color="yellow"
+          subtitle={`${count(k.totalDealers)} dealers in total`}
+          onClick={() => navigate('/dealers')}
         />
       </div>
 
-      {/* ── Main content: Chart + Table | Alerts + Actions ────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-        {/* Left column (2/3) */}
-        <div className="lg:col-span-2 space-y-5">
-
-          {/* Revenue chart */}
-          <div className="card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-800">Revenue Forecast</h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  This month: <span className="font-semibold text-slate-600">{fmtMoney(kpis?.monthRevenue)}</span>
-                  {kpis?.revenueTrend !== null && kpis?.revenueTrend !== undefined && (
-                    <span className={`ml-2 font-semibold ${kpis.revenueTrend >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                      {kpis.revenueTrend >= 0 ? '↑' : '↓'}{Math.abs(kpis.revenueTrend)}% vs last month
-                    </span>
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                {CHART_PERIODS.map((p) => (
-                  <button
-                    key={p.value}
-                    onClick={() => dispatch(setChartPeriod(p.value))}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                      chartPeriod === p.value
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-500 hover:bg-slate-100'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={salesChart} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false}
-                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-                />
-                <Tooltip
-                  contentStyle={{ borderRadius: 10, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }}
-                  formatter={(v) => [`₹${v.toLocaleString('en-IN')}`, 'Revenue']}
-                />
-                <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2.5} fill="url(#revGrad)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Recent Orders table */}
-          <div className="card overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h2 className="text-base font-bold text-slate-800">Recent Orders</h2>
-              <button
-                onClick={() => navigate('/orders')}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-              >
-                View All <ChevronRight size={14} />
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50/70">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Order ID</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Dealer</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Date</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Amount</th>
-                    <th className="text-center px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {recentOrders.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center py-8 text-slate-400 text-sm">
-                        No recent orders
-                      </td>
-                    </tr>
-                  ) : (
-                    recentOrders.map((order) => (
-                      <tr
-                        key={order._id}
-                        className="hover:bg-slate-50/60 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/orders/${order._id}`)}
-                      >
-                        <td className="px-5 py-3.5 font-mono text-xs font-semibold text-blue-600">
-                          #{order._id?.slice(-6).toUpperCase()}
-                        </td>
-                        <td className="px-4 py-3.5 text-slate-700 font-medium">
-                          {order.dealerId?.businessName || order.dealerId?.name || '—'}
-                        </td>
-                        <td className="px-4 py-3.5 text-slate-400 text-xs">
-                          {order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy') : '—'}
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-semibold text-slate-700">
-                          ₹{(order.netAmount || order.total || order.totalAmount || 0).toLocaleString('en-IN')}
-                        </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <span className={ORDER_STATUS_CLASS[order.status?.toLowerCase()] || 'badge-solid-gray'}>
-                            {order.status?.toUpperCase()}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Right column (1/3) */}
-        <div className="space-y-5">
-
-          {/* Alerts */}
-          <div className="card overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
-              <AlertCircle size={17} className="text-red-500 flex-shrink-0" />
-              <h2 className="text-base font-bold text-slate-800">Alerts</h2>
-            </div>
-            <div className="divide-y divide-slate-50">
-
-              {/* Out of stock */}
-              {(kpis?.outOfStockAlerts ?? 0) > 0 ? (
-                <div className="flex items-center gap-3 px-5 py-3.5 bg-red-50/80">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-red-800 truncate">Out of Stock</p>
-                    <p className="text-xs text-red-500 mt-0.5">{kpis.outOfStockAlerts} product{kpis.outOfStockAlerts > 1 ? 's' : ''} with zero stock</p>
-                  </div>
-                  <button
-                    onClick={() => navigate('/inventory')}
-                    className="text-xs font-bold text-red-700 hover:text-red-800 whitespace-nowrap underline underline-offset-2"
-                  >
-                    Restock
-                  </button>
-                </div>
-              ) : null}
-
-              {/* Low stock (above zero but below 50% of opening stock) */}
-              {(kpis?.lowStockAlerts ?? 0) > 0 ? (
-                <div className="flex items-center gap-3 px-5 py-3.5 bg-amber-50/70">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-amber-800 truncate">Low Stock Warning</p>
-                    <p className="text-xs text-amber-600 mt-0.5">{kpis.lowStockAlerts} item{kpis.lowStockAlerts > 1 ? 's' : ''} below 50% of opening stock</p>
-                  </div>
-                  <button
-                    onClick={() => navigate('/inventory')}
-                    className="text-xs font-bold text-amber-700 hover:text-amber-800 whitespace-nowrap underline underline-offset-2"
-                  >
-                    Restock
-                  </button>
-                </div>
-              ) : null}
-
-              {/* All-clear when both are zero */}
-              {(kpis?.outOfStockAlerts ?? 0) === 0 && (kpis?.lowStockAlerts ?? 0) === 0 && (
-                <div className="flex items-center gap-3 px-5 py-3.5">
-                  <p className="text-sm text-slate-400">No stock alerts</p>
-                </div>
-              )}
-
-              {/* Delayed shipments */}
-              {(kpis?.delayedOrders ?? 0) > 0 ? (
-                <div
-                  className="flex items-center gap-3 px-5 py-3.5 bg-amber-50/60 cursor-pointer hover:bg-amber-50"
-                  onClick={() => navigate('/orders?status=processing')}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-amber-700 truncate">Delayed Shipments</p>
-                    <p className="text-xs text-amber-500 mt-0.5">
-                      {kpis.delayedOrders} order{kpis.delayedOrders > 1 ? 's' : ''} stuck &gt; 3 days
-                    </p>
-                  </div>
-                  <ArrowRight size={15} className="text-amber-500 flex-shrink-0" />
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 px-5 py-3.5">
-                  <p className="text-sm text-slate-400">No delayed shipments</p>
-                </div>
-              )}
-
-              {/* Overdue invoices */}
-              {(kpis?.overdueInvoices ?? 0) > 0 && (
-                <div
-                  className="flex items-center gap-3 px-5 py-3.5 bg-orange-50/60 cursor-pointer hover:bg-orange-50"
-                  onClick={() => navigate('/invoices')}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-orange-700 truncate">Overdue Invoices</p>
-                    <p className="text-xs text-orange-400 mt-0.5">
-                      {kpis.overdueInvoices} invoice{kpis.overdueInvoices > 1 ? 's' : ''} past due
-                      {kpis.overdueAmount > 0 ? ` · ${fmtMoney(kpis.overdueAmount)}` : ''}
-                    </p>
-                  </div>
-                  <ArrowRight size={15} className="text-orange-500 flex-shrink-0" />
-                </div>
-              )}
-
-              {/* Warranty claims */}
-              {(kpis?.warrantyPending ?? 0) > 0 && (
-                <div
-                  className="flex items-center gap-3 px-5 py-3.5 bg-blue-50/60 cursor-pointer hover:bg-blue-50"
-                  onClick={() => navigate('/warranty')}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-blue-700 truncate">Warranty Claims</p>
-                    <p className="text-xs text-blue-400 mt-0.5">
-                      {kpis.warrantyPending} claim{kpis.warrantyPending > 1 ? 's' : ''} awaiting review
-                    </p>
-                  </div>
-                  <ArrowRight size={15} className="text-blue-500 flex-shrink-0" />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Pending Actions */}
-          <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Pending Actions</p>
-            </div>
-            <div className="p-4 space-y-3">
-
-              {/* Review KYC */}
-              <button
-                onClick={() => navigate('/onboarding')}
-                className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/40 transition-all text-left group"
-              >
-                <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200 transition-colors">
-                  <FileText size={16} className="text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-700">Review KYC Docs</p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {(kpis?.pendingApprovals ?? 0) > 0
-                      ? `${kpis.pendingApprovals} dealer${kpis.pendingApprovals > 1 ? 's' : ''} awaiting approval`
-                      : 'No pending approvals'}
-                  </p>
-                </div>
-                <ArrowRight size={15} className="text-slate-300 group-hover:text-blue-500 flex-shrink-0 transition-colors" />
-              </button>
-
-              {/* Service Requests */}
-              {(kpis?.serviceRequests ?? 0) > 0 && (
-                <button
-                  onClick={() => navigate('/support')}
-                  className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-slate-100 hover:border-amber-200 hover:bg-amber-50/40 transition-all text-left group"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
-                    <AlertTriangle size={16} className="text-amber-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-700">Open Service Requests</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{kpis.serviceRequests} request{kpis.serviceRequests > 1 ? 's' : ''} need attention</p>
-                  </div>
-                  <ArrowRight size={15} className="text-slate-300 group-hover:text-amber-500 flex-shrink-0 transition-colors" />
-                </button>
-              )}
-
-              {/* Pending Returns */}
-              {(kpis?.pendingReturns ?? 0) > 0 && (
-                <button
-                  onClick={() => navigate('/returns')}
-                  className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-slate-100 hover:border-red-200 hover:bg-red-50/40 transition-all text-left group"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0 group-hover:bg-red-200 transition-colors">
-                    <RotateCcw size={16} className="text-red-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-700">Process Returns</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{kpis.pendingReturns} return{kpis.pendingReturns > 1 ? 's' : ''} need review</p>
-                  </div>
-                  <ArrowRight size={15} className="text-slate-300 group-hover:text-red-500 flex-shrink-0 transition-colors" />
-                </button>
-              )}
-
-              {/* Warranty Claims */}
-              {(kpis?.warrantyPending ?? 0) > 0 && (
-                <button
-                  onClick={() => navigate('/warranty')}
-                  className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/40 transition-all text-left group"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200 transition-colors">
-                    <ShieldAlert size={16} className="text-blue-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-700">Warranty Claims</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{kpis.warrantyPending} claim{kpis.warrantyPending > 1 ? 's' : ''} pending review</p>
-                  </div>
-                  <ArrowRight size={15} className="text-slate-300 group-hover:text-blue-500 flex-shrink-0 transition-colors" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Top Dealers */}
-          {topDealers.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100">
-                <h2 className="text-base font-bold text-slate-800">Top Dealers</h2>
-              </div>
-              <div className="p-4 space-y-3">
-                {topDealers.slice(0, 4).map((dealer, i) => (
-                  <div key={dealer._id} className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                      {i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-700 truncate">{dealer.businessName}</p>
-                      <p className="text-xs text-slate-400">₹{(dealer.totalRevenue || 0).toLocaleString('en-IN')}</p>
-                    </div>
-                    <span className="badge-blue text-xs">{dealer.pricingTier}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KPICard
+          title="KYC waiting for approval"
+          value={count(k.pendingApprovals)}
+          icon={UserPlus}
+          color="blue"
+          subtitle={k.pendingApprovals > 0 ? 'Dealers need review' : 'All dealers reviewed'}
+          onClick={() => navigate('/onboarding')}
+        />
+        <KPICard
+          title="Overdue invoices"
+          value={count(k.overdueInvoices)}
+          icon={ReceiptText}
+          color="red"
+          subtitle={k.overdueAmount > 0 ? `${fmtMoney(k.overdueAmount)} outstanding` : 'Nothing overdue'}
+          onClick={() => navigate('/invoices')}
+        />
+        <KPICard
+          title="Pending returns"
+          value={count(k.pendingReturns)}
+          icon={RotateCcw}
+          color="orange"
+          subtitle={k.pendingReturns > 0 ? 'Waiting to be processed' : 'No returns pending'}
+          onClick={() => navigate('/returns')}
+        />
+        <KPICard
+          title="Inventory value"
+          value={fmtMoney(k.inventoryValue)}
+          icon={Boxes}
+          color="green"
+          subtitle={k.outOfStockAlerts > 0 || k.lowStockAlerts > 0
+            ? `${k.outOfStockAlerts || 0} out of stock · ${k.lowStockAlerts || 0} low`
+            : 'All products in stock'}
+          onClick={() => navigate(k.outOfStockAlerts > 0 ? '/inventory?status=out-of-stock' : k.lowStockAlerts > 0 ? '/inventory?status=low-stock' : '/inventory')}
+        />
       </div>
+
+      {/* Revenue + top dealers */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <SectionCard
+          className="xl:col-span-2"
+          title="Revenue"
+          subtitle={`${CHART_PERIODS.find((p) => p.value === chartPeriod)?.label} · orders net of returns`}
+          action={k.revenueTrend !== null && k.revenueTrend !== undefined && (
+            <span className={k.revenueTrend >= 0 ? 'badge-green' : 'badge-red'}>
+              {k.revenueTrend >= 0 ? '↑' : '↓'} {Math.abs(k.revenueTrend)}% vs last month
+            </span>
+          )}
+        >
+          <div className="h-full min-h-[280px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={salesChart} margin={{ top: 8, right: 4, left: -8, bottom: 0 }}>
+              <defs>
+                <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2853e0" stopOpacity={0.22} />
+                  <stop offset="100%" stopColor="#2853e0" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" stroke="#eef0f4" vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis
+                tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={56}
+                tickFormatter={(v) => fmtMoney(v)}
+              />
+              <Tooltip
+                cursor={{ stroke: '#c2d5ff', strokeWidth: 1 }}
+                contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 12px 32px -8px rgba(16,24,40,0.18)', fontSize: 12 }}
+                formatter={(v) => [`₹${Number(v).toLocaleString('en-IN')}`, 'Revenue']}
+              />
+              <Area type="monotone" dataKey="revenue" stroke="#2853e0" strokeWidth={2.5} fill="url(#revGrad)" dot={false} activeDot={{ r: 4 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Top dealers"
+          subtitle="By order value"
+          action={<Link to="/dealers" className="link">All dealers</Link>}
+        >
+          {topDealers.length === 0 ? (
+            <p className="py-10 text-center text-sm text-slate-400">No dealer orders yet</p>
+          ) : (
+            <ul className="space-y-4">
+              {topDealers.slice(0, 6).map((dealer, i) => (
+                <li key={dealer._id}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`badge truncate ${RANK_CHIPS[i % RANK_CHIPS.length]}`} title={dealer.businessName}>
+                      {dealer.businessName || 'Dealer'}
+                    </span>
+                    <span className="flex-shrink-0 text-sm font-semibold tabular-nums text-slate-700">
+                      {fmtMoney(dealer.totalRevenue)}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={`h-full rounded-full ${RANK_COLORS[i % RANK_COLORS.length]}`}
+                      style={{ width: `${Math.max(4, ((dealer.totalRevenue || 0) / maxDealerRevenue) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {plural(dealer.totalOrders || 0, 'order')}{dealer.pricingTier ? ` · ${dealer.pricingTier}` : ''}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+
+      {/* Needs attention + live activity */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <SectionCard title="Needs attention" subtitle="Things waiting on your team right now">
+          {attention.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <span className="icon-tile h-11 w-11 rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 size={20} /></span>
+              <p className="text-sm font-semibold text-slate-700">All clear</p>
+              <p className="text-xs text-slate-400">No stock, payment or approval issues need action.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {attention.map(({ icon: Icon, tone, title, detail, to, cta }) => (
+                <li key={title} className="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0">
+                  <span className={`icon-tile h-10 w-10 rounded-full ring-1 ring-inset ${ATTENTION_TONES[tone]}`}>
+                    <Icon size={17} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
+                    <p className="truncate text-[13px] text-slate-500">{detail}</p>
+                  </div>
+                  <button onClick={() => navigate(to)} className="btn-secondary px-3.5 py-1.5">{cta}</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Live team activity"
+          subtitle="Latest changes across the portal"
+          action={hasPermission('audit:read') && <Link to="/audit" className="link">Analytics</Link>}
+        >
+          {feed.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center text-slate-400">
+              <Activity size={22} className="opacity-40" />
+              <p className="text-sm">No recent activity</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {feed.map((entry) => {
+                const { icon: Icon, tone } = ACTION_ICONS[entry.action] || { icon: CircleDot, tone: 'bg-slate-100 text-slate-500' };
+                const ref = entry.entityId ? ` #${String(entry.entityId).slice(-6).toUpperCase()}` : '';
+                return (
+                  <li key={entry._id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                    <span className={`icon-tile mt-0.5 h-9 w-9 rounded-full ${tone}`}><Icon size={16} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-snug text-slate-700">
+                        <span className="font-semibold text-slate-900">{entry.performedBy?.name || 'System'}</span>{' '}
+                        {ACTION_VERBS[entry.action] || entry.action}{' '}
+                        {ENTITY_LABELS[entry.entity] || entry.entity}
+                        <span className="font-medium text-slate-900">{ref}</span>
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {entry.createdAt ? `${formatDistanceToNowStrict(new Date(entry.createdAt))} ago` : ''}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+
+      {/* Recent orders */}
+      {canReadOrders && (
+        <SectionCard
+          title="Recent orders"
+          subtitle="Latest dealer orders"
+          action={<Link to="/orders" className="link">All orders</Link>}
+          flush
+        >
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th className="pl-5">Order</th>
+                  <th>Dealer</th>
+                  <th>Date</th>
+                  <th className="text-right">Amount</th>
+                  <th className="pr-5">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentOrders.length === 0 ? (
+                  <tr className="hover:bg-transparent">
+                    <td colSpan={5} className="py-10 text-center text-sm text-slate-400">No recent orders</td>
+                  </tr>
+                ) : (
+                  recentOrders.map((order) => (
+                    <tr key={order._id} className="cursor-pointer" onClick={() => navigate(`/orders/${order._id}`)}>
+                      <td className="pl-5 font-semibold text-primary-700">#{order._id?.slice(-6).toUpperCase()}</td>
+                      <td className="font-medium text-slate-900">{order.dealerId?.businessName || order.dealerId?.name || '—'}</td>
+                      <td className="text-slate-500">{order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy') : '—'}</td>
+                      <td className="text-right font-semibold tabular-nums">
+                        ₹{(order.netAmount || order.total || order.totalAmount || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td className="pr-5"><StatusBadge status={order.status} /></td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 };

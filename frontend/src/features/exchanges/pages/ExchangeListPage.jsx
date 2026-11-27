@@ -5,7 +5,8 @@ import StatusBadge from '../../../components/ui/StatusBadge';
 import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { format } from 'date-fns';
-import { Search, X } from 'lucide-react';
+import { Search, X, Repeat } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_TABS = [
   { label: 'All',       value: '' },
@@ -66,13 +67,7 @@ const ExchangeListPage = () => {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Exchanges</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Review exchange requests and manage replacements.</p>
-        </div>
-      </div>
+      <PageHeader icon={Repeat} title="Exchanges" subtitle="Review exchange requests and manage replacements" />
 
       <div className="card">
         {/* Filter tabs + Search */}

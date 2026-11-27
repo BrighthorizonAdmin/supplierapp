@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSettings, saveSettings } from '../settingsSlice';
+import PageHeader from '../../../components/ui/PageHeader';
+import { Settings } from 'lucide-react';
 
 const Toggle = ({ checked, onChange }) => (
   <button
@@ -68,10 +70,7 @@ const NotificationPage = () => {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dealer Management Settings</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Configure default rules and global settings for all dealers</p>
-      </div>
+      <PageHeader icon={Settings} title="Settings" subtitle="Company details, default dealer rules and global settings" />
 
       <div className="card">
         <div className="border-b border-slate-100 px-4 flex items-center overflow-x-auto">

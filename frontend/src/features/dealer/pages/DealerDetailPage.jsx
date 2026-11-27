@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import {
   MapPin, FileText, Eye, MessageSquare, Edit,
   AlertOctagon, Search, ChevronDown, X, Mail, Phone,
+  ArrowLeft,
 } from 'lucide-react';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
@@ -22,7 +23,7 @@ const Modal = ({ title, onClose, children }) => (
   <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+        <h2 className="section-title">{title}</h2>
         <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400">
           <X size={16} />
         </button>
@@ -199,27 +200,24 @@ const DealerDetailPage = () => {
   }
  
   return (
-    <div className="space-y-5 h-[calc(100vh-80px)] overflow-hidden flex flex-col relative">
-      {/* ── Breadcrumb ── */}
-      <div className="flex items-center gap-2 text-sm text-slate-500">
-        <button onClick={() => navigate('/dealers')} className="hover:text-primary-600 transition-colors">
-          Dealer
-        </button>
-        <span>›</span>
-        <span className="text-slate-800 font-medium">{dealer.businessName}</span>
-      </div>
- 
+    <div className="space-y-5 h-[calc(100vh-116px)] overflow-hidden flex flex-col relative">
+      <button
+        onClick={() => navigate('/dealers')}
+        className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
+      >
+        <ArrowLeft size={15} /> Dealer management
+      </button>
       {/* ── Profile Card ── */}
-      <div className="card p-5">
+      <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-r from-primary-50/70 via-white to-white p-5 shadow-card">
         <div className="flex items-start gap-4">
           {/* Avatar */}
-          <div className="w-14 h-14 rounded-full bg-primary-500 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-brand flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
             {(dealer.businessName || dealer.ownerName || 'D')[0].toUpperCase()}
           </div>
  
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-slate-900">{dealer.businessName}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">{dealer.businessName}</h1>
             <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-slate-500">
               {(dealer.address?.city || dealer.address?.state) && (
                 <span className="flex items-center gap-1">
@@ -554,7 +552,7 @@ const DealerDetailPage = () => {
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
             <div className="flex items-center gap-4">
-              <h2 className="text-base font-semibold text-slate-900">
+              <h2 className="section-title">
                 {activeTab === 'Orders' ? `Orders (${totalOrders})` : activeTab}
               </h2>
               <span className="text-sm text-slate-400">{dealer.businessName}</span>

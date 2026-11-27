@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchWarrantyRequests } from '../warrantySlice';
 import { format } from 'date-fns';
 import { Search, ShieldCheck } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_COLORS = {
   pending:  'bg-yellow-100 text-yellow-800',
@@ -31,26 +32,21 @@ export default function WarrantyListPage() {
   const handleSearch = (e) => { setSearch(e.target.value); setPage(1); };
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <ShieldCheck size={24} className="text-blue-600" />
-          <h1 className="text-2xl font-bold text-slate-800">Warranty Requests</h1>
-          {pagination?.total !== undefined && (
-            <span className="ml-2 text-sm text-slate-500">({pagination.total} total)</span>
-          )}
-        </div>
-        <button
-          onClick={() => navigate('/warranty-lookup')}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
+    <div>
+      <div className="mb-5">
+        <PageHeader
+          icon={ShieldCheck}
+          title="Warranty requests"
+          subtitle={pagination?.total !== undefined ? `${pagination.total} claims in total` : 'Warranty claims from dealers and customers'}
         >
-          Warranty Lookup
-        </button>
+          <button onClick={() => navigate('/warranty-lookup')} className="btn-primary">
+            <Search size={15} /> Warranty lookup
+          </button>
+        </PageHeader>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-5">
+      <div className="card mb-5 flex flex-wrap gap-3 p-4">
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input

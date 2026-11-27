@@ -29,9 +29,23 @@ const STATUS_MAP = {
   false: 'badge-red',
 };
 
+const DOT = {
+  'badge-green': 'bg-emerald-500', 'badge-solid-green': 'bg-emerald-500',
+  'badge-red': 'bg-red-500', 'badge-solid-red': 'bg-red-500',
+  'badge-yellow': 'bg-amber-500', 'badge-solid-amber': 'bg-amber-500',
+  'badge-blue': 'bg-primary-500', 'badge-solid-blue': 'bg-primary-500',
+  'badge-purple': 'bg-violet-500', 'badge-solid-purple': 'bg-violet-500',
+};
+
 const StatusBadge = ({ status }) => {
   const cls = STATUS_MAP[status?.toLowerCase?.()] || 'badge-gray';
-  return <span className={cls}>{status}</span>;
+  const label = String(status ?? '').replace(/_/g, ' ');
+  return (
+    <span className={`${cls} capitalize`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${DOT[cls] || 'bg-slate-400'}`} />
+      {label}
+    </span>
+  );
 };
 
 export default StatusBadge;

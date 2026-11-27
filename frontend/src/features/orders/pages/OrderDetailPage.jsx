@@ -2,10 +2,13 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOrderById, confirmOrder, cancelOrder, clearSelected } from '../orderSlice';
-import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Truck, MapPin, CreditCard, CheckCheck, Hash, Save, ChevronDown, Check, Search } from 'lucide-react';
+import { ArrowLeft, Printer, FileText, CheckCircle, XCircle, Truck, MapPin, CreditCard, CheckCheck, Hash, Save, ChevronDown, Check, Search, ShoppingCart, IndianRupee, Package, Mail, Phone, Store, RotateCcw, Clock, ArrowRight, AlertTriangle, Wallet, Activity } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
+import PageHeader from '../../../components/ui/PageHeader';
+import KPICard from '../../../components/ui/KPICard';
+import SectionCard from '../../../components/ui/SectionCard';
 
 const STATUS_RANK = {
   draft: 0, pending: 1, confirmed: 2,
@@ -25,72 +28,105 @@ const METHOD_LABELS = {
   cheque: 'Cheque', card: 'Card', other: 'Other',
 };
 
+// When each step happened, from the order's timeline (latest matching event).
+const stepDate = (timeline, status) => {
+  const hit = [...(timeline || [])].reverse().find((e) => e.status === status);
+  return hit?.timestamp ? format(new Date(hit.timestamp), 'dd MMM, hh:mm a') : null;
+};
+
 const OrderProgress = ({ order, onStatusUpdate, loading, serialsComplete }) => {
   const currentRank = STATUS_RANK[order.status] ?? 0;
-  if (order.status === 'cancelled') return null;
 
-  const doneCount = PROGRESS_STEPS.filter(s => currentRank >= STATUS_RANK[s.status]).length;
+  if (order.status === 'cancelled') {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <XCircle size={17} className="mt-0.5 shrink-0 text-red-500" />
+        <span><strong>Cancelled.</strong> This order will not be fulfilled.</span>
+      </div>
+    );
+  }
+
+  const doneCount = PROGRESS_STEPS.filter((s) => currentRank >= STATUS_RANK[s.status]).length;
   const pct = PROGRESS_STEPS.length > 1
-    ? Math.min(100, ((doneCount - 1) / (PROGRESS_STEPS.length - 1)) * 100)
+    ? Math.max(0, Math.min(100, ((doneCount - 1) / (PROGRESS_STEPS.length - 1)) * 100))
     : 0;
+  const nextStep = PROGRESS_STEPS.find((s) => STATUS_RANK[s.status] === currentRank + 1);
 
   // Serial numbers must be entered before moving from confirmed → shipped
   const serialsBlocking = (step) =>
     step.status === 'shipped' && order.status === 'confirmed' && !serialsComplete;
+  const nextBlocked = nextStep && serialsBlocking(nextStep);
 
   return (
-    <div className="mb-6">
+    <div>
       <div className="relative flex items-start justify-between">
-        <div className="absolute top-5 left-0 right-0 h-0.5 bg-slate-200 z-0" />
-        <div className="absolute top-5 left-0 h-0.5 bg-green-500 z-0 transition-all duration-500" style={{ width: `${pct}%` }} />
+        <div className="absolute left-[12.5%] right-[12.5%] top-5 h-1 rounded-full bg-slate-100" />
+        <div
+          className="absolute left-[12.5%] top-5 h-1 rounded-full bg-emerald-500 transition-all duration-500"
+          style={{ width: `${pct * 0.75}%` }}
+        />
 
         {PROGRESS_STEPS.map((step) => {
           const stepRank = STATUS_RANK[step.status];
           const done = currentRank >= stepRank;
           const isNext = stepRank === currentRank + 1;
           const blocked = isNext && serialsBlocking(step);
+          const when = done ? stepDate(order.timeline, step.status) : null;
           const { Icon } = step;
 
           return (
-            <div key={step.status} className="flex flex-col items-center z-10 flex-1">
+            <div key={step.status} className="relative z-10 flex flex-1 flex-col items-center text-center">
               <button
                 onClick={() => isNext && onStatusUpdate(step.status)}
                 disabled={!isNext || loading}
-                title={
-                  blocked
-                    ? 'Enter/Scan serial numbers below before shipping'
-                    : isNext ? `Click to ${step.label}` : undefined
-                }
+                title={blocked ? 'Enter or scan serial numbers before shipping' : isNext ? `Click to ${step.label}` : undefined}
                 className={[
-                  'w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all',
+                  'flex h-11 w-11 items-center justify-center rounded-full border-2 transition-all',
                   done
-                    ? 'bg-green-500 border-green-500 text-white'
+                    ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
                     : blocked
-                      ? 'bg-amber-50 border-amber-400 text-amber-500 cursor-pointer'
+                      ? 'cursor-pointer border-amber-400 bg-amber-50 text-amber-600'
                       : isNext
-                        ? 'bg-white border-green-400 text-green-600 hover:bg-green-50 cursor-pointer'
-                        : 'bg-white border-slate-200 text-slate-300 cursor-default',
+                        ? 'cursor-pointer border-primary-500 bg-white text-primary-600 ring-4 ring-primary-100 hover:bg-primary-50'
+                        : 'cursor-default border-slate-200 bg-white text-slate-300',
                 ].join(' ')}
               >
-                <Icon size={17} strokeWidth={2.2} />
+                {done ? <Check size={18} strokeWidth={2.6} /> : <Icon size={18} strokeWidth={2.2} />}
               </button>
-              <span className={`mt-2 text-xs font-medium text-center leading-tight max-w-[72px] ${done ? 'text-green-600' : blocked ? 'text-amber-500' : isNext ? 'text-green-500' : 'text-slate-400'
-                }`}>
-                {step.label}
+              <span className={`mt-2 text-xs font-semibold ${done ? 'text-emerald-700' : blocked ? 'text-amber-600' : isNext ? 'text-primary-700' : 'text-slate-400'}`}>
+                {step.label.replace(/^Mark /, '')}
               </span>
-              {blocked && (
-                <span className="mt-1 text-[10px] text-amber-500 font-semibold text-center leading-tight max-w-[80px]">
-                  Serials required
-                </span>
-              )}
+              <span className="mt-0.5 min-h-[16px] text-[11px] text-slate-400">
+                {when || (blocked ? 'Serials required' : isNext ? 'Next step' : '')}
+              </span>
             </div>
           );
         })}
       </div>
 
+      {nextStep && (
+        <div className={`mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+          nextBlocked ? 'border-amber-200 bg-amber-50' : 'border-primary-100 bg-primary-50/60'
+        }`}>
+          <p className={`flex items-center gap-2 text-sm ${nextBlocked ? 'text-amber-800' : 'text-slate-700'}`}>
+            {nextBlocked ? <AlertTriangle size={16} className="shrink-0 text-amber-500" /> : <ArrowRight size={16} className="shrink-0 text-primary-600" />}
+            {nextBlocked
+              ? <span><strong>Before shipping:</strong> select serial numbers for every item below and save them.</span>
+              : <span>Next step: <strong>{nextStep.label}</strong></span>}
+          </p>
+          <button
+            onClick={() => onStatusUpdate(nextStep.status)}
+            disabled={loading}
+            className={nextBlocked ? 'btn-secondary' : 'btn-primary'}
+          >
+            <nextStep.Icon size={15} /> {nextStep.label}
+          </button>
+        </div>
+      )}
+
       {order.status === 'delivered' && (
-        <div className="mt-5 flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">
-          <CheckCircle size={15} className="mt-0.5 shrink-0 text-green-600" />
+        <div className="mt-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <CheckCircle size={16} className="mt-0.5 shrink-0 text-emerald-600" />
           <span><strong>Delivered.</strong> The dealer&apos;s inventory has been updated with the quantities from this order.</span>
         </div>
       )}
@@ -231,13 +267,16 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
 
   return (
     <div className="card">
-      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Hash size={16} className="text-blue-500" />
-          <h2 className="font-semibold text-slate-900">Serial Numbers</h2>
-          {saved && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">All Saved ✓</span>}
+      <div className="flex flex-wrap items-start justify-between gap-2 px-5 pt-5 pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="section-title">Serial numbers</h2>
+            {saved && <span className="badge-green"><Check size={12} /> All saved</span>}
+          </div>
+          <p className="section-subtitle">
+            {saved ? 'Recorded for warranty tracking' : 'Select the serial number of every unit before dispatch'}
+          </p>
         </div>
-        {!saved && <p className="text-xs text-slate-400">Select serial numbers for each item before dispatch</p>}
       </div>
 
       {/* Overlay to close dropdown on outside click */}
@@ -245,7 +284,7 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
         <div className="fixed inset-0 z-10" onClick={() => setOpenDropdown(null)} />
       )}
 
-      <div className="px-6 py-4 space-y-5">
+      <div className="space-y-5 border-t border-slate-100 px-5 py-4">
         {lineItems.map((item, i) => {
           const selected = getSerials(i);
           const qty = item.quantity;
@@ -414,7 +453,7 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="mt-2 flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="btn-primary mt-2"
           >
             <Save size={14} />
             {saving ? 'Saving…' : 'Save Serial Numbers'}
@@ -422,8 +461,9 @@ const SerialNumberSection = ({ order, onSerialsComplete }) => {
         )}
 
         {saved && (
-          <div className="mt-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700 font-medium">
-            All serial numbers saved. DispatchedUnit records updated for warranty tracking.
+          <div className="mt-2 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+            <CheckCircle size={16} className="shrink-0" />
+            All serial numbers saved and recorded for warranty tracking.
           </div>
         )}
       </div>
@@ -607,7 +647,7 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
       return;
     }
     toast.custom((t) => (
-      <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-5 py-4 flex flex-col gap-3 min-w-[260px]">
+      <div className="card shadow-lg px-5 py-4 flex flex-col gap-3 min-w-[260px]">
         <div className="flex items-center gap-2">
           <CheckCircle size={16} className="text-green-500 shrink-0" />
           <p className="font-semibold text-slate-800 text-sm">Confirm this order?</p>
@@ -656,6 +696,14 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
   const customerPhone = dealer.phone || order.customerPhone || '';
   const addr = order.deliveryAddress || {};
   const timeline = order.timeline || [];
+  const lastEvent = timeline[timeline.length - 1];
+  const totalUnits = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const paymentLabel = isPartPaid ? 'partly paid' : (order.paymentStatus || 'pending');
+  const paymentMethodLabel = !order.paymentMethod
+    ? ''
+    : /^net-\d+$/.test(order.paymentMethod)
+      ? `Credit limit · ${order.paymentMethod.replace('net-', 'Net ')}`
+      : order.paymentMethod;
 
   const statusColor =
     order.status === 'delivered' ? 'bg-green-100 text-green-700' :
@@ -668,309 +716,316 @@ ${[{ label: 'Order Placed', value: order.createdAt }, ...(order.confirmedAt ? [{
 
   return (
     <div>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-[1fr_auto_1.5fr] items-start gap-3 mb-6">
-        <button onClick={() => navigate('/orders')} className="justify-self-start p-2 hover:bg-slate-100 rounded-lg mt-0.5">
-          <ArrowLeft size={20} />
-        </button>
-
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900">{order.orderNumber}</h1>
-          {order.dealerOrderNumber && (
-            <p className="text-xs text-slate-400 mt-0.5">
-              Dealer Order: <span className="font-medium text-slate-600">{order.dealerOrderNumber}</span>
-            </p>
+      <div className="mb-5">
+        <PageHeader
+          compact
+          icon={ShoppingCart}
+          title={order.orderNumber}
+          badge={(
+            <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold capitalize ${statusColor}`}>
+              {order.status?.replace(/_/g, ' ')}
+            </span>
           )}
-          <p className="text-sm text-slate-500 mt-0.5">
-            Placed on {format(new Date(order.createdAt), 'MMM dd, yyyy')}
-          </p>
-          <span className={`inline-flex items-center mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold capitalize ${statusColor}`}>
-            {order.status?.replace(/_/g, ' ')}
-          </span>
-        </div>
-
-        <div className="justify-self-end flex gap-2 items-center">
-          {['draft', 'pending'].includes(order.status) && (
+          subtitle={(
             <>
-              <button onClick={() => dispatch(confirmOrder(id))} disabled={loading} className="btn-primary flex items-center gap-1.5 text-sm">
-                <CheckCircle size={14} /> Accept Order
-              </button>
-              <button onClick={() => dispatch(cancelOrder({ id, reason: 'Rejected by supplier' }))} className="btn-danger flex items-center gap-1.5 text-sm">
-                <XCircle size={14} /> Reject
-              </button>
+              Placed on {format(new Date(order.createdAt), 'dd MMM yyyy')}
+              {order.dealerOrderNumber && <> · Dealer order <span className="font-medium text-slate-700">{order.dealerOrderNumber}</span></>}
             </>
           )}
-          {!['draft', 'pending'].includes(order.status) && (
-            <>
-              <button type='button' onClick={handlePrint} className="btn-secondary flex items-center gap-1.5 text-sm">
-                <Printer size={14} /> Print
-              </button>
-              <button type='button' onClick={handleInvoice} className="btn-danger flex items-center gap-1.5 text-sm">
-                <FileText size={14} /> {orderInvoiceId ? 'View Invoice' : 'Create Invoice'}
-              </button>
-            </>
-          )}
-        </div>
+          back={{ label: 'Orders', onClick: () => navigate('/orders') }}
+        >
+        {['draft', 'pending'].includes(order.status) && (
+          <>
+            <button onClick={() => dispatch(confirmOrder(id))} disabled={loading} className="btn-primary flex items-center gap-1.5 text-sm">
+              <CheckCircle size={14} /> Accept Order
+            </button>
+            <button onClick={() => dispatch(cancelOrder({ id, reason: 'Rejected by supplier' }))} className="btn-danger flex items-center gap-1.5 text-sm">
+              <XCircle size={14} /> Reject
+            </button>
+          </>
+        )}
+        {!['draft', 'pending'].includes(order.status) && (
+          <>
+            <button type='button' onClick={handlePrint} className="btn-secondary flex items-center gap-1.5 text-sm">
+              <Printer size={14} /> Print
+            </button>
+            <button type='button' onClick={handleInvoice} className="btn-primary flex items-center gap-1.5 text-sm">
+              <FileText size={14} /> {orderInvoiceId ? 'View Invoice' : 'Create Invoice'}
+            </button>
+          </>
+        )}
+        </PageHeader>
       </div>
 
-      {/* ── Two-column layout ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+      {/* ── At a glance ─────────────────────────────────────────────────── */}
+      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <KPICard
+          title="Order total"
+          value={fmt(total)}
+          icon={IndianRupee}
+          color="blue"
+          subtitle={tax > 0 ? `Includes ${fmt(tax)} tax` : 'No tax applied'}
+        />
+        <KPICard
+          title="Items"
+          value={totalUnits.toLocaleString('en-IN')}
+          icon={Package}
+          color="purple"
+          subtitle={`${items.length} product${items.length === 1 ? '' : 's'} · ${totalUnits === 1 ? '1 unit' : `${totalUnits} units`}`}
+        />
+        <KPICard
+          title="Payment"
+          value={<span className="capitalize">{paymentLabel}</span>}
+          icon={Wallet}
+          color={isFullyPaid ? 'green' : isPartPaid ? 'blue' : 'yellow'}
+          subtitle={ledgerRow && ledgerRow.outstanding > 0.01 ? `${fmt(ledgerRow.outstanding)} still due` : paymentMethodLabel || 'Method not recorded'}
+        />
+        <KPICard
+          title="Fulfilment"
+          value={<span className="capitalize">{order.status?.replace(/_/g, ' ')}</span>}
+          icon={order.status === 'cancelled' ? XCircle : Truck}
+          color={order.status === 'cancelled' ? 'red' : order.status === 'delivered' ? 'green' : 'orange'}
+          subtitle={lastEvent?.timestamp ? `Updated ${format(new Date(lastEvent.timestamp), 'dd MMM, hh:mm a')}` : `Placed ${format(new Date(order.createdAt), 'dd MMM yyyy')}`}
+        />
+      </div>
 
-        {/* LEFT */}
-        <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_360px]">
 
-          {/* Order Items card */}
-          <div className="card">
-            <div className="px-6 py-4 border-b border-slate-100">
-              <h2 className="font-semibold text-slate-900">Order Items</h2>
-            </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Product</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Price</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Quantity</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {items.map((item, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-slate-900">{item.productName || item.name || item.productId?.name || '—'}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">SKU: {item.productCode || item.sku || '—'}</p>
-                    </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-900">₹{(item.unitPrice || item.basePrice || 0).toLocaleString('en-IN')}</td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-900">{item.quantity}</td>
-                    <td className="px-6 py-4 text-right font-bold text-slate-900">{fmt(item.lineTotal)}</td>
+        {/* ── Main column ───────────────────────────────────────────────── */}
+        <div className="min-w-0 space-y-5">
+
+          <SectionCard title="Fulfilment" subtitle="Move the order forward one step at a time">
+            <OrderProgress order={order} onStatusUpdate={handleStatusUpdate} loading={statusLoading || loading} serialsComplete={serialsComplete} />
+          </SectionCard>
+
+          <SectionCard
+            title="Order items"
+            subtitle={`${items.length} product${items.length === 1 ? '' : 's'} · ${totalUnits} unit${totalUnits === 1 ? '' : 's'}`}
+            flush
+          >
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th className="pl-5">Product</th>
+                    <th className="text-right">Price</th>
+                    <th className="text-center">Qty</th>
+                    <th className="pr-5 text-right">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((item, i) => {
+                    const name = item.productName || item.name || item.productId?.name || '—';
+                    return (
+                      <tr key={i}>
+                        <td className="pl-5 whitespace-normal">
+                          <div className="flex items-center gap-3">
+                            <span className="icon-tile h-10 w-10 rounded-xl bg-primary-50 text-primary-600 ring-1 ring-inset ring-primary-100">
+                              <Package size={17} />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-900">{name}</p>
+                              <p className="text-xs text-slate-400">SKU {item.productCode || item.sku || '—'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="text-right tabular-nums">₹{(item.unitPrice || item.basePrice || 0).toLocaleString('en-IN')}</td>
+                        <td className="text-center">
+                          <span className="inline-flex min-w-[32px] justify-center rounded-md bg-slate-100 px-2 py-0.5 text-sm font-semibold tabular-nums text-slate-700">
+                            {item.quantity}
+                          </span>
+                        </td>
+                        <td className="pr-5 text-right font-semibold tabular-nums text-slate-900">{fmt(item.lineTotal)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-            {/* Totals */}
-            <div className="px-6 py-4 border-t border-slate-100 space-y-2 bg-slate-50 rounded-b-2xl">
-              <div className="flex justify-between text-sm text-slate-600"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
-              <div className="flex justify-between text-sm text-slate-600">
-                <span>Tax{order.taxRate ? ` (${Math.round((order.taxRate || 0) * 100)}%)` : ''}</span>
-                <span>{fmt(tax)}</span>
-              </div>
-              {shipping > 0 && (
-                <div className="flex justify-between text-sm text-slate-600"><span>Shipping</span><span>{fmt(shipping)}</span></div>
-              )}
-              {discount > 0 && (
-                <div className="flex justify-between text-sm text-emerald-600">
-                  <span>Flash sale discount{order.flashSaleApplied && order.discountPercent ? ` (${order.discountPercent}%)` : ''}</span>
-                  <span>-{fmt(discount)}</span>
+            <div className="flex justify-end border-t border-slate-100 bg-slate-50/60 px-5 py-4">
+              <dl className="w-full max-w-xs space-y-2 text-sm">
+                <div className="flex justify-between text-slate-600"><dt>Subtotal</dt><dd className="tabular-nums">{fmt(subtotal)}</dd></div>
+                <div className="flex justify-between text-slate-600">
+                  <dt>Tax{order.taxRate ? ` (${Math.round((order.taxRate || 0) * 100)}%)` : ''}</dt>
+                  <dd className="tabular-nums">{fmt(tax)}</dd>
                 </div>
-              )}
-              <div className="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-200 text-base">
-                <span>Total</span><span>{fmt(total)}</span>
-              </div>
+                {shipping > 0 && (
+                  <div className="flex justify-between text-slate-600"><dt>Shipping</dt><dd className="tabular-nums">{fmt(shipping)}</dd></div>
+                )}
+                {discount > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <dt>Flash sale discount{order.flashSaleApplied && order.discountPercent ? ` (${order.discountPercent}%)` : ''}</dt>
+                    <dd className="tabular-nums">-{fmt(discount)}</dd>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-900">
+                  <dt>Total</dt><dd className="tabular-nums">{fmt(total)}</dd>
+                </div>
+              </dl>
             </div>
-          </div>
-
-          {/* Serial numbers reminder banner — shown when confirmed and serials not yet entered */}
-          {order.status === 'confirmed' && !serialsComplete && (
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
-              <Hash size={15} className="mt-0.5 shrink-0 text-amber-500" />
-              <span>
-                <strong>Action required:</strong> Enter/Scan serial numbers for all items below before marking this order as Shipped.
-              </span>
-            </div>
-          )}
+          </SectionCard>
 
           {/* Serial Numbers — shown after order is confirmed */}
           <SerialNumberSection order={order} onSerialsComplete={setSerialsComplete} />
 
-          {/* Timeline card — progress stepper + events */}
-          <div className="card">
-            <div className="px-6 py-4 border-b border-slate-100">
-              <h2 className="font-semibold text-slate-900">Time Line</h2>
-            </div>
-            <div className="px-6 py-5">
-
-              {/* ORDER PROGRESS stepper (Image 3) */}
-              <OrderProgress order={order} onStatusUpdate={handleStatusUpdate} loading={statusLoading || loading} serialsComplete={serialsComplete} />
-
-              {/* Timeline events */}
-              {timeline.length > 0 ? (
-                <div className="relative pl-5 mt-2">
-                  <div className="absolute left-2 top-2 bottom-2 w-px bg-slate-100" />
-                  {timeline.map((event, i) => (
-                    <div key={i} className="relative mb-4 last:mb-0">
-                      <div className="absolute -left-3.5 top-1.5 w-2.5 h-2.5 rounded-full border-2 border-slate-300 bg-white" />
-                      <p className="font-medium text-sm text-slate-800">{event.description || event.status}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {event.timestamp ? format(new Date(event.timestamp), 'MMMM dd, yyyy · hh:mm a') : ''}
-                        {event.location ? ` · ${event.location}` : ''}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400 text-center py-2">No events yet</p>
-              )}
-            </div>
-          </div>
-
+          <SectionCard title="Activity" subtitle="Everything that has happened on this order">
+            {timeline.length > 0 ? (
+              <ol className="relative space-y-4 pl-6">
+                <span className="absolute bottom-1 left-[7px] top-1 w-px bg-slate-200" />
+                {[...timeline].reverse().map((event, i) => (
+                  <li key={i} className="relative">
+                    <span className={`absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-white ${i === 0 ? 'bg-primary-600 ring-4 ring-primary-100' : 'bg-slate-300'}`} />
+                    <p className={`text-sm font-medium text-slate-800 ${event.description ? '' : 'capitalize'}`}>{event.description || event.status?.replace(/_/g, ' ')}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {event.timestamp ? format(new Date(event.timestamp), 'dd MMM yyyy · hh:mm a') : ''}
+                      {event.location ? ` · ${event.location}` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="flex flex-col items-center gap-2 py-6 text-slate-400">
+                <Activity size={20} className="opacity-50" />
+                <p className="text-sm">No activity yet</p>
+              </div>
+            )}
+          </SectionCard>
         </div>
 
-        {/* RIGHT */}
-        <div className="space-y-4">
+        {/* ── Side column ───────────────────────────────────────────────── */}
+        <div className="space-y-5">
 
-          {/* Customer Details */}
-          <div className="card">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <h2 className="font-semibold text-slate-900">Customer Details</h2>
-            </div>
-            <div className="px-5 py-4 space-y-3">
-              <div>
-                <p className="font-semibold text-slate-900">{customerName}</p>
-                {customerEmail && <p className="text-sm text-slate-500 mt-0.5">{customerEmail}</p>}
-                {customerPhone && <p className="text-sm text-slate-500">{customerPhone}</p>}
+          <SectionCard
+            title={order.dealerId ? 'Dealer' : 'Customer'}
+            action={dealer._id && (
+              <button type="button" onClick={() => navigate(`/dealers/${dealer._id}`)} className="link text-xs">View dealer</button>
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <span className="icon-tile h-11 w-11 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-base font-bold text-white shadow-brand">
+                {(customerName || '?').charAt(0).toUpperCase()}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-900">{customerName}</p>
+                <p className="text-xs text-slate-500">{order.dealerId ? 'Dealer order (B2B)' : 'Buvvas website order'}</p>
               </div>
-              {(addr.fullAddress || addr.city) && (
-                <div className="pt-3 border-t border-slate-100">
-                  <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide mb-1.5">Shipping Address</p>
-                  {addr.fullAddress && <p className="text-sm text-slate-700">{addr.fullAddress}</p>}
-                  <p className="text-sm text-slate-500">
-                    {[addr.city, addr.postalCode].filter(Boolean).join(', ')}
-                    {addr.country ? `, ${addr.country}` : ''}
-                  </p>
-                </div>
+            </div>
+            <div className="mt-4 space-y-2.5 text-sm">
+              {customerEmail && (
+                <a href={`mailto:${customerEmail}`} className="flex items-center gap-2.5 text-slate-600 hover:text-primary-700">
+                  <Mail size={15} className="shrink-0 text-slate-400" /> <span className="truncate">{customerEmail}</span>
+                </a>
+              )}
+              {customerPhone && (
+                <a href={`tel:${customerPhone}`} className="flex items-center gap-2.5 text-slate-600 hover:text-primary-700">
+                  <Phone size={15} className="shrink-0 text-slate-400" /> {customerPhone}
+                </a>
               )}
             </div>
-          </div>
+            {(addr.fullAddress || addr.city) && (
+              <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <MapPin size={13} /> Shipping address
+                </p>
+                {addr.fullAddress && <p className="text-sm text-slate-700">{addr.fullAddress}</p>}
+                <p className="text-sm text-slate-500">
+                  {[addr.city, addr.postalCode].filter(Boolean).join(', ')}
+                  {addr.country ? `, ${addr.country}` : ''}
+                </p>
+              </div>
+            )}
+          </SectionCard>
 
-          {/* Payment Info */}
-          <div className="card">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <h2 className="font-semibold text-slate-900">Payment Info</h2>
-            </div>
-            <div className="px-5 py-4 space-y-3">
+          <SectionCard
+            title="Payment"
+            action={(
+              <span className={isFullyPaid ? 'badge-green' : isPartPaid ? 'badge-blue' : 'badge-yellow'}>
+                <span className="capitalize">{paymentLabel}</span>
+              </span>
+            )}
+          >
+            <dl className="space-y-2.5 text-sm">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <CreditCard size={14} className="text-slate-400" />
-                  <span>Payment Status</span>
-                </div>
-                <span className={`badge ${isFullyPaid ? 'badge-green' : isPartPaid ? 'badge-blue' : 'badge-yellow'}`}>
-                  {isPartPaid ? 'partial' : (order.paymentStatus || 'Pending')}
-                </span>
+                <dt className="flex items-center gap-2 text-slate-500"><CreditCard size={14} className="text-slate-400" /> Method</dt>
+                <dd className="font-medium capitalize text-slate-800">{paymentMethodLabel || 'Not recorded'}</dd>
               </div>
-              {(order.paymentMethod) && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500">Payment Method</span>
-                  <span className="font-medium text-slate-700 capitalize">
-                    {/^net-\d+$/.test(order.paymentMethod)
-                      ? `Credit Limit · ${order.paymentMethod.replace('net-', 'Net ')}`
-                      : order.paymentMethod}
-                  </span>
+              {order.pricingTier && (
+                <div className="flex items-center justify-between">
+                  <dt className="text-slate-500">Pricing tier</dt>
+                  <dd className="font-medium capitalize text-slate-800">{order.pricingTier}</dd>
                 </div>
               )}
-              {!order.paymentMethod && (
-                <p className="text-xs text-slate-400">Payment method not recorded</p>
-              )}
-              {/* Split orders never show an amount above — "Payment Status: pending" just means
-                  the CREDIT portion is still outstanding, but the pay-now portion is already
-                  collected. Without this, the page looks like nothing was paid at all. */}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-2.5">
+                <dt className="text-slate-500">Order total</dt>
+                <dd className="font-semibold tabular-nums text-slate-900">{fmt(total)}</dd>
+              </div>
+              {/* Split orders: "pending" only means the credit portion is outstanding —
+                  the pay-now portion was collected at checkout. */}
               {order.paymentMethod === 'split' && (
-                <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3">
-                  <span className="text-slate-500">Paid at checkout</span>
-                  <span className="font-medium text-green-700">{fmt(order.splitPayNowAmount)}</span>
-                </div>
-              )}
-              {order.paymentMethod === 'split' && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500">On credit</span>
-                  <span className="font-medium text-slate-700">{fmt(order.splitCreditAmount)}</span>
-                </div>
+                <>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-slate-500">Paid at checkout</dt>
+                    <dd className="font-medium tabular-nums text-emerald-700">{fmt(order.splitPayNowAmount)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-slate-500">On credit</dt>
+                    <dd className="font-medium tabular-nums text-slate-800">{fmt(order.splitCreditAmount)}</dd>
+                  </div>
+                </>
               )}
               {/* Payments made after checkout — cash / UPI / cheque recorded in Finance → Ledger */}
-              {laterPayments.map((p) => (
-                <div key={p._id} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500">
+              {laterPayments.map((pay) => (
+                <div key={pay._id} className="flex items-center justify-between gap-2">
+                  <dt className="text-slate-500">
                     {isCreditOrder ? 'Credit paid' : 'Paid'}
-                    <span className="text-slate-400"> · {METHOD_LABELS[p.method] || p.method} · {format(new Date(p.paidOn), 'dd MMM yyyy')}</span>
-                  </span>
-                  <span className="font-medium text-green-700">{fmt(p.amount)}</span>
+                    <span className="text-slate-400"> · {METHOD_LABELS[pay.method] || pay.method} · {format(new Date(pay.paidOn), 'dd MMM yyyy')}</span>
+                  </dt>
+                  <dd className="font-medium tabular-nums text-emerald-700">{fmt(pay.amount)}</dd>
                 </div>
               ))}
-              {ledgerRow && laterPayments.length > 0 && (
-                <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3">
-                  <span className="font-medium text-slate-600">Balance due</span>
-                  <span className={`font-semibold ${ledgerRow.outstanding > 0.01 ? 'text-red-600' : 'text-green-700'}`}>
+              {ledgerRow && (
+                <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
+                  <dt className="font-semibold text-slate-700">Balance due</dt>
+                  <dd className={`text-base font-bold tabular-nums ${ledgerRow.outstanding > 0.01 ? 'text-red-600' : 'text-emerald-700'}`}>
                     {fmt(ledgerRow.outstanding)}
-                  </span>
+                  </dd>
                 </div>
               )}
-              {ledgerRow && !ledgerRow.settled && ledgerRow.outstanding > 0.01 && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Dealer paid outside the app (cash, UPI, cheque)? Record it in{' '}
-                  <button type="button" className="font-semibold underline"
-                    onClick={() => navigate('/finance/ledger', { state: { openOrderId: order._id } })}>
-                    Finance → Ledger
-                  </button>
-                  {' '}— it updates this order, its invoice, the dealer's credit and the dealer app.
-                </div>
-              )}
-              {order.pricingTier && (
-                <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3">
-                  <span className="text-slate-500">Pricing Tier</span>
-                  <span className="font-medium capitalize text-slate-700">{order.pricingTier}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Shipping Method */}
-          {/* <div className="card">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <h2 className="font-semibold text-slate-900">Shipping Method</h2>
-            </div>
-            <div className="px-5 py-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
-                <Truck size={16} className="text-purple-600" />
+            </dl>
+            {ledgerRow && !ledgerRow.settled && ledgerRow.outstanding > 0.01 && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800">
+                Dealer paid outside the app (cash, UPI, cheque)?
+                <button
+                  type="button"
+                  className="btn-secondary mt-2 w-full py-1.5 text-xs"
+                  onClick={() => navigate('/finance/ledger', { state: { openOrderId: order._id } })}
+                >
+                  <Wallet size={13} /> Record payment in Ledger
+                </button>
+                <p className="mt-1.5 text-amber-700/80">It updates this order, its invoice, the dealer's credit and the dealer app.</p>
               </div>
-              <div>
-                <p className="font-medium text-sm text-slate-900">
-                  {order.carrier || 'Standard Shipping'}
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Tracking: {order.trackingId || 'Pending'}
-                </p>
-                {(order.shippingCost > 0) && (
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Shipping Cost: ₹{order.shippingCost.toLocaleString('en-')}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div> */}
-          <div className="card">
-            <div className="px-6 py-4 border-b border-slate-100">
-              <h2 className="font-semibold text-slate-900">Return Details</h2>
-            </div>
-            <div className="px-6 py-5">
-              {order.returns && order.returns.length > 0 ? (
-                order.returns.map((ret, idx) => (
-                  <div key={idx} className="mb-4 last:mb-0">
-                    <p className="font-medium text-sm text-slate-800">RMA: {ret.rmaNumber || ret.returnId}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Status: {ret.status} · Refund: ₹{(ret.refundAmount || 0).toLocaleString('en-IN')}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      Refund Status: {ret.refundStatus || '—'}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-slate-400 text-center py-2">No returns found</p>
-              )}
-            </div>
-          </div>
+            )}
+          </SectionCard>
 
-
+          <SectionCard title="Returns" subtitle={order.returns?.length ? `${order.returns.length} on this order` : undefined}>
+            {order.returns && order.returns.length > 0 ? (
+              <ul className="space-y-3">
+                {order.returns.map((ret, idx) => (
+                  <li key={idx} className="flex items-start gap-3 rounded-xl border border-slate-100 p-3">
+                    <span className="icon-tile h-9 w-9 rounded-lg bg-rose-50 text-rose-600"><RotateCcw size={15} /></span>
+                    <div className="min-w-0 flex-1 text-sm">
+                      <p className="font-semibold text-slate-800">RMA {ret.rmaNumber || ret.returnId}</p>
+                      <p className="text-xs capitalize text-slate-500">{ret.status} · refund {ret.refundStatus || '—'}</p>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums text-slate-800">₹{(ret.refundAmount || 0).toLocaleString('en-IN')}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="flex items-center gap-2 text-sm text-slate-400"><CheckCircle size={15} /> No returns on this order</p>
+            )}
+          </SectionCard>
         </div>
       </div>
     </div>

@@ -4,7 +4,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchFlashSaleById, createFlashSale, updateFlashSale, clearSelectedFlashSale } from '../flashSaleSlice';
 import { fetchProducts, fetchCategories } from '../../products/productSlice';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Zap } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 // datetime-local inputs need "YYYY-MM-DDTHH:mm" in local time — toISOString()
 // would shift to UTC and drift the displayed time from what was actually set.
@@ -74,12 +75,14 @@ const FlashSaleFormPage = () => {
   };
 
   return (
-    <div className="space-y-5 max-w-2xl">
-      <button onClick={() => navigate('/flash-sales')} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft size={14} /> Back to Flash Sales
-      </button>
-
-      <h1 className="text-2xl font-bold text-slate-900">{isEdit ? 'Edit Flash Sale' : 'New Flash Sale'}</h1>
+    <div className="mx-auto max-w-2xl space-y-5">
+      <PageHeader
+        compact
+        icon={Zap}
+        title={isEdit ? 'Edit flash sale' : 'New flash sale'}
+        subtitle="A first-order discount for customers on the Buvvas website"
+        back={{ label: 'Flash sale', onClick: () => navigate('/flash-sales') }}
+      />
 
       <form onSubmit={handleSubmit(onSubmit)} className="card p-6 space-y-5">
         <div>

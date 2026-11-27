@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AuthLayout from '../components/AuthLayout';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import api from '../../../services/api';
 import { KeyRound } from 'lucide-react';
@@ -43,17 +44,7 @@ const ResetPasswordPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-primary-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl mb-4">
-            <KeyRound className="text-white" size={28} />
-          </div>
-          <h1 className="text-2xl font-bold text-white">Set New Password</h1>
-          <p className="text-slate-400 mt-1">Choose a strong password for your account</p>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+    <AuthLayout icon={KeyRound} title="Set a new password" subtitle="Choose a strong password for your account">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="label">New Password</label>
@@ -78,12 +69,12 @@ const ResetPasswordPage = () => {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-lg">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {error}
               </div>
             )}
 
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3">
+            <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
@@ -100,9 +91,7 @@ const ResetPasswordPage = () => {
               </Link>
             </div>
           </form>
-        </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 };
 

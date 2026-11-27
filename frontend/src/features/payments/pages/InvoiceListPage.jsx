@@ -6,7 +6,8 @@ import Table from '../../../components/ui/Table';
 import Pagination from '../../../components/ui/Pagination';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { format } from 'date-fns';
-import { Plus, Search, Eye, Trash2, Send, FileText } from 'lucide-react';
+import { Plus, Search, Eye, Trash2, Send, FileText, ReceiptText } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
  
 // Inline-editable Date cell for the table — keeps its own draft value so typing/
 // picking a date doesn't feel laggy, and saves via the existing updateInvoice
@@ -200,17 +201,12 @@ const InvoiceListPage = () => {
  
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Sales Invoices</h1>
-        <button
-          onClick={() => navigate('/invoices/new')}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={16} /> New Invoice
+      <PageHeader icon={ReceiptText} title="Sales invoices" subtitle="GST invoices for dealers and customers">
+        <button onClick={() => navigate('/invoices/new')} className="btn-primary">
+          <Plus size={16} /> New invoice
         </button>
-      </div>
- 
+      </PageHeader>
+
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
         {/* Search */}

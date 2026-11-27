@@ -1,64 +1,67 @@
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
+// Top accent bar, soft background tint and icon tile per colour.
 const COLOR_MAP = {
-  blue:   { icon: 'bg-blue-100 text-blue-600' },
-  green:  { icon: 'bg-green-100 text-green-600' },
-  red:    { icon: 'bg-red-100 text-red-600' },
-  yellow: { icon: 'bg-amber-100 text-amber-600' },
-  purple: { icon: 'bg-purple-100 text-purple-600' },
-  orange: { icon: 'bg-orange-100 text-orange-600' },
+  blue:   { bar: 'bg-primary-500', tint: 'from-primary-50/80', icon: 'bg-primary-100/80 text-primary-600' },
+  green:  { bar: 'bg-emerald-600', tint: 'from-emerald-50/80', icon: 'bg-emerald-100/80 text-emerald-700' },
+  red:    { bar: 'bg-red-500',     tint: 'from-red-50/80',     icon: 'bg-red-100/80 text-red-600' },
+  yellow: { bar: 'bg-amber-500',   tint: 'from-amber-50/80',   icon: 'bg-amber-100/80 text-amber-700' },
+  purple: { bar: 'bg-violet-500',  tint: 'from-violet-50/80',  icon: 'bg-violet-100/80 text-violet-600' },
+  orange: { bar: 'bg-orange-500',  tint: 'from-orange-50/80',  icon: 'bg-orange-100/80 text-orange-600' },
 };
 
 /**
- * KPICard — Figma-aligned metric card
+ * KPICard — stat card with a coloured top bar.
  * Props:
  *   title        string   — metric label
  *   value        string|number — main value
  *   icon         LucideIcon
  *   color        'blue'|'green'|'red'|'yellow'|'purple'|'orange'
  *   trend        number   — e.g. 18 or -11 (percentage)
- *   trendLabel   string   — e.g. "vs last year", "need review"
- *   subtitle     string   — small note below value
+ *   trendLabel   string   — e.g. "vs last year"
+ *   subtitle     node     — small note below value
+ *   onClick      function — makes the card a button
+ *   active       boolean  — highlights the card (e.g. the filter it applies is on)
  */
-const KPICard = ({ title, value, icon: Icon, color = 'blue', trend, trendLabel = 'vs last year', subtitle }) => {
+const KPICard = ({ title, value, icon: Icon, color = 'blue', trend, trendLabel = 'vs last year', subtitle, onClick, active = false }) => {
   const cls = COLOR_MAP[color] || COLOR_MAP.blue;
+  const Wrapper = onClick ? 'button' : 'div';
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md transition-shadow">
-      {/* Title + Icon row */}
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide leading-tight">
-          {title}
-        </p>
+    <Wrapper
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      aria-pressed={onClick ? active : undefined}
+      className={`relative overflow-hidden rounded-2xl border bg-gradient-to-b ${cls.tint} to-white to-60% p-5 text-left shadow-card transition-all hover:shadow-card-hover ${
+        active ? 'border-primary-300 ring-4 ring-primary-100' : 'border-slate-200/80'
+      } ${onClick ? 'w-full cursor-pointer hover:-translate-y-0.5' : ''}`}
+    >
+      <span className={`absolute inset-x-0 top-0 h-1 ${cls.bar}`} />
+
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium leading-snug text-slate-600">{title}</p>
         {Icon && (
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${cls.icon}`}>
-            <Icon size={19} />
-          </div>
-        )}
-      </div>
-
-      {/* Value */}
-      <p className="text-2xl font-bold text-slate-800 mb-2 leading-tight">{value ?? '—'}</p>
-
-      {/* Trend + subtitle */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        {trend !== undefined ? (
-          <span
-            className={`inline-flex items-center gap-1 text-xs font-semibold ${
-              trend >= 0 ? 'text-green-600' : 'text-red-500'
-            }`}
-          >
-            {trend >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-            {trend >= 0 ? '+' : ''}{trend}% {trendLabel}
+          <span className={`icon-tile h-10 w-10 rounded-xl ${cls.icon}`}>
+            <Icon size={18} />
           </span>
-        ) : (
-          <span />
-        )}
-        {subtitle && (
-          <p className="text-xs text-slate-400 leading-tight">{subtitle}</p>
         )}
       </div>
-    </div>
+
+      <p className="mt-2 text-[28px] font-bold leading-tight tracking-tight text-slate-900 tabular-nums">{value ?? '—'}</p>
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-500">
+        {trend !== undefined && trend !== null && (
+          <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold ${
+            trend >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+          }`}>
+            {trend >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+            {trend >= 0 ? '+' : ''}{trend}%
+            <span className="font-normal text-slate-500">{trendLabel}</span>
+          </span>
+        )}
+        {subtitle && <span className="leading-snug">{subtitle}</span>}
+      </div>
+    </Wrapper>
   );
 };
 

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { createLead } from '../marketingSlice';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Megaphone } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const LEAD_SOURCES = [
   { value: 'justdial', label: 'JustDial / External List' },
@@ -115,41 +116,38 @@ const AddMarketingLeadPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Page top bar */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-blue-700">Add New Dealer Lead</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Capture dealer details from external sources, log call information and push to onboarding page.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/marketing-leads')}
-            className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !form.businessName.trim() || !form.primaryContact.trim() || !form.phone.trim()}
-            className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {submitting ? 'Saving...' : 'Save Lead & Continue'}
-          </button>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        compact
+        icon={Megaphone}
+        title="Add dealer lead"
+        subtitle="Capture dealer details from external sources, log calls and push them to onboarding"
+        back={{ label: 'Marketing leads', onClick: () => navigate('/marketing-leads') }}
+      >
+        <button
+          onClick={() => navigate('/marketing-leads')}
+          className="btn-secondary"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !form.businessName.trim() || !form.primaryContact.trim() || !form.phone.trim()}
+          className="btn-primary"
+        >
+          {submitting ? 'Saving...' : 'Save Lead & Continue'}
+        </button>
+      </PageHeader>
 
       {/* Body */}
-      <div className="max-w-8xl mx-auto px-6 py-6 grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-5">
 
         {/* LEFT: Business + Location */}
         <div className="col-span-2 space-y-6">
 
           {/* Business Information */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <h2 className="text-base font-bold text-slate-800 mb-5">Business Information</h2>
+          <div className="card p-6">
+            <h2 className="section-title mb-5">Business Information</h2>
             <div className="space-y-4">
               <InputField
                 label="Business Name"
@@ -202,8 +200,8 @@ const AddMarketingLeadPage = () => {
           </div>
 
           {/* Location Details */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <h2 className="text-base font-bold text-slate-800 mb-5">Location Details</h2>
+          <div className="card p-6">
+            <h2 className="section-title mb-5">Location Details</h2>
             <div className="space-y-4">
               <InputField
                 label="Street Address"
@@ -252,8 +250,8 @@ const AddMarketingLeadPage = () => {
         <div className="space-y-6">
 
           {/* Initial Call Log */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <h2 className="text-base font-bold text-slate-800 mb-5">Initial Call Log</h2>
+          <div className="card p-6">
+            <h2 className="section-title mb-5">Initial Call Log</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1.5">Call Outcome</label>
@@ -289,8 +287,8 @@ const AddMarketingLeadPage = () => {
           </div>
 
           {/* Onboarding Pipeline */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <h2 className="text-base font-bold text-slate-800 mb-5">Onboarding Pipeline</h2>
+          <div className="card p-6">
+            <h2 className="section-title mb-5">Onboarding Pipeline</h2>
             <div className="space-y-4">
               {PIPELINE_STAGES.map((stage, idx) => (
                 <div key={stage.key} className="flex items-start gap-3">

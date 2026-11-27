@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileSearch, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { FileSearch, Loader2, Pencil, Plus, Trash2, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../services/api';
 import Pagination from '../../../components/ui/Pagination';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const PAGE_TYPE_LABELS = {
   home: 'Home',
@@ -67,22 +68,13 @@ const SeoManagerPage = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">SEO Manager</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage metadata, page copy, and image alt text for the Buvvas ecommerce website.
-          </p>
-        </div>
-        <button
-          onClick={() => navigate('/seo/new')}
-          className="btn-primary flex items-center gap-2 text-sm py-2 px-4"
-        >
-          <Plus size={15} /> Add SEO Page
+      <PageHeader icon={Search} title="SEO manager" subtitle="Metadata, page copy and image alt text for the Buvvas website">
+        <button onClick={() => navigate('/seo/new')} className="btn-primary">
+          <Plus size={16} /> Add SEO page
         </button>
-      </div>
+      </PageHeader>
 
-      <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+      <div className="rounded-2xl border border-primary-100 bg-primary-50/60 px-4 py-3 text-sm text-primary-900">
         These settings apply to existing Buvvas pages; they do not create ecommerce pages.
         The site loads a published record for the current route at
         {' '}<code className="font-semibold">GET /api/seo/public?path=/page-path</code>.

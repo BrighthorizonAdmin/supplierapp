@@ -6,7 +6,8 @@ import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
-import { Search, Filter, X } from 'lucide-react';
+import { Search, Filter, X, RotateCcw } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_TABS = [
   { label: 'All Requests', value: '' },
@@ -69,28 +70,19 @@ const ReturnListPage = () => {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Returns & Refunds</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Review pending returns and manage refund approvals.</p>
-        </div>
-        <div className="flex items-center border border-slate-200 rounded-lg p-1 bg-white">
+      <PageHeader icon={RotateCcw} title="Returns & refunds" subtitle="Review pending returns and manage refund approvals">
+        <div className="segmented">
           {['Dealers', 'Retails'].map((t) => (
             <button
               key={t}
               onClick={() => setTypeFilter(t.toLowerCase())}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                typeFilter === t.toLowerCase()
-                  ? 'border border-blue-600 text-blue-600 bg-white'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
+              className={`segmented-item ${typeFilter === t.toLowerCase() ? 'segmented-item-active' : ''}`}
             >
               {t}
             </button>
           ))}
         </div>
-      </div>
+      </PageHeader>
 
       <div className="card">
         {/* Filter tabs + Search row */}

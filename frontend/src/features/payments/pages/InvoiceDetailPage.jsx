@@ -207,8 +207,8 @@ export default function InvoiceDetailPage() {
   return (
     <div>
       {/* Action bar */}
-      <div className="flex items-center justify-between mb-6 print:hidden">
-        <button onClick={() => navigate('/invoices')} className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 text-sm font-medium">
+      <div className="mb-5 print:hidden flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-primary-50/70 via-white to-white px-5 py-3.5 shadow-card">
+        <button onClick={() => navigate('/invoices')} className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900">
           <ArrowLeft size={16} /> Back to Invoices
         </button>
         <div className="flex gap-2">

@@ -12,6 +12,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import Modal from '../../../components/ui/Modal';
 import { getProductImageUrl } from '../../../utils/productImage';
+import { STOCK_STATUS_META, getStockStatus } from '../../../utils/stockLevels';
 
 const toPreviewUrl = (image) => getProductImageUrl(image);
 
@@ -683,11 +684,12 @@ const TAX_OPTIONS = [0, 5, 12, 18, 28];
             {isEdit && (() => {
               const cur  = selected?.currentStockQty  ?? 0;
               const open = selected?.openingStockQty ?? 0;
-              const status = cur <= 0
-                ? { label: 'Out of Stock',  cls: 'bg-red-100 text-red-700 border-red-200' }
-                : open > 0 && cur < open * 0.2
-                ? { label: 'Low Stock', cls: 'bg-amber-100 text-amber-700 border-amber-200' }
-                : { label: 'In Stock',  cls: 'bg-green-100 text-green-700 border-green-200' };
+              // App-wide rule: 0 = out of stock, 1–15 = low stock, more = in stock.
+              const status = {
+                'out-of-stock': { label: STOCK_STATUS_META['out-of-stock'].label, cls: 'bg-red-100 text-red-700 border-red-200' },
+                'low-stock': { label: STOCK_STATUS_META['low-stock'].label, cls: 'bg-amber-100 text-amber-700 border-amber-200' },
+                'in-stock': { label: STOCK_STATUS_META['in-stock'].label, cls: 'bg-green-100 text-green-700 border-green-200' },
+              }[getStockStatus(cur)];
               return (
                 <div>
                   <label className="label">Current Stock Quantity</label>

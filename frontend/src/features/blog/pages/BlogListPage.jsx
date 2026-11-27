@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchBlogs, deleteBlog } from '../blogSlice';
-import { FileText, Loader2, Plus, Pencil, Trash2 } from 'lucide-react';
+import { FileText, Loader2, Plus, Pencil, Trash2, Newspaper } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_COLOR = {
   draft: 'bg-gray-100 text-gray-600',
@@ -34,21 +35,15 @@ export default function BlogListPage() {
   };
 
   return (
-    <div className="p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Blog Management</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Create and publish posts shown on the Buvvas website's Blog section</p>
-        </div>
-        <button onClick={() => navigate('/blog/new')}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2.5 rounded-lg transition-colors">
-          <Plus size={16} /> New Post
+    <div className="space-y-5">
+      <PageHeader icon={Newspaper} title="Blog" subtitle="Posts shown in the Blog section of the Buvvas website">
+        <button onClick={() => navigate('/blog/new')} className="btn-primary">
+          <Plus size={16} /> New post
         </button>
-      </div>
+      </PageHeader>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="card flex flex-wrap gap-3 p-4">
         <input
           className="flex-1 min-w-[200px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           placeholder="Search by title, excerpt, tags…"
@@ -69,7 +64,7 @@ export default function BlogListPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      <div className="card overflow-hidden shadow-sm">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-gray-400">
             <Loader2 size={24} className="animate-spin mr-2" /> Loading posts…

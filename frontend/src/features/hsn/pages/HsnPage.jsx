@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Tag, Plus, Check, X, Pencil } from 'lucide-react';
 import { fetchHsnCategories, createHsnCategory, updateHsnCategory } from '../hsnSlice';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const HsnPage = () => {
   const dispatch = useDispatch();
@@ -38,23 +39,18 @@ const HsnPage = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">HSN Codes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage product categories and their HSN codes</p>
-        </div>
+    <div className="space-y-5">
+      <PageHeader icon={Tag} title="HSN codes" subtitle="Product categories and the HSN codes used on invoices">
         {!showAdd && (
-          <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2">
-            <Plus size={16} /> Add New Category
+          <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <Plus size={16} /> Add category
           </button>
         )}
-      </div>
+      </PageHeader>
 
       {/* Add form */}
       {showAdd && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 space-y-4">
+        <div className="card border-primary-200 bg-primary-50/40 p-5 space-y-4">
           <p className="text-sm font-semibold text-blue-800">New Category</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -92,7 +88,7 @@ const HsnPage = () => {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      <div className="card overflow-hidden shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>

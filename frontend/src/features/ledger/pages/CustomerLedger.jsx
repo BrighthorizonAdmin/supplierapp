@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
   Search, X, Download, ChevronDown, ChevronRight, FileText, FileType, Mail,
-  IndianRupee, Users, Wallet, CheckCircle2, Clock, Plus, Pencil, Undo2, Paperclip,
+  IndianRupee, Users, Wallet, CheckCircle2, Clock, Plus, Pencil, Undo2, Paperclip, ShoppingBag,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Modal from '../../../components/ui/Modal';
 import KPICard from '../../../components/ui/KPICard';
 import api from '../../../services/api';
+import PageHeader from '../../../components/ui/PageHeader';
 
 // Buvvas website (b2c) customer ledger — the "Buvvas Customers" tab of the Ledger page.
 // Backend: /api/customer-ledger (modules/customerLedger).
@@ -349,18 +350,14 @@ const CustomerLedger = () => {
 
   return (
     <div className="space-y-6 pb-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Buvvas Customer Ledger</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Orders from the Buvvas website, per customer. Online (Razorpay) orders are paid; COD orders stay due until a payment is recorded.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <SmallBtn icon={Download} label="Export CSV" tone="solid" onClick={() => download({ format: 'csv', ...exportParams })} />
-          <SmallBtn icon={FileType} label="PDF" onClick={() => download({ format: 'pdf', ...exportParams })} />
-        </div>
-      </div>
+      <PageHeader
+        icon={ShoppingBag}
+        title="Buvvas customer ledger"
+        subtitle="Website orders per customer. Online (Razorpay) orders are paid; COD orders stay due until a payment is recorded."
+      >
+        <SmallBtn icon={Download} label="Export CSV" tone="solid" onClick={() => download({ format: 'csv', ...exportParams })} />
+        <SmallBtn icon={FileType} label="PDF" onClick={() => download({ format: 'pdf', ...exportParams })} />
+      </PageHeader>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard title="Customers" value={summary.customers || 0} icon={Users} color="blue"

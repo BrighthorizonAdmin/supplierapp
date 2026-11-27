@@ -5,6 +5,9 @@ import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import api from '../../../services/api';
 import { productDescriptionText } from '../../../utils/productDescription';
+import PageHeader from '../../../components/ui/PageHeader';
+import { Boxes } from 'lucide-react';
+import { LOW_STOCK_THRESHOLD, STOCK_STATUS_META, getStockStatus, stockHint } from '../../../utils/stockLevels';
  
 const InventoryDetailsPage = () => {
   const { id } = useParams();
@@ -116,8 +119,7 @@ console.log(isSuperAdmin)
   const prod = data.productId || {};
   const availableQty = Math.max(0, data.currentStockQty || 0);
   const stockValue = prod.basePrice ? prod.basePrice * availableQty : null;
-  const lowStockThreshold = data.openingStockQty ? Math.floor((data.openingStockQty || 0) * 0.2) : null;
-  const lowStockEnabled = lowStockThreshold != null && availableQty <= lowStockThreshold && availableQty > 0;
+  const stockMeta = STOCK_STATUS_META[getStockStatus(availableQty)];
   const purchasePrice = prod.purchasePrice ?? prod.basePrice ?? 0;
   const gstRate = prod.taxRate != null ? `${prod.taxRate}%` : '—';
   const showOnline = prod.showOnline ? 'Yes' : 'No';
@@ -137,21 +139,22 @@ console.log(isSuperAdmin)
   const allSelected = eligibleSerials.length > 0 && selectedIds.length === eligibleSerials.length;
  
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <button onClick={() => navigate(-1)} className="px-3 py-1.5 text-sm font-medium text-slate-700 border border-slate-300 rounded hover:bg-slate-50">
-            Back
-          </button>
-        </div>
-        <div />
+    <div>
+      <div className="mb-5">
+        <PageHeader
+          compact
+          icon={Boxes}
+          title={prod.name || 'Inventory item'}
+          subtitle="Stock, serial numbers and movement for this product"
+          back={{ label: 'Back', onClick: () => navigate(-1) }}
+        />
       </div>
- 
+
       <div className="grid gap-4 lg:grid-cols-2 mb-6">
         {/* General Details */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+        <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-medium font-medium text-slate-700 tracking-[0.2em]">General Details</p>
+            <h2 className="section-title">General Details</h2>
           </div>
           <div className="grid gap-3">
             <div className="space-y-1">
@@ -180,13 +183,17 @@ console.log(isSuperAdmin)
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <p className="text-xs text-slate-500">Low Stock Quantity</p>
-                <p className="font-medium text-slate-800">{lowStockThreshold != null ? lowStockThreshold.toLocaleString('en-IN') : '—'}</p>
+                <p className="text-xs text-slate-500">Low stock level</p>
+                <p className="font-medium text-slate-800">{LOW_STOCK_THRESHOLD} pieces or fewer</p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs text-slate-500">Low Stock Warning</p>
-                <p className={`font-medium ${lowStockEnabled ? 'text-emerald-600' : 'text-slate-500'}`}>
-                  {lowStockEnabled ? 'Enabled' : 'Disabled'}
+                <p className="text-xs text-slate-500">Stock status</p>
+                <p className="flex flex-wrap items-center gap-2">
+                  <span className={stockMeta.badge}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${stockMeta.dot}`} />
+                    {stockMeta.label}
+                  </span>
+                  <span className="text-xs text-slate-500">{stockHint(availableQty)}</span>
                 </p>
               </div>
             </div>
@@ -208,9 +215,9 @@ console.log(isSuperAdmin)
         </div>
  
         {/* Pricing Details */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+        <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-medium font-medium text-slate-700 tracking-[0.2em]">Pricing Details</p>
+            <h2 className="section-title">Pricing Details</h2>
           </div>
           <div className="grid gap-3">
             <div className="grid grid-cols-2 gap-4">
@@ -252,9 +259,9 @@ console.log(isSuperAdmin)
       </div>
  
       {/* Serial Numbers */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+      <div className="card p-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <p className="text-medium font-medium text-slate-700 tracking-[0.2em]">Serial Numbers</p>
+          <h2 className="section-title">Serial Numbers</h2>
  
           <div className="flex items-center gap-3 flex-wrap">
             <input

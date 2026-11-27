@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { lookupBySerial, clearLookupResult } from '../warrantySlice';
 import { format, addMonths } from 'date-fns';
 import { Search, ShieldCheck, ShieldOff, Package, User, FileText, Barcode } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 export default function WarrantyLookupPage() {
   const dispatch = useDispatch();
@@ -23,14 +24,13 @@ export default function WarrantyLookupPage() {
   const unit = lookupResult;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <Barcode size={24} className="text-blue-600" />
-        <h1 className="text-2xl font-bold text-slate-800">Warranty Lookup</h1>
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-5">
+        <PageHeader compact icon={Barcode} title="Warranty lookup" subtitle="Scan or type a serial number to see its product, sale and warranty status" />
       </div>
 
       {/* Search */}
-      <form onSubmit={handleSearch} className="flex gap-3 mb-6">
+      <form onSubmit={handleSearch} className="card mb-5 flex gap-3 p-4">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input

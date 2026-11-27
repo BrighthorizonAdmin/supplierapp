@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchTickets } from '../supportSlice';
 import { Headphones, Wrench, Clock, AlertCircle, CheckCircle2, Loader2, Search } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_COLOR = {
   OPEN: 'bg-yellow-100 text-yellow-800',
@@ -31,27 +32,18 @@ export default function SupportListPage() {
   const setFilter = (key, val) => setFilters(f => ({ ...f, [key]: val, page: 1 }));
 
   return (
-    <div className="p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Support Tickets</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage dealer support requests and service tickets</p>
-        </div>
-        <div className="flex gap-3">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2 text-center">
-            <p className="text-xl font-bold text-yellow-700">{meta?.openCount ?? '—'}</p>
-            <p className="text-xs text-yellow-600">Open</p>
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 text-center">
-            <p className="text-xl font-bold text-blue-700">{meta?.inProgressCount ?? '—'}</p>
-            <p className="text-xs text-blue-600">In Progress</p>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader icon={Headphones} title="Support tickets" subtitle="Dealer support requests and service tickets">
+        <span className="badge-yellow px-3 py-1.5 text-sm">
+          <span className="font-bold">{meta?.openCount ?? '—'}</span> open
+        </span>
+        <span className="badge-blue px-3 py-1.5 text-sm">
+          <span className="font-bold">{meta?.inProgressCount ?? '—'}</span> in progress
+        </span>
+      </PageHeader>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="card flex flex-wrap gap-3 p-4">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -79,7 +71,7 @@ export default function SupportListPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      <div className="card overflow-hidden shadow-sm">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-gray-400">
             <Loader2 size={24} className="animate-spin mr-2" /> Loading tickets…

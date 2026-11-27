@@ -1,84 +1,20 @@
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { useState } from 'react';
-import {
-  ShieldCheck, X, KeyRound, ChevronDown, Tag,
-  LayoutDashboard, Users, Package, Boxes, ShoppingCart, Headphones,
-  RotateCcw, DollarSign, CreditCard, ChevronLeft, ChevronRight,
-  UserPlus, TrendingUp, BarChart2, Settings, HelpCircle, LogOut, Building2, FileText, ShieldCheck as WarrantyIcon,
-  MessageSquare, Zap,
-  Search, Star,
-} from 'lucide-react';
+import { Building2, KeyRound, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { toggleSidebar } from '../../store/uiSlice';
 import { usePermission } from '../../routes/ProtectedRoute';
 import { logout } from '../../features/auth/authSlice';
-import toast from 'react-hot-toast';
-
-const SALES_CHILDREN = [
-  { to: '/invoices',          label: 'Sales Invoice',    perm: 'invoices:read' },
-  { to: '/quotes',            label: 'Quotes',           perm: 'invoices:read' },
-  { to: '/delivery-challan',  label: 'Delivery Challan', perm: 'invoices:read' },
-];
-
-const FINANCE_CHILDREN = [
-  { to: '/finance',        label: 'Overview', perm: 'finance:read' },
-  // Gated on payments:read for now, matching the route in AppRouter.jsx — swap to a
-  // dedicated ledger:read permission later if one gets added.
-  { to: '/finance/ledger', label: 'Ledger',   perm: 'payments:read' },
-];
-
-const NAV_ITEMS = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', perm: 'dashboard:read' },
-  { to: '/marketing-leads', icon: Users, label: 'Marketing Leads', perm: 'marketing:read', end: false },
-  { to: '/onboarding', icon: UserPlus, label: 'Onboarding', perm: 'dealer:read' },
-  { to: '/dealers', icon: Users, label: 'Dealer Management', perm: 'dealer:read', end: false },
-  { to: '/products', icon: Package, label: 'Product Catalog', perm: 'products:read' },
-  { to: '/flash-sales', icon: Zap, label: 'Flash Sale', perm: 'flashsale:read' },
-  { to: '/hsn-codes', icon: Tag, label: 'HSN Codes', perm: 'products:read' },
-  { to: '/inventory', icon: Boxes, label: 'Inventory', perm: 'inventory:read' },
-  { to: '/orders', icon: ShoppingCart, label: 'Orders', perm: 'orders:read' },
-  // Ledger moved here as a child (was its own top-level item) — see FINANCE_CHILDREN.
-  // No `perm` on the group itself: the top-of-loop `if (perm && !hasPermission(perm))
-  // return null` check runs before a group's own children are ever filtered, so gating
-  // the group on 'finance:read' hid the whole group — Ledger included — for a user with
-  // 'payments:read' but not 'finance:read', even though the route itself only requires
-  // payments:read. Visibility is already correctly handled below by filtering children
-  // to what the user can see and hiding the group only if that leaves none.
-  { group: 'finance', icon: TrendingUp, label: 'Finances', children: FINANCE_CHILDREN },
-  { to: '/payments', icon: CreditCard, label: 'Payments & Credits', perm: 'payments:read' },
-  { group: 'sales', icon: Tag, label: 'Sales', perm: 'invoices:read', children: SALES_CHILDREN },
-  { to: '/returns', icon: RotateCcw, label: 'Returns', perm: 'returns:read' },
-  { to: '/exchanges', icon: RotateCcw, label: 'Exchanges', perm: 'returns:read' },
-  { to: '/warranty', icon: WarrantyIcon, label: 'Warranty', perm: 'orders:read' },
-  { to: '/audit', icon: BarChart2, label: 'Analytics', perm: 'audit:read' },
-  { to: '/notifications', icon: Settings, label: 'Settings', perm: 'notifications:read' },
-  { to: '/rolemanagement', icon: ShieldCheck, label: 'Role Permissions', perm: 'users:manage' },
-  { to: '/usermanagement', icon: Users, label: 'User Management', perm: 'users:manage' },
-  { to: '/support', icon: Headphones, label: 'Support Tickets', perm: 'support:read' },
-  { to: '/website-enquiries', icon: MessageSquare, label: 'Website Enquiries', perm: 'enquiries:read' },
-  { to: '/blog', icon: FileText, label: 'Blog', perm: 'blog:read' },
-  { to: '/seo', icon: Search, label: 'SEO Manager', perm: 'seo:read' },
-  { to: '/product-reviews', icon: Star, label: 'Product Reviews', perm: 'reviews:read' },
-];
+import { NAV_SECTIONS, TONES } from './navConfig';
+import { getInitials, getRoleLabel } from './userDisplay';
 
 const Sidebar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const location = useLocation();
   const sidebarOpen = useSelector((s) => s.ui.sidebarOpen);
   const { user } = useSelector((s) => s.auth);
+  const kpis = useSelector((s) => s.dashboard.kpis);
   const { hasPermission } = usePermission();
-  const [showHelpCard, setShowHelpCard] = useState(true);
-
-  // Per-group open/active state — was hardcoded to a single `salesOpen` boolean shared
-  // by every collapsible group, which was harmless with only one group (Sales) but
-  // would have made a second one (Finance) open and close in lockstep with it.
-  const groupsWithChildren = NAV_ITEMS.filter((item) => item.group);
-  const isGroupActive = (item) => item.children.some((c) => location.pathname.startsWith(c.to));
-  const [openGroups, setOpenGroups] = useState(() =>
-    Object.fromEntries(groupsWithChildren.map((item) => [item.group, isGroupActive(item)]))
-  );
-  const toggleGroup = (group) => setOpenGroups((prev) => ({ ...prev, [group]: !prev[group] }));
 
   const handleLogout = () => {
     dispatch(logout());
@@ -86,158 +22,121 @@ const Sidebar = () => {
     navigate('/login');
   };
 
-  const initials = user?.name
-    ? user.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
-    : 'SU';
+  const sections = NAV_SECTIONS
+    .map((section) => ({ ...section, items: section.items.filter((item) => !item.perm || hasPermission(item.perm)) }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full  text-white z-30 flex flex-col transition-all duration-200 ${sidebarOpen ? 'w-64' : 'w-16'
-        }`}
+      className={`fixed left-0 top-0 z-30 flex h-full flex-col border-r border-slate-200/80 bg-sidebar transition-[width] duration-200 ${
+        sidebarOpen ? 'w-64' : 'w-[72px]'
+      }`}
     >
-      {/* Logo / Brand */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10 flex-shrink-0">
-        <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-md">
-          <Building2 size={18} className="text-white" />
+      {/* Brand */}
+      <div className={`flex h-[68px] flex-shrink-0 items-center gap-3 border-b border-slate-200/80 ${sidebarOpen ? 'px-4' : 'justify-center px-2'}`}>
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-brand">
+          <Building2 size={19} />
         </div>
         {sidebarOpen && (
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-black truncate leading-tight">Buvvas</p>
-            <p className="text-xs text-blue-600 truncate leading-tight">{`Supplier ${Array.isArray(user.role) ? user.role.join(', ') : user.role} Portal`}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-bold leading-tight text-slate-900">Supplier Portal</p>
+            <p className="truncate text-xs leading-tight text-slate-500">Buvvas One</p>
           </div>
         )}
-        <button
-          onClick={() => dispatch(toggleSidebar())}
-          className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/10 text-blue-300 hover:text-white transition-colors"
-        >
-          {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-        </button>
+        {sidebarOpen && (
+          <button
+            onClick={() => dispatch(toggleSidebar())}
+            className="flex-shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-200/60 hover:text-slate-700"
+            title="Collapse sidebar"
+          >
+            <PanelLeftClose size={17} />
+          </button>
+        )}
       </div>
 
+      {!sidebarOpen && (
+        <button
+          onClick={() => dispatch(toggleSidebar())}
+          className="mx-auto mt-3 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-200/60 hover:text-slate-700"
+          title="Expand sidebar"
+        >
+          <PanelLeftOpen size={17} />
+        </button>
+      )}
+
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {NAV_ITEMS.map((item) => {
-          const { icon: Icon, label, perm } = item;
-          if (perm && !hasPermission(perm)) return null;
-
-          if (item.group) {
-            const visibleChildren = item.children.filter((c) => !c.perm || hasPermission(c.perm));
-            if (visibleChildren.length === 0) return null;
-            const active = isGroupActive(item);
-            const isOpen = sidebarOpen ? openGroups[item.group] : active;
-            return (
-              <div key={item.group}>
-                <button
-                  onClick={() => { if (sidebarOpen) toggleGroup(item.group); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active ? 'text-blue-700 bg-blue-50/60' : 'text-blue-600 hover:bg-white/10'}`}
-                >
-                  <Icon size={17} className="flex-shrink-0" />
-                  {sidebarOpen && (
-                    <>
-                      <span className="flex-1 truncate text-left">{label}</span>
-                      <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                    </>
-                  )}
-                </button>
-                {isOpen && (
-                  <div className={`mt-0.5 space-y-0.5 ${sidebarOpen ? 'ml-3 border-l-2 border-blue-200 pl-3' : ''}`}>
-                    {visibleChildren.map((child) => (
-                      <NavLink
-                        key={child.to}
-                        to={child.to}
-                        end
-                        className={({ isActive }) =>
-                          `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${isActive
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'text-blue-600 hover:bg-white/10'
-                          }`
-                        }
-                      >
-                        <FileText size={15} className="flex-shrink-0" />
-                        {sidebarOpen && <span className="truncate">{child.label}</span>}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          }
-
-          return (
-            <NavLink
-              key={`${item.to}-${label}`}
-              to={item.to}
-              end={item.end !== false}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-blue-600  hover:bg-white/10'
-                }`
-              }
-            >
-              <Icon size={17} className="flex-shrink-0" />
-              {sidebarOpen && <span className="truncate">{label}</span>}
-            </NavLink>
-          );
-        })}
+      <nav className="flex-1 overflow-y-auto px-3 py-3">
+        {sections.map((section, sectionIndex) => (
+          <div key={section.label} className={sectionIndex > 0 ? 'mt-4' : ''}>
+            {sidebarOpen ? (
+              <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                {section.label}
+              </p>
+            ) : (
+              sectionIndex > 0 && <div className="mx-2 mb-3 h-px bg-slate-200" />
+            )}
+            <div className="space-y-0.5">
+              {section.items.map(({ to, label, icon: Icon, tone, count, end }) => {
+                const countValue = (Array.isArray(count) ? count : [count].filter(Boolean))
+                  .reduce((sum, key) => sum + (Number(kpis?.[key]) || 0), 0);
+                return (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end !== false}
+                    title={sidebarOpen ? undefined : label}
+                    className={({ isActive }) =>
+                      `group relative flex items-center gap-3 rounded-xl py-1.5 text-sm transition-colors ${
+                        sidebarOpen ? 'px-2' : 'justify-center px-0'
+                      } ${isActive
+                        ? 'bg-primary-100/70 font-semibold text-slate-900'
+                        : 'font-medium text-slate-600 hover:bg-slate-200/50 hover:text-slate-900'}`
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <span className={`icon-tile h-8 w-8 ${isActive ? 'bg-primary-600 text-white shadow-brand' : TONES[tone] || TONES.slate}`}>
+                          <Icon size={16} />
+                        </span>
+                        {sidebarOpen && <span className="flex-1 truncate">{label}</span>}
+                        {countValue > 0 && (sidebarOpen ? (
+                          <span className={`text-xs font-semibold tabular-nums ${isActive ? 'text-primary-700' : 'text-slate-400'}`}>
+                            {countValue > 99 ? '99+' : countValue}
+                          </span>
+                        ) : (
+                          <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-sidebar" />
+                        ))}
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      {/* Need Help card */}
-      {/* {sidebarOpen && showHelpCard && (
-        <div className="mx-3 mb-3 p-3 bg-blue-600/90 rounded-2xl relative flex-shrink-0">
-          <button
-            onClick={() => setShowHelpCard(false)}
-            className="absolute top-2 right-2 text-blue-200 hover:text-white transition-colors"
-          >
-            <X size={14} />
-          </button>
-
-          <div className="flex items-center gap-2 mb-1">
-            <HelpCircle size={15} className="text-blue-100 flex-shrink-0" />
-            <span className="text-sm font-semibold text-white">Need Help?</span>
-          </div>
-
-          <p className="text-xs text-blue-200 mb-2 leading-relaxed">
-            Contact our support team for assistance.
-          </p>
-
-          <button className="w-full text-xs bg-white text-blue-700 font-semibold py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
-            Contact Support
-          </button>
-        </div>
-      )} */}
-
-      {/* User profile */}
-      <div
-        className={`border-t border-white/10 px-3 py-3 flex items-center gap-3 flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''
-          }`}
-      >
-        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-          {initials}
+      {/* User */}
+      <div className={`flex flex-shrink-0 items-center gap-3 border-t border-slate-200/80 py-3 ${sidebarOpen ? 'px-4' : 'justify-center px-2'}`}>
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700">
+          {getInitials(user?.name)}
         </div>
         {sidebarOpen && (
           <>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-blue-600 truncate leading-tight">
-                {user?.name || 'Supplier User'}
-              </p>
-              <p
-                onClick={handleLogout}
-                className="text-xs text-gray-500 cursor-pointer hover:text-red-500 transition-colors"
-              >
-                Sign out
-              </p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold leading-tight text-slate-900">{user?.name || 'Supplier user'}</p>
+              <p className="truncate text-xs leading-tight text-slate-500">{getRoleLabel(user?.role)}</p>
             </div>
             <button
               onClick={() => navigate('/changePassword')}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-blue-300 hover:text-white transition-colors flex-shrink-0"
+              className="flex-shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-200/60 hover:text-slate-700"
               title="Change password"
             >
               <KeyRound size={15} />
             </button>
             <button
               onClick={handleLogout}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-blue-300 hover:text-red-300 transition-colors flex-shrink-0"
+              className="flex-shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
               title="Sign out"
             >
               <LogOut size={15} />

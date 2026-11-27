@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Plus, Search, Phone, MapPin } from 'lucide-react';
+import { Plus, Search, Phone, MapPin, Megaphone, Users, Activity, BadgeCheck, FileClock } from 'lucide-react';
 import { fetchLeads, fetchLeadStats } from '../marketingSlice';
+import PageHeader from '../../../components/ui/PageHeader';
+import KPICard from '../../../components/ui/KPICard';
 
 const KYC_STYLES = {
   'pending-kyc':   'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -53,43 +55,29 @@ const MarketingPage = () => {
   }, [search, stageFilter, dispatch]);
 
   const STAT_CARDS = [
-    { label: 'Total Leads', value: stats?.total ?? 0, color: 'text-blue-600' },
-    { label: 'Active', value: stats?.active ?? 0, color: 'text-green-600' },
-    { label: 'Converted', value: stats?.converted ?? 0, color: 'text-purple-600' },
-    { label: 'Pending Docs', value: stats?.documentCollection ?? 0, color: 'text-amber-600' },
+    { label: 'Total leads', value: stats?.total ?? 0, color: 'blue', icon: Users },
+    { label: 'Active', value: stats?.active ?? 0, color: 'green', icon: Activity },
+    { label: 'Converted', value: stats?.converted ?? 0, color: 'purple', icon: BadgeCheck },
+    { label: 'Pending documents', value: stats?.documentCollection ?? 0, color: 'yellow', icon: FileClock },
   ];
 
   return (
-    <div className="-m-6">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
-        <div>
-          <h1 className="text-xl font-bold text-blue-700">Marketing Leads</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Capture and track dealer leads from external sources through the onboarding pipeline.
-          </p>
-        </div>
-        <button
-          onClick={() => navigate('/marketing-leads/new')}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={15} />
-          Add New Lead
+    <div className="space-y-5">
+      <PageHeader icon={Megaphone} title="Marketing leads" subtitle="Dealer leads from external sources, tracked through the onboarding pipeline">
+        <button onClick={() => navigate('/marketing-leads/new')} className="btn-primary">
+          <Plus size={16} /> Add lead
         </button>
-      </div>
+      </PageHeader>
 
-      {/* Stat cards */}
-      <div className="px-6 py-4 bg-white border-b border-slate-100 grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {STAT_CARDS.map((s) => (
-          <div key={s.label} className="bg-slate-50 rounded-xl p-4">
-            <p className="text-xs text-slate-500 mb-1">{s.label}</p>
-            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-          </div>
+          <KPICard key={s.label} title={s.label} value={s.value} icon={s.icon} color={s.color} />
         ))}
       </div>
 
+      <div className="card overflow-hidden">
       {/* Filters */}
-      <div className="px-6 py-3 bg-white border-b border-slate-100 flex items-center gap-3">
+      <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -132,7 +120,7 @@ const MarketingPage = () => {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="card overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
@@ -207,6 +195,7 @@ const MarketingPage = () => {
             </table>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

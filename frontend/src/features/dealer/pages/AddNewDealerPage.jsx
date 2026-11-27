@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { createDealer } from '../dealerSlice';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Store } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const LEAD_SOURCES = [
   { value: 'justdial', label: 'JustDial / External List' },
@@ -299,41 +300,38 @@ const AddNewDealerPage = () => {
 
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Page top bar */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-blue-700">Add New Dealer</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Capture dealer details from external sources, log call information and push to onboarding page.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/dealers')}
-            className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading || !form.businessName?.trim() || !form.name?.trim() || !form.phone?.trim() || form.creditLimit === '' || !form.paymentTerms?.trim()}
-            className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Saving...' : 'Create Dealer'}
-          </button>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        compact
+        icon={Store}
+        title="Add dealer"
+        subtitle="Create a dealer directly with credit limit and payment terms"
+        back={{ label: 'Dealer management', onClick: () => navigate('/dealers') }}
+      >
+        <button
+          onClick={() => navigate('/dealers')}
+          className="btn-secondary"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={loading || !form.businessName?.trim() || !form.name?.trim() || !form.phone?.trim() || form.creditLimit === '' || !form.paymentTerms?.trim()}
+          className="btn-primary"
+        >
+          {loading ? 'Saving...' : 'Create Dealer'}
+        </button>
+      </PageHeader>
 
       {/* Body */}
-      <div className="max-w-8xl mx-auto px-6 py-6 grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-5">
 
         {/* LEFT: Business + Location */}
         <div className="col-span-2 space-y-6">
 
           {/* Business Information */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <h2 className="text-base font-bold text-slate-800 mb-5">Business Information</h2>
+          <div className="card p-6">
+            <h2 className="section-title mb-5">Business Information</h2>
             <div className="space-y-4">
               <InputField
                 label="Business Name"
@@ -397,8 +395,8 @@ const AddNewDealerPage = () => {
           </div>
 
           {/* Location Details */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <h2 className="text-base font-bold text-slate-800 mb-5">Location Details</h2>
+          <div className="card p-6">
+            <h2 className="section-title mb-5">Location Details</h2>
             <div className="space-y-4">
               <InputField
                 label="Street Address"
@@ -446,8 +444,8 @@ const AddNewDealerPage = () => {
 
 {/* RIGHT: Documents + Onboarding */}
         <div className="col-span-1 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-            <h2 className="text-base font-bold text-slate-800 mb-4">Documents Required</h2>
+          <div className="card p-6 shadow-sm">
+            <h2 className="section-title mb-4">Documents Required</h2>
             <p className="text-sm text-slate-500 mb-5">
               Please upload clear copies (PDF, JPG, PNG, HEIC). Max 5MB per file.
             </p>
@@ -477,8 +475,8 @@ const AddNewDealerPage = () => {
             />
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-            <h2 className="text-base font-bold text-slate-800 mb-4">Onboarding Settings</h2>
+          <div className="card p-6 shadow-sm">
+            <h2 className="section-title mb-4">Onboarding Settings</h2>
             <div className="space-y-4">
               <InputField
                 label="Credit Limit (INR)"

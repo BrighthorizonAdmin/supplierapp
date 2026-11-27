@@ -5,8 +5,9 @@ import StatusBadge from '../../../components/ui/StatusBadge';
 import Pagination from '../../../components/ui/Pagination';
 import Modal from '../../../components/ui/Modal';
 import { format } from 'date-fns';
-import { Search, Download, X, Filter } from 'lucide-react';
+import { Search, Download, X, Filter, CreditCard } from 'lucide-react';
 import api from '../../../services/api';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const METHOD_LABELS_FOR_EXPORT = {
   'bank-transfer': 'Bank Transfer', upi: 'UPI', cash: 'Cash',
@@ -77,7 +78,7 @@ const PaymentListPage = () => {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-slate-900">Payments & Collections</h1>
+      <PageHeader icon={CreditCard} title="Payments & collections" subtitle="Dealer payments received, credits and their status" />
 
       <div className="card">
         {/* Toolbar */}
@@ -102,7 +103,7 @@ const PaymentListPage = () => {
             <button
               onClick={handleExport}
               disabled={exporting}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+              className="btn-primary py-1.5"
             >
               <Download size={14} />
               {exporting ? 'Exporting...' : 'Export'}

@@ -5,8 +5,9 @@ import { useForm, Controller } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
-import { ArrowLeft, Loader2, Save, UploadCloud, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, UploadCloud, X, Newspaper } from 'lucide-react';
 import { fetchBlogById, createBlog, updateBlog, clearCurrentBlog } from '../blogSlice';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const CATEGORIES = ['Retail', 'Restaurant', 'Pharmacy', 'Hospitality', 'Cafe', 'Supermarket', 'Warehouse', 'General'];
 
@@ -122,16 +123,17 @@ export default function BlogFormPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-5">
-      <button onClick={() => navigate('/blog')}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
-        <ArrowLeft size={16} /> Back to Blog Posts
-      </button>
-
-      <h1 className="text-2xl font-bold text-gray-900">{isEdit ? 'Edit Blog Post' : 'New Blog Post'}</h1>
+    <div className="mx-auto max-w-4xl space-y-5">
+      <PageHeader
+        compact
+        icon={Newspaper}
+        title={isEdit ? 'Edit blog post' : 'New blog post'}
+        subtitle="Shown in the Blog section of the Buvvas website"
+        back={{ label: 'Blog', onClick: () => navigate('/blog') }}
+      />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <div className="card p-5 space-y-4">
           <div>
             <label className={labelCls}>Title *</label>
             <input {...register('title', { required: true })} placeholder="e.g. 5 Ways Modern POS Systems Boost Retail Sales" className={inputCls} />
@@ -183,7 +185,7 @@ export default function BlogFormPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="card p-5 shadow-sm">
           <label className={labelCls}>Content *</label>
           <Controller
             name="content"
@@ -201,7 +203,7 @@ export default function BlogFormPage() {
           />
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
+        <div className="card p-5 shadow-sm flex items-center justify-between">
           <div>
             <label className={labelCls}>Status</label>
             <select {...register('status')} className={inputCls}>

@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchEnquiries } from '../websiteEnquirySlice';
 import { MessageSquare, Loader2, Search } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_COLOR = {
   NEW: 'bg-yellow-100 text-yellow-800',
@@ -34,21 +35,15 @@ export default function WebsiteEnquiryListPage() {
   const setFilter = (key, val) => setFilters(f => ({ ...f, [key]: val, page: 1 }));
 
   return (
-    <div className="p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Website Enquiries</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Messages submitted from the Buvvas website's Support, Get a Quote & Free Consultation forms</p>
-        </div>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2 text-center">
-          <p className="text-xl font-bold text-yellow-700">{meta?.newCount ?? '—'}</p>
-          <p className="text-xs text-yellow-600">New</p>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader icon={MessageSquare} title="Website enquiries" subtitle="Messages from the website's Support, Get a Quote and Free Consultation forms">
+        <span className="badge-yellow px-3 py-1.5 text-sm">
+          <span className="font-bold">{meta?.newCount ?? '—'}</span> new
+        </span>
+      </PageHeader>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="card flex flex-wrap gap-3 p-4">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -78,7 +73,7 @@ export default function WebsiteEnquiryListPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      <div className="card overflow-hidden shadow-sm">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-gray-400">
             <Loader2 size={24} className="animate-spin mr-2" /> Loading enquiries…

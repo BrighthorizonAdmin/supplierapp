@@ -5,7 +5,8 @@ import Table from '../../../components/ui/Table';
 import Pagination from '../../../components/ui/Pagination';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { format } from 'date-fns';
-import { Search, Wifi } from 'lucide-react';
+import { Search, Wifi, ShoppingBag } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 // Badge showing whether a row came from an internal order or a dealer sync
 const SourceBadge = ({ source }) =>
@@ -76,14 +77,7 @@ const RetailOrderListPage = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Retail Orders</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Includes internal orders and invoices synced from dealers
-          </p>
-        </div>
-      </div>
+      <PageHeader icon={ShoppingBag} title="Retail orders" subtitle="Internal orders and invoices synced from dealers" />
 
       <div className="card p-4 flex gap-3 flex-wrap items-center">
         <div className="relative">

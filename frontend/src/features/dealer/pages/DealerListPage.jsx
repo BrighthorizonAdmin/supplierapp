@@ -13,6 +13,8 @@ import Modal from '../../../components/ui/Modal';
 import { useForm } from 'react-hook-form';
 import api from '../../../services/api';
 import { format } from 'date-fns';
+import PageHeader from '../../../components/ui/PageHeader';
+import KPICard from '../../../components/ui/KPICard';
  
 // ─── Tab config ────────────────────────────────────────────────────────────────
 const TABS = [
@@ -41,19 +43,6 @@ const StatusChip = ({ status }) => {
     </span>
   );
 };
- 
-// ─── Stats card ────────────────────────────────────────────────────────────────
-const StatsCard = ({ label, value, icon: Icon, cardCls, iconCls, valueCls }) => (
-  <div className={`card p-4 flex items-center gap-4 ${cardCls}`}>
-    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${iconCls}`}>
-      <Icon size={22} />
-    </div>
-    <div>
-      <p className={`text-2xl font-bold leading-tight ${valueCls}`}>{value ?? '—'}</p>
-      <p className="text-xs font-medium mt-0.5 text-slate-500 leading-tight">{label}</p>
-    </div>
-  </div>
-);
  
 // ─── Per-row action menu ───────────────────────────────────────────────────────
 const RowActions = ({ row, onView, onEdit, onApprove, onReject, onSuspend }) => {
@@ -275,53 +264,19 @@ const DealerListPage = () => {
   return (
     <div className="space-y-5">
  
-      {/* ── Page title ── */}
-      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
-      <h1 className="text-2xl font-bold text-slate-900">Dealer Management</h1>
-       <button
-          onClick={() => navigate('/addnew-dealer')}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={15} />
-          Add New Dealer
+      <PageHeader icon={Store} title="Dealer management" subtitle="Every authorised dealer, their credit and status">
+        <button onClick={() => navigate('/addnew-dealer')} className="btn-primary">
+          <Plus size={16} /> Add dealer
         </button>
-        </div>
-      {/* ── Stats cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard
-          label="Total Dealers"
-          value={counts.total}
-          icon={TrendingUp}
-          cardCls=""
-          iconCls="bg-primary-100 text-primary-600"
-          valueCls="text-slate-900"
-        />
-        <StatsCard
-          label="Active Dealers"
-          value={counts.active}
-          icon={CheckCircle}
-          cardCls="bg-green-50 border-green-100"
-          iconCls="bg-green-600 text-white"
-          valueCls="text-green-700"
-        />
-        <StatsCard
-          label="Inactive Dealers"
-          value={counts.pending}
-          icon={Clock}
-          cardCls="bg-amber-50 border-amber-100"
-          iconCls="bg-amber-100 text-amber-600"
-          valueCls="text-amber-700"
-        />
-        <StatsCard
-          label="Suspended Dealers"
-          value={counts.suspended}
-          icon={AlertTriangle}
-          cardCls="bg-red-50 border-red-100"
-          iconCls="bg-red-100 text-red-600"
-          valueCls="text-red-700"
-        />
+      </PageHeader>
+
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <KPICard title="Total dealers" value={counts.total ?? '—'} icon={TrendingUp} color="blue" />
+        <KPICard title="Active dealers" value={counts.active ?? '—'} icon={CheckCircle} color="green" />
+        <KPICard title="Inactive dealers" value={counts.pending ?? '—'} icon={Clock} color="yellow" />
+        <KPICard title="Suspended dealers" value={counts.suspended ?? '—'} icon={AlertTriangle} color="red" />
       </div>
- 
+
       {/* ── Table card ── */}
       <div className="card overflow-hidden">
  

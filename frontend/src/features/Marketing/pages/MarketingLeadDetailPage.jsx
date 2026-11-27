@@ -182,11 +182,11 @@ const MarketingLeadDetailPage = () => {
   const isNotInterested = selected.status === 'not-interested' || panelOutcome === 'not-interested';
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="space-y-5">
 
       {/* Success banner */}
       {showSuccessBanner && (
-        <div className="flex items-center gap-3 px-6 py-3 bg-green-50 border-b border-green-200 text-green-700 text-sm font-medium">
+        <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-medium text-emerald-700">
           <CheckCircle size={16} className="text-green-600 flex-shrink-0" />
           <span>
             Lead &ldquo;<strong>{selected.businessName}</strong>&rdquo; has been successfully created and added to the pipeline.
@@ -198,7 +198,7 @@ const MarketingLeadDetailPage = () => {
       )}
 
       {/* Sub-header */}
-      <div className="px-6 pt-5 pb-0">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-r from-primary-50/70 via-white to-white p-5 shadow-card">
         <div className="flex items-start justify-between mb-2">
           <div>
             <div className="mb-2 flex items-center gap-2">
@@ -244,15 +244,15 @@ const MarketingLeadDetailPage = () => {
       </div>
 
       {/* Main two-column body */}
-      <div className="px-6 py-5 grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-5">
 
         {/* LEFT col */}
         <div className="col-span-2 space-y-5">
 
           {/* Lead Details card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-slate-800">Lead Details</h2>
+              <h2 className="section-title">Lead Details</h2>
               <button
                 onClick={() => setShowEditModal(true)}
                 className="text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-medium transition-colors"
@@ -291,8 +291,8 @@ const MarketingLeadDetailPage = () => {
           </div>
 
           {/* Activity & Call Logs */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
-            <h2 className="text-sm font-bold text-slate-800 mb-4">Activity & Call Logs</h2>
+          <div className="card p-5">
+            <h2 className="section-title mb-4">Activity & Call Logs</h2>
             {selected.callLogs && selected.callLogs.length > 0 ? (
               <div className="space-y-4">
                 {[...selected.callLogs].reverse().map((log) => {
@@ -345,9 +345,9 @@ const MarketingLeadDetailPage = () => {
         <div className="space-y-5">
 
           {/* Initial Call Log panel */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-slate-800">Initial Call Log</h2>
+              <h2 className="section-title">Initial Call Log</h2>
               <button
                 onClick={handlePanelSave}
                 disabled={!panelOutcome || panelSaving}
@@ -390,7 +390,7 @@ const MarketingLeadDetailPage = () => {
 
           {/* ✅ Onboarding Pipeline — disabled with overlay when not interested */}
           <div className={`bg-white border rounded-xl p-5 relative ${isNotInterested ? 'border-red-200' : 'border-slate-200'}`}>
-            <h2 className="text-sm font-bold text-slate-800 mb-4">Onboarding Pipeline</h2>
+            <h2 className="section-title mb-4">Onboarding Pipeline</h2>
 
             {/* Not Interested overlay */}
             {isNotInterested && (

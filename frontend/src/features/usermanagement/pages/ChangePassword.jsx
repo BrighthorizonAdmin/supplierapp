@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { changePassword } from '../userSlice';
 import { KeyRound } from 'lucide-react';
+import AuthLayout from '../../auth/components/AuthLayout';
 
 const ChangePassword = () => {
   const dispatch = useDispatch();
@@ -62,25 +63,11 @@ const ChangePassword = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-primary-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl mb-4">
-            <KeyRound className="text-white" size={28} />
-          </div>
-          <h1 className="text-2xl font-bold text-white">
-            {isFirstLogin ? 'Set Your Password' : 'Change Password'}
-          </h1>
-          <p className="text-slate-400 mt-1">
-            {isFirstLogin
-              ? 'Please set a new password before continuing'
-              : 'Update your account password'}
-          </p>
-        </div>
-
-        {/* Form */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+    <AuthLayout
+      icon={KeyRound}
+      title={isFirstLogin ? 'Set your password' : 'Change password'}
+      subtitle={isFirstLogin ? 'Please set a new password before continuing' : 'Update your account password'}
+    >
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="label">Current Password</label>
@@ -116,7 +103,7 @@ const ChangePassword = () => {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-lg">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {error}
               </div>
             )}
@@ -142,9 +129,7 @@ const ChangePassword = () => {
               </button>
             )}
           </form>
-        </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 };
 

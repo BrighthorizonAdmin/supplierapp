@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { formatDistanceToNow, format } from 'date-fns';
-import { MapPin, Calendar, Hash, FileText, CheckCircle, AlertCircle, AlertTriangle, Globe, Smartphone, HelpCircle } from 'lucide-react';
+import { MapPin, Calendar, Hash, FileText, CheckCircle, AlertCircle, AlertTriangle, Globe, Smartphone, HelpCircle, UserPlus } from 'lucide-react';
 import { fetchDealers, approveDealer, rejectDealer, requestDealerUpdate } from '../dealerSlice';
 import Modal from '../../../components/ui/Modal';
 import api from '../../../services/api';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_TABS = [
   { label: 'Pending', value: 'pending' },
@@ -313,40 +314,34 @@ const DealerOnboardingPage = () => {
   const activeTabLabel = STATUS_TABS.find((t) => t.value === activeTab)?.label || 'Applications';
 
   return (
-    <div className="-m-6 flex flex-col" style={{ height: 'calc(100vh - 4rem)' }}>
+    <div className="flex flex-col gap-5" style={{ height: 'calc(100vh - 116px)' }}>
 
-      {/* Page header: title + pill tabs */}
-      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 flex-shrink-0">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Dealer Onboarding</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Review pending applications and manage new dealer approvals.</p>
-        </div>
-        <div className="flex items-center gap-1">
-          {STATUS_TABS.map((tab) => {
-            const isActive = activeTab === tab.value;
-            const count = isActive && pagination?.total > 0 ? pagination.total : null;
-            return (
-              <button
-                key={tab.value}
-                onClick={() => setActiveTab(tab.value)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isActive
-                  ? 'border border-blue-600 text-blue-600 bg-white'
-                  : 'text-slate-500 hover:text-slate-800'
-                  }`}
-              >
-                {tab.label}
-                {count && <span className="ml-0.5">({count})</span>}
-              </button>
-            );
-          })}
-        </div>
+      <div className="flex-shrink-0">
+        <PageHeader icon={UserPlus} title="Dealer onboarding" subtitle="Review pending applications and approve new dealers">
+          <div className="segmented">
+            {STATUS_TABS.map((tab) => {
+              const isActive = activeTab === tab.value;
+              const count = isActive && pagination?.total > 0 ? pagination.total : null;
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => setActiveTab(tab.value)}
+                  className={`segmented-item whitespace-nowrap ${isActive ? 'segmented-item-active' : ''}`}
+                >
+                  {tab.label}
+                  {count && <span className="ml-1">({count})</span>}
+                </button>
+              );
+            })}
+          </div>
+        </PageHeader>
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="card flex min-h-0 flex-1 overflow-hidden">
 
         {/* Left: Application list */}
-        <div className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col overflow-hidden">
+        <div className="w-72 flex-shrink-0 border-r border-slate-100 bg-white flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 flex-shrink-0">
             <p className="text-sm font-semibold text-slate-800">{activeTabLabel} Applications</p>
             {pagination?.total > 0 && (
@@ -478,7 +473,7 @@ const DealerOnboardingPage = () => {
               </div>
 
               {/* Contact Information */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="card p-5">
                 <h3 className="text-sm font-semibold text-slate-800 mb-4">Contact Information</h3>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                   <div>
@@ -502,7 +497,7 @@ const DealerOnboardingPage = () => {
 
               {/* Applicant's note about their current business */}
               {selected.applicantNote && (
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="card p-5">
                   <h3 className="text-sm font-semibold text-slate-800 mb-2">Applicant's Note</h3>
                   <p className="text-sm text-slate-600 leading-relaxed">{selected.applicantNote}</p>
                 </div>
@@ -602,7 +597,7 @@ const DealerOnboardingPage = () => {
               {/* ── Submitted Documents ── */}
               {selected?.submittedDocuments &&
                 Object.values(selected.submittedDocuments).some((d) => d?.fileUrl) && (
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <div className="card p-5">
                     <div className="flex items-center gap-2 mb-4">
                       <h3 className="text-sm font-semibold text-slate-800">Submitted Documents</h3>
                       {isResubmitted && (
@@ -667,7 +662,7 @@ const DealerOnboardingPage = () => {
 
               {/* ── Approval Actions — shown for pending, updates-required, in-review ── */}
               {canTakeAction && (
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="card p-5">
                   <h3 className="text-sm font-semibold text-slate-800 mb-4">Approval Actions</h3>
                   <div className="flex items-center gap-3">
                     <button

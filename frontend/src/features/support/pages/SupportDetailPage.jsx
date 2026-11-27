@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchTicketById, updateTicketStatus } from '../supportSlice';
 import { ArrowLeft, Wrench, Headphones, Loader2, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_OPTIONS = ['OPEN','IN_PROGRESS','AWAITING_DEALER','RESOLVED','CLOSED'];
 const PRIORITY_OPTIONS = ['LOW','MEDIUM','HIGH','URGENT'];
@@ -54,35 +55,26 @@ export default function SupportDetailPage() {
   const isService = ticket.type === 'SERVICE_REQUEST';
 
   return (
-    <div className="p-6 w-full px-6 space-y-5">
-      {/* Back */}
-      <button onClick={() => navigate('/support')}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
-        <ArrowLeft size={16} /> Back to Tickets
-      </button>
-
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isService ? 'bg-blue-100' : 'bg-purple-100'}`}>
-            {isService ? <Wrench size={18} className="text-blue-600" /> : <Headphones size={18} className="text-purple-600" />}
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{ticket.ticketNumber}</h1>
-            <p className="text-sm text-gray-500">{isService ? 'Service Request' : 'General Support'}</p>
-          </div>
-        </div>
-        <span className={`text-sm font-semibold px-3 py-1.5 rounded-full ${BADGE[ticket.status] || 'bg-gray-100 text-gray-600'}`}>
-          {ticket.status?.replace(/_/g, ' ')}
-        </span>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        compact
+        icon={isService ? Wrench : Headphones}
+        title={ticket.ticketNumber}
+        subtitle={isService ? 'Service request' : 'General support'}
+        badge={(
+          <span className={`text-xs font-semibold capitalize px-2.5 py-1 rounded-md ${BADGE[ticket.status] || 'bg-gray-100 text-gray-600'}`}>
+            {ticket.status?.replace(/_/g, ' ')}
+          </span>
+        )}
+        back={{ label: 'Support tickets', onClick: () => navigate('/support') }}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left — ticket details */}
         <div className="lg:col-span-2 space-y-4">
 
           {/* Dealer info */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <div className="card p-4 shadow-sm">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Dealer</h3>
             <p className="font-semibold text-gray-900">
               {ticket.dealerName || (!isService && ticket.name) || '—'}
@@ -99,7 +91,7 @@ export default function SupportDetailPage() {
           </div>
 
           {/* Ticket content */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <div className="card p-4 shadow-sm">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
               {isService ? 'Service Details' : 'Message'}
             </h3>
@@ -150,7 +142,7 @@ export default function SupportDetailPage() {
 
         {/* Right — actions */}
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-4">
+          <div className="card p-4 shadow-sm space-y-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Update Ticket</h3>
 
             <div>

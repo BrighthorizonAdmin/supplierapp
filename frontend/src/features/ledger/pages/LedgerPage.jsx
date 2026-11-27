@@ -6,7 +6,7 @@ import {
   Search, Filter, X, Download, Bell, ChevronDown, ChevronRight,
   Paperclip, Undo2, Plus, CalendarClock, AlertTriangle,
   IndianRupee, Users, Layers3, Wallet, FileSpreadsheet, FileText, FileType,
-  Clock, CheckCircle2, ReceiptText, ImagePlus, Send,
+  Clock, CheckCircle2, ReceiptText, ImagePlus, Send, BookOpenText,
 } from 'lucide-react';
 import Modal from '../../../components/ui/Modal';
 import Pagination from '../../../components/ui/Pagination';
@@ -19,6 +19,7 @@ import {
   addManualPayment, deleteManualPayment, resyncManualPayment, patchLedgerEntry,
   uploadScreenshot, deleteScreenshot, notifyDealer, downloadLedger,
 } from '../ledgerSlice';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const ASSET_BASE = (api.defaults.baseURL || '').replace(/\/api\/?$/, '');
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
@@ -79,7 +80,7 @@ const NotifyMenu = ({ onPick, label = 'Notify', tone = 'outline', disabled, dire
         <ChevronDown size={12} className={`transition-transform ${open !== up ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className={`absolute right-0 w-44 bg-white border border-slate-200 rounded-xl shadow-lg z-30 overflow-hidden text-xs ${up ? 'bottom-full mb-1.5' : 'mt-1.5'}`}>
+        <div className={`absolute right-0 w-44 card shadow-lg z-30 overflow-hidden text-xs ${up ? 'bottom-full mb-1.5' : 'mt-1.5'}`}>
           {[['both', 'App + Email', Send], ['app', 'In-app only', Bell], ['email', 'Email only', FileText]].map(([v, l, Ic]) => (
             <button key={v} type="button" onClick={() => { setOpen(false); onPick(v); }}
               className="flex w-full items-center gap-2 px-3 py-2.5 hover:bg-slate-50 text-slate-600">
@@ -676,30 +677,24 @@ const DealerLedger = () => {
 
   return (
     <div className="space-y-6 pb-6">
-      {/* header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Ledger</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {view === 'cleared'
-              ? 'History of dealer orders that have been fully paid off.'
-              : view === 'all'
-              ? 'Every dealer transaction — credit-based and cash paid, including fully paid orders.'
-              : 'Outstanding payments for pending & partially-paid dealer orders.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {view === 'outstanding' && (
-            <NotifyMenu label={notifyingAll ? 'Notifying…' : 'Notify all'} disabled={notifyingAll} onPick={notifyAll} />
-          )}
-          <button onClick={() => downloadLedger({ ...exportParams, format: 'xlsx' })}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-primary-600 text-white rounded-lg hover:bg-primary-700">
-            <Download size={14} /> Export all
-          </button>
-          <IconBtn icon={FileText} label="CSV" onClick={() => downloadLedger({ ...exportParams, format: 'csv' })} />
-          <IconBtn icon={FileType} label="PDF" onClick={() => downloadLedger({ ...exportParams, format: 'pdf' })} />
-        </div>
-      </div>
+      <PageHeader
+        icon={BookOpenText}
+        title="Ledger"
+        subtitle={view === 'cleared'
+          ? 'Dealer orders that have been fully paid off'
+          : view === 'all'
+          ? 'Every dealer transaction — credit and cash, including fully paid orders'
+          : 'Outstanding payments for pending and partly paid dealer orders'}
+      >
+        {view === 'outstanding' && (
+          <NotifyMenu label={notifyingAll ? 'Notifying…' : 'Notify all'} disabled={notifyingAll} onPick={notifyAll} />
+        )}
+        <button onClick={() => downloadLedger({ ...exportParams, format: 'xlsx' })} className="btn-primary">
+          <Download size={15} /> Export all
+        </button>
+        <IconBtn icon={FileText} label="CSV" onClick={() => downloadLedger({ ...exportParams, format: 'csv' })} />
+        <IconBtn icon={FileType} label="PDF" onClick={() => downloadLedger({ ...exportParams, format: 'pdf' })} />
+      </PageHeader>
 
       {/* view tabs + transaction-type filter */}
       <div className="flex flex-wrap items-center gap-3">

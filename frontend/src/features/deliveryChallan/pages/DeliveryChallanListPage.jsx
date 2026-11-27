@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchChallans, deleteChallan } from '../deliveryChallanSlice';
-import { Search, Eye, Edit2, Trash2, FileText, ChevronDown, Calendar, Printer } from 'lucide-react';
+import { Search, Eye, Edit2, Trash2, FileText, ChevronDown, Calendar, Printer, Truck, Plus } from 'lucide-react';
 import { format } from 'date-fns';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_COLORS = {
   open:   'bg-green-100 text-green-700',
@@ -54,21 +55,16 @@ export default function DeliveryChallanListPage() {
   };
 
   return (
-    <div className="bg-white flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 148px)' }}>
-
-      {/* Top bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Delivery Challan</h1>
-        <button
-          onClick={() => navigate('/delivery-challan/new')}
-          className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 shadow transition-colors"
-        >
-          Create Delivery Challan
+    <div className="flex flex-col gap-5" style={{ height: 'calc(100vh - 116px)' }}>
+      <PageHeader icon={Truck} title="Delivery challan" subtitle="Goods sent out without an invoice, with print-ready challans">
+        <button onClick={() => navigate('/delivery-challan/new')} className="btn-primary">
+          <Plus size={16} /> Create challan
         </button>
-      </div>
+      </PageHeader>
 
+      <div className="card flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Filters bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
+      <div className="border-b border-slate-100 px-5 py-3 flex items-center gap-3">
 
         {/* Search toggle */}
         <button
@@ -91,7 +87,7 @@ export default function DeliveryChallanListPage() {
         <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white hover:bg-gray-50 transition-colors">
           <Calendar size={14} className="text-gray-500 flex-shrink-0" />
           <select
-            className="text-sm text-gray-700 outline-none bg-transparent cursor-pointer"
+            className="appearance-none pr-1 text-sm text-gray-700 outline-none bg-transparent cursor-pointer"
             value={dateRange}
             onChange={(e) => { setDateRange(e.target.value); setPage(1); }}
           >
@@ -103,7 +99,7 @@ export default function DeliveryChallanListPage() {
         {/* Status filter */}
         <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white hover:bg-gray-50 transition-colors">
           <select
-            className="text-sm text-gray-700 outline-none bg-transparent cursor-pointer"
+            className="appearance-none pr-1 text-sm text-gray-700 outline-none bg-transparent cursor-pointer"
             value={statusFilt}
             onChange={(e) => { setStatusFilt(e.target.value); setPage(1); }}
           >
@@ -210,6 +206,7 @@ export default function DeliveryChallanListPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

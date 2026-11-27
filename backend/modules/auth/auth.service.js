@@ -81,13 +81,11 @@ const login = async (email, password, meta = {}) => {
   let outOfStockCount = 0;
   try {
     const Product = require('../products/model/Product.model');
+    const { STOCK_FILTERS } = require('../../utils/stockLevels');
+    // Shared rule: 1–15 pieces = low stock, 0 = out of stock.
     [lowStockCount, outOfStockCount] = await Promise.all([
-      Product.countDocuments({
-        isActive: true,
-        currentStockQty: { $gt: 0 },
-        $expr: { $lt: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.2] }] },
-      }),
-      Product.countDocuments({ isActive: true, currentStockQty: { $lte: 0 } }),
+      Product.countDocuments({ isActive: true, ...STOCK_FILTERS['low-stock'] }),
+      Product.countDocuments({ isActive: true, ...STOCK_FILTERS['out-of-stock'] }),
     ]);
 
     const total = lowStockCount + outOfStockCount;

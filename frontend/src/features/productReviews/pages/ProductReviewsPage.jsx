@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../../services/api';
 import Pagination from '../../../components/ui/Pagination';
 import { usePermission } from '../../../routes/ProtectedRoute';
+import PageHeader from '../../../components/ui/PageHeader';
 
 // Reviews written by customers on the Buvvas website. Nothing shows on the
 // website until it is approved here.
@@ -107,19 +108,17 @@ const ProductReviewsPage = () => {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Product Reviews</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Reviews customers write on the Buvvas website. Approve a review to show it, with its photos and videos,
-          on the product page and in Google results.
-        </p>
-      </div>
+      <PageHeader
+        icon={Star}
+        title="Product reviews"
+        subtitle="Reviews customers write on the Buvvas website. Approved reviews show on the product page and in Google results."
+      />
 
       <div className="flex flex-wrap gap-2">
         {TABS.map(([value, label]) => (
           <button key={value} type="button" onClick={() => updateFilter('status', value)}
             className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-              filters.status === value ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              filters.status === value ? 'bg-primary-600 text-white shadow-brand' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}>
             {label} <span className="ml-1 opacity-75">{statusCounts[value] ?? 0}</span>
           </button>

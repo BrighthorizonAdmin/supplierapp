@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Search, Filter, Download, AlertTriangle,
-  TrendingUp, TrendingDown, Package, BarChart2, ChevronDown, Plus, X, Tag,
+  TrendingUp, TrendingDown, Package, BarChart2, ChevronDown, Plus, X, Tag, Boxes,
+  Eye, Pencil, PackageCheck, PackageMinus, PackageX, Info, ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchInventory, fetchInventoryStats, fetchWarehouses, adjustStock, editStockWithSerials, setStockQuantity } from '../inventorySlice';
@@ -12,6 +13,9 @@ import { fetchProducts } from '../../products/productSlice';
 import Pagination from '../../../components/ui/Pagination';
 import { format } from 'date-fns';
 import api from '../../../services/api';
+import PageHeader from '../../../components/ui/PageHeader';
+import KPICard from '../../../components/ui/KPICard';
+import { LOW_STOCK_THRESHOLD, STOCK_STATUS_META, getStockStatus, stockHint } from '../../../utils/stockLevels';
 
 const fmtNum = (n) => {
   if (!n && n !== 0) return '—';
@@ -23,53 +27,44 @@ const fmtCurrency = (n) => (n != null ? `₹${Number(n).toLocaleString('en-IN')}
 
 const DONUT_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
 
-const stockStatus = (item) => {
-  const cur = item.currentStockQty ?? 0;
-  const open = item.openingStockQty ?? 0;
-  if (cur === 0) return 'out-of-stock';
-  if (open > 0 && cur <= open * 0.25) return 'low stock';
-  return 'in stock';
-};
+// Status from the product's live stock: 0 = out of stock, 1–15 = low stock, more = in stock.
+const stockStatus = (item) => getStockStatus(item.currentStockQty);
 
 const StockChip = ({ item }) => {
-  const s = stockStatus(item);
-  if (s === 'out-of-stock') return <span className="badge-red">Out of Stock</span>;
-  if (s === 'low stock') return <span className="badge-yellow">Low Stock</span>;
-  return <span className="badge-green">In-Stock</span>;
+  const meta = STOCK_STATUS_META[stockStatus(item)];
+  return (
+    <span className={meta.badge}>
+      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+      {meta.label}
+    </span>
+  );
 };
 
 const forecastLabel = (item) => {
   const s = stockStatus(item);
-  if (s === 'out of stock') return 'Replenishment Required';
-  if (s === 'low stock') return 'Projected to Spike – order soon';
+  if (s === 'out-of-stock') return 'Replenishment Required';
+  if (s === 'low-stock') return 'Projected to Spike – order soon';
   return 'Stable Demand – next 30 days';
 };
 
 const STOCK_TABS = [
-  { id: '', label: 'All Items' },
-  { id: 'low-stock', label: 'Low Stock' },
-  { id: 'high-stock', label: 'High Stock' },
-  { id: 'out-of-stock', label: 'Out of Stock' },
+  { id: '', label: 'All items', countKey: 'all' },
+  { id: 'in-stock', label: 'In stock', countKey: 'inStock', dot: STOCK_STATUS_META['in-stock'].dot },
+  { id: 'low-stock', label: 'Low stock', countKey: 'lowStock', dot: STOCK_STATUS_META['low-stock'].dot },
+  { id: 'out-of-stock', label: 'Out of stock', countKey: 'outOfStock', dot: STOCK_STATUS_META['out-of-stock'].dot },
 ];
+const TAB_IDS = STOCK_TABS.map((t) => t.id);
 
-const StatCard = ({ label, value, sub, subIcon: SubIcon, icon: Icon, iconBg, badge, badgeCls }) => (
-  <div className="card p-4 flex items-start justify-between gap-3">
-    <div className="flex-1 min-w-0">
-      <p className="text-xs text-slate-500 mb-1">{label}</p>
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <p className="text-2xl font-bold text-slate-900 leading-tight">{value ?? '—'}</p>
-        {badge && <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${badgeCls}`}>{badge}</span>}
-      </div>
-      {sub && (
-        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 leading-tight">
-          {SubIcon && <SubIcon size={11} />}{sub}
-        </p>
-      )}
-    </div>
-    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-      <Icon size={18} />
-    </div>
-  </div>
+// Stat tile in the shared KPI card style; colour follows the icon background used below.
+const ICON_BG_COLOR = {
+  'bg-primary-100 text-primary-600': 'blue',
+  'bg-green-100 text-green-600': 'green',
+  'bg-red-100 text-red-500': 'red',
+  'bg-amber-100 text-amber-600': 'yellow',
+  'bg-slate-100 text-slate-500': 'purple',
+};
+const StatCard = ({ label, value, sub, icon, iconBg }) => (
+  <KPICard title={label} value={value ?? '—'} icon={icon} color={ICON_BG_COLOR[iconBg] || 'blue'} subtitle={sub} />
 );
 
 const DonutTooltip = ({ active, payload }) => {
@@ -385,7 +380,8 @@ const InventoryPage = () => {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [stockTab, setStockTab] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const stockTab = TAB_IDS.includes(searchParams.get('status') || '') ? (searchParams.get('status') || '') : '';
   const [warehouseId, setWarehouseId] = useState('');
   const [category, setCategory] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -442,11 +438,19 @@ const InventoryPage = () => {
     { name: 'Out of Stock', value: stats.distribution?.outOfStock || 0 },
   ] : [];
   const totalItems = donutData.reduce((s, d) => s + d.value, 0);
-  const forecastPct = stats?.totalSKUs
-    ? Math.round((stats.fastMovingCount / stats.totalSKUs) * 100)
-    : 0;
 
-  const switchTab = (id) => { setStockTab(id); setPage(1); };
+  const switchTab = (id) => {
+    const next = new URLSearchParams(searchParams);
+    if (id) next.set('status', id); else next.delete('status');
+    setSearchParams(next, { replace: true });
+    setPage(1);
+  };
+  const tabCounts = {
+    all: stats?.totalSKUs,
+    inStock: stats?.inStockCount,
+    lowStock: stats?.lowStockCount,
+    outOfStock: stats?.outOfStockCount,
+  };
 
   const handleAdjustStock = async (form) => {
     setAdjusting(true);
@@ -509,8 +513,7 @@ const InventoryPage = () => {
     const rows = list.map((item) => {
       const prod = item.productId || {};
       const wh = item.warehouseId || {};
-      const s = stockStatus(item);
-      const status = s === 'no-stock' ? 'Out of Stock' : s === 'low-stock' ? 'Low Stock' : 'In Stock';
+      const status = STOCK_STATUS_META[stockStatus(item)].label;
       return [
         prod.name || '—', prod.productCode || '—', prod.category || '—',
         wh.name || '—',
@@ -548,28 +551,66 @@ const InventoryPage = () => {
         />
       )}
 
-      {/* ── Top section: donut + stat cards, equal height ── */}
-      {/* FIX 1: items-stretch so the donut card grows to match the stat-cards grid height */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-stretch">
+      <PageHeader icon={Boxes} title="Inventory" subtitle="Stock on hand across warehouses, with low-stock and movement insights">
+        <button onClick={handleExport} className="btn-primary">
+          <Download size={15} /> Export
+        </button>
+      </PageHeader>
 
-        {/* Donut chart card — h-full makes it fill the row height */}
-        <div className="card p-5 lg:col-span-2 flex flex-col items-center h-full">
-          <p className="text-xs font-bold text-slate-600 tracking-widest uppercase mb-3">
-            Inventory Distribution
-          </p>
+      {/* ── Stock health: the three statuses are the main way into the table ── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <KPICard
+          title="In stock"
+          value={fmtNum(stats?.inStockCount)}
+          icon={PackageCheck}
+          color="green"
+          subtitle={STOCK_STATUS_META['in-stock'].rule}
+          active={stockTab === 'in-stock'}
+          onClick={() => switchTab(stockTab === 'in-stock' ? '' : 'in-stock')}
+        />
+        <KPICard
+          title="Low stock"
+          value={fmtNum(stats?.lowStockCount)}
+          icon={PackageMinus}
+          color="yellow"
+          subtitle={stats?.lowStockCount > 0 ? `${STOCK_STATUS_META['low-stock'].rule} · reorder soon` : STOCK_STATUS_META['low-stock'].rule}
+          active={stockTab === 'low-stock'}
+          onClick={() => switchTab(stockTab === 'low-stock' ? '' : 'low-stock')}
+        />
+        <KPICard
+          title="Out of stock"
+          value={fmtNum(stats?.outOfStockCount)}
+          icon={PackageX}
+          color="red"
+          subtitle={STOCK_STATUS_META['out-of-stock'].rule}
+          active={stockTab === 'out-of-stock'}
+          onClick={() => switchTab(stockTab === 'out-of-stock' ? '' : 'out-of-stock')}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+        {/* Distribution */}
+        <div className="card flex flex-col p-5 lg:col-span-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="section-title">Stock health</h2>
+              <p className="section-subtitle">Click a status to filter the table</p>
+            </div>
+          </div>
 
           {totalItems === 0 ? (
-            <div className="flex items-center justify-center flex-1 text-slate-400 text-sm">No data</div>
+            <div className="flex flex-1 items-center justify-center py-10 text-sm text-slate-400">No data</div>
           ) : (
-            <div className="w-full flex-1 min-h-0">
-              <ResponsiveContainer width="100%" height={210}>
+            <div className="relative mt-2 h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={donutData}
                     cx="50%" cy="50%"
-                    innerRadius={60} outerRadius={90}
+                    innerRadius={62} outerRadius={88}
                     paddingAngle={3}
                     dataKey="value"
+                    isAnimationActive={false}
                   >
                     {donutData.map((_, i) => (
                       <Cell key={i} fill={DONUT_COLORS[i]} strokeWidth={0} />
@@ -578,73 +619,71 @@ const InventoryPage = () => {
                   <Tooltip content={<DonutTooltip />} />
                 </PieChart>
               </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold text-slate-900 tabular-nums">{totalItems.toLocaleString('en-IN')}</span>
+                <span className="text-xs text-slate-500">products</span>
+              </div>
             </div>
           )}
 
-          {/* Legend pushed to bottom */}
-          <div className="flex items-center gap-5 mt-auto pt-3">
+          <div className="mt-3 space-y-1.5">
             {[
-              { label: 'In Stock', color: 'bg-green-500' },
-              { label: 'Low Stock', color: 'bg-amber-500' },
-              { label: 'Out of Stock', color: 'bg-red-500' },
-            ].map(({ label, color }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${color}`} />
-                <span className="text-xs text-slate-600">{label}</span>
-              </div>
-            ))}
+              { id: 'in-stock', value: stats?.inStockCount || 0 },
+              { id: 'low-stock', value: stats?.lowStockCount || 0 },
+              { id: 'out-of-stock', value: stats?.outOfStockCount || 0 },
+            ].map(({ id, value }) => {
+              const meta = STOCK_STATUS_META[id];
+              const pct = totalItems ? Math.round((value / totalItems) * 100) : 0;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => switchTab(stockTab === id ? '' : id)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
+                    stockTab === id ? 'bg-primary-50 ring-1 ring-inset ring-primary-200' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${meta.dot}`} />
+                  <span className="flex-1 text-sm font-medium text-slate-700">
+                    {meta.label}
+                    <span className="ml-1.5 text-xs font-normal text-slate-400">{meta.rule}</span>
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums text-slate-900">{value}</span>
+                  <span className="w-10 text-right text-xs tabular-nums text-slate-400">{pct}%</span>
+                  <ChevronRight size={14} className="text-slate-300" />
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* 6 stat cards */}
-        <div className="lg:col-span-3 grid grid-cols-2 gap-3 content-start">
+        {/* Volume and movement */}
+        <div className="grid grid-cols-2 content-start gap-4 lg:col-span-3">
           <StatCard
-            label="Total Network Stocks"
+            label="Units on hand"
             value={fmtNum(stats?.totalOnHand)}
-            sub={`${stats?.inStockCount ?? 0} products in stock`}
-            subIcon={TrendingUp}
+            sub={`Across ${fmtNum(stats?.totalSKUs)} products`}
             icon={BarChart2}
             iconBg="bg-primary-100 text-primary-600"
           />
           <StatCard
-            label="Total SKU's"
+            label="Products in catalogue"
             value={fmtNum(stats?.totalSKUs)}
-            sub={`${stats?.fastMovingCount ?? 0} new this month`}
-            subIcon={Package}
+            sub={`${stats?.inStockCount ?? 0} ready to sell`}
             icon={Package}
             iconBg="bg-green-100 text-green-600"
           />
           <StatCard
-            label="Low Stock Alert"
-            value={stats?.lowStockCount ?? '—'}
-            sub="need replenishment"
-            subIcon={AlertTriangle}
-            icon={AlertTriangle}
-            iconBg="bg-red-100 text-red-500"
-          />
-          <StatCard
-            label="Forecast Demand"
-            value={`+${forecastPct}%`}
-            sub="next 30 days"
-            subIcon={TrendingUp}
+            label="Fast-moving items"
+            value={fmtNum(stats?.fastMovingCount)}
+            sub="Restocked in the last 30 days"
             icon={TrendingUp}
             iconBg="bg-amber-100 text-amber-600"
           />
           <StatCard
-            label="Fast-Moving Items"
-            value={fmtNum(stats?.fastMovingCount)}
-            sub="restocked in last 30 days"
-            // sub="vs last year"
-            subIcon={TrendingUp}
-            icon={TrendingUp}
-            iconBg="bg-green-100 text-green-600"
-          />
-          <StatCard
-            label="Slow-Moving Items"
+            label="Slow-moving items"
             value={fmtNum(stats?.slowMovingCount)}
-            sub="not restocked in 90+ days"
-            // sub="vs last year"
-            subIcon={TrendingDown}
+            sub="Not restocked in 90+ days"
             icon={TrendingDown}
             iconBg="bg-slate-100 text-slate-500"
           />
@@ -672,17 +711,20 @@ const InventoryPage = () => {
           </div>
 
           {/* Tabs */}
-          <div className="flex items-center border-b border-slate-100 overflow-x-auto">
+          <div className="segmented overflow-x-auto">
             {STOCK_TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => switchTab(tab.id)}
-                className={`px-5 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap ${stockTab === tab.id
-                  ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-                  }`}
+                className={`segmented-item flex items-center gap-1.5 whitespace-nowrap ${stockTab === tab.id ? 'segmented-item-active' : ''}`}
               >
+                {tab.dot && <span className={`h-2 w-2 rounded-full ${tab.dot}`} />}
                 {tab.label}
+                {tabCounts[tab.countKey] != null && (
+                  <span className={`rounded-md px-1.5 text-xs tabular-nums ${stockTab === tab.id ? 'bg-primary-100 text-primary-700' : 'bg-white text-slate-500'}`}>
+                    {tabCounts[tab.countKey]}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -724,20 +766,25 @@ const InventoryPage = () => {
               )}
             </div>
 
-            {/* Export */}
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700"
-            >
-              <Download size={13} /> Export
-            </button>
 
           </div>
         </div>
 
         {/* Table header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-          <p className="text-sm font-semibold text-slate-800">Stock Details</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-100">
+          <div>
+            <h2 className="section-title">
+              {stockTab ? STOCK_STATUS_META[stockTab].label : 'All stock'}
+              {pagination?.total != null && <span className="ml-2 text-sm font-medium text-slate-400">{pagination.total} products</span>}
+            </h2>
+          </div>
+          <p className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Info size={13} className="text-slate-400" />
+            Low stock = 1–{LOW_STOCK_THRESHOLD} pieces · Out of stock = 0 pieces
+            {stockTab && (
+              <button onClick={() => switchTab('')} className="link ml-2 text-xs">Clear filter</button>
+            )}
+          </p>
         </div>
 
         {/* Table */}
@@ -771,12 +818,17 @@ const InventoryPage = () => {
                   const serial = rowSerialState[item._id];
                   const isHovered = hoveredSerial === item._id;
 
+                  const status = stockStatus(item);
+                  const qty = Math.max(0, item.currentStockQty ?? 0);
+                  const openDetails = () => navigate(`/inventory/${item._id}`, { state: { inventory: item } });
                   return (
-                    <tr key={item._id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={item._id} className={`transition-colors hover:bg-slate-50 ${
+                      status === 'out-of-stock' ? 'bg-red-50/30' : status === 'low-stock' ? 'bg-amber-50/30' : ''
+                    }`}>
                       <td className="px-4 py-3.5">
-                        <p className="font-semibold text-slate-800 leading-snug hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/inventory/${item._id}`, { state: { inventory: item } })}>
+                        <button type="button" onClick={openDetails} className="text-left font-semibold leading-snug text-slate-800 hover:text-primary-700">
                           {prod.name || '—'}
-                        </p>
+                        </button>
                         <p className="text-xs text-slate-400 mt-0.5">
                           SKU: {prod.productCode || '—'}
                           {prod.category ? ` | Category: ${prod.category}` : ''}
@@ -790,10 +842,16 @@ const InventoryPage = () => {
                         <div
                           className="relative inline-block"
                         >
-                          <p className="font-semibold text-slate-800 cursor-default">
-                            {Math.max(0, item.currentStockQty ?? 0).toLocaleString('en-IN')}
+                          <p className="font-semibold text-slate-800 cursor-default tabular-nums">
+                            {qty.toLocaleString('en-IN')}
+                            {prod.unit && <span className="ml-1 text-xs font-normal text-slate-400">{prod.unit}</span>}
                           </p>
-                          {prod.unit && <p className="text-xs text-slate-400 mt-0.5">{prod.unit}</p>}
+                          <div className="mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className={`h-full rounded-full ${STOCK_STATUS_META[status].bar}`}
+                              style={{ width: `${status === 'out-of-stock' ? 0 : Math.min(100, Math.max(6, (qty / (LOW_STOCK_THRESHOLD * 4)) * 100))}%` }}
+                            />
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3.5">
@@ -810,17 +868,22 @@ const InventoryPage = () => {
                       </td>
                       <td className="px-4 py-3.5">
                         <StockChip item={item} />
+                        <p className={`mt-1 text-xs ${status === 'in-stock' ? 'text-slate-400' : status === 'low-stock' ? 'font-medium text-amber-700' : 'font-medium text-red-600'}`}>
+                          {stockHint(qty)}
+                        </p>
                       </td>
                       {/* <td className="px-4 py-3.5 text-xs text-slate-500 max-w-[160px] leading-relaxed">
                         {forecastLabel(item)}
                       </td> */}
                       <td className="px-4 py-3.5">
-                        <button
-                          onClick={() => setEditItem(item)}
-                          className="px-3 py-1.5 text-xs font-medium text-primary-600 border border-primary-300 rounded-lg hover:bg-primary-50 whitespace-nowrap"
-                        >
-                          Edit Stock
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => setEditItem(item)} className="btn-secondary whitespace-nowrap px-3 py-1.5 text-xs">
+                            <Pencil size={13} /> Edit stock
+                          </button>
+                          <button onClick={openDetails} className="btn-ghost p-2" title="View stock details">
+                            <Eye size={15} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

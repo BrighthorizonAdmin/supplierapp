@@ -7,10 +7,12 @@ import {
 } from 'recharts';
 import {
   Download, Calendar, CheckCircle, Clock, AlertCircle,
-  MoreVertical, TrendingUp, ChevronDown,
+  MoreVertical, TrendingUp, ChevronDown, Wallet, IndianRupee, HandCoins, CreditCard,
 } from 'lucide-react';
 import { format, subDays, subMonths, subYears } from 'date-fns';
 import api from '../../../services/api';
+import PageHeader from '../../../components/ui/PageHeader';
+import KPICard from '../../../components/ui/KPICard';
  
 const PERIODS = [
   { label: 'Last 30 Days', value: '30d' },
@@ -170,101 +172,42 @@ const FinancePage = () => {
   return (
     <div className="space-y-5">
  
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Finance Overview</h1>
-        <div className="flex items-center gap-2">
-          {/* Period filter dropdown */}
-          <div className="relative" ref={periodMenuRef}>
-            <button
-              onClick={() => setShowPeriodMenu((v) => !v)}
-              className="btn-secondary flex items-center gap-2 text-sm py-2 px-3"
-            >
-              <Calendar size={14} /> {periodLabel} <ChevronDown size={12} />
-            </button>
-            {showPeriodMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 min-w-[150px]">
-                {PERIODS.map((p) => (
-                  <button
-                    key={p.value}
-                    onClick={() => { setPeriod(p.value); setShowPeriodMenu(false); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 first:rounded-t-xl last:rounded-b-xl ${period === p.value ? 'font-semibold text-primary-600' : 'text-slate-700'}`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
- 
-          {/* Export CSV */}
+      <PageHeader icon={Wallet} title="Finance overview" subtitle="Revenue, outstanding dues and cash flow">
+        {/* Period filter dropdown */}
+        <div className="relative" ref={periodMenuRef}>
           <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="btn-secondary flex items-center gap-2 text-sm py-2 px-3 disabled:opacity-50"
+            onClick={() => setShowPeriodMenu((v) => !v)}
+            className="btn-secondary flex items-center gap-2 text-sm py-2 px-3"
           >
-            <Download size={14} /> {exporting ? 'Exporting…' : 'Export'}
+            <Calendar size={14} /> {periodLabel} <ChevronDown size={12} />
           </button>
+          {showPeriodMenu && (
+            <div className="absolute right-0 top-full mt-1 card shadow-lg z-10 min-w-[150px]">
+              {PERIODS.map((p) => (
+                <button
+                  key={p.value}
+                  onClick={() => { setPeriod(p.value); setShowPeriodMenu(false); }}
+                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 first:rounded-t-xl last:rounded-b-xl ${period === p.value ? 'font-semibold text-primary-600' : 'text-slate-700'}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+ 
+        <button onClick={handleExport} disabled={exporting} className="btn-primary">
+          <Download size={15} /> {exporting ? 'Exporting…' : 'Export'}
+        </button>
+      </PageHeader>
+
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <KPICard title="Total revenue" value={fmt(stats?.totalRevenue)} icon={IndianRupee} color="blue" subtitle="+14.2% vs last month" />
+        <KPICard title="Outstanding" value={fmt(outstanding)} icon={Clock} color="yellow" subtitle="+8.3% pending" />
+        <KPICard title="Paid this month" value={fmt(stats?.netRevenue)} icon={HandCoins} color="green" subtitle="+11.8% vs last month" />
+        <KPICard title="Credit available" value={fmt((stats?.totalRevenue || 0) - (stats?.netRevenue || 0))} icon={CreditCard} color="purple" subtitle="Limit unchanged" />
       </div>
- 
-      {/* ── KPI cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
- 
-        {/* 1 – Total Revenue (highlighted card) */}
-        <div className="bg-primary-600 rounded-2xl p-5 text-white shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-primary-200 mb-2">
-            Total Revenue
-          </p>
-          <p className="text-2xl font-bold leading-tight mb-3">
-            {fmt(stats?.totalRevenue)}
-          </p>
-          <div className="flex items-center gap-1 text-xs text-primary-200">
-            <TrendingUp size={12} />
-            <span>+14.2% vs last month</span>
-          </div>
-        </div>
- 
-        {/* 2 – Outstanding */}
-        <div className="card p-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-            Outstanding
-          </p>
-          <p className="text-2xl font-bold text-slate-900 leading-tight mb-3">
-            {fmt(outstanding)}
-          </p>
-          <div className="flex items-center gap-1 text-xs text-green-600">
-            <TrendingUp size={12} />
-            <span>+8.3% Pending</span>
-          </div>
-        </div>
- 
-        {/* 3 – Paid This Month */}
-        <div className="card p-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-            Paid This Month
-          </p>
-          <p className="text-2xl font-bold text-slate-900 leading-tight mb-3">
-            {fmt(stats?.netRevenue)}
-          </p>
-          <div className="flex items-center gap-1 text-xs text-green-600">
-            <TrendingUp size={12} />
-            <span>+11.8% vs last month</span>
-          </div>
-        </div>
- 
-        {/* 4 – Credit Available */}
-        <div className="card p-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-            Credit Available
-          </p>
-          <p className="text-2xl font-bold text-slate-900 leading-tight mb-3">
-            {fmt((stats?.totalRevenue || 0) - (stats?.netRevenue || 0))}
-          </p>
-          <p className="text-xs text-slate-400">Limit unchanged</p>
-        </div>
-      </div>
- 
+
       {/* ── Cash Flow + Payment Status ── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
  
@@ -272,7 +215,7 @@ const FinancePage = () => {
         <div className="card p-5 lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-semibold text-slate-900">Cash Flow</h2>
+              <h2 className="section-title">Cash Flow</h2>
               <p className="text-xs text-slate-400 mt-0.5">Last 6 months</p>
             </div>
             <div className="flex items-center bg-slate-100 rounded-lg p-1 gap-0.5">
@@ -314,7 +257,7 @@ const FinancePage = () => {
         {/* Payment Status */}
         <div className="card p-5 lg:col-span-2">
           <div className="mb-4">
-            <h2 className="font-semibold text-slate-900">Payment Status</h2>
+            <h2 className="section-title">Payment Status</h2>
             <p className="text-xs text-slate-400 mt-0.5">Last 6 months</p>
           </div>
           <div className="space-y-3">
@@ -340,7 +283,7 @@ const FinancePage = () => {
       {/* ── Recent Transactions ── */}
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-900">Recent Transactions</h2>
+          <h2 className="section-title">Recent Transactions</h2>
           <button className="text-sm font-medium text-primary-600 hover:underline" onClick={() => navigate('/payments')}>
             View All
           </button>

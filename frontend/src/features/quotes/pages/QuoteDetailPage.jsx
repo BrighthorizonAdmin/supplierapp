@@ -156,16 +156,16 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
   //  SCREEN LAYOUT (toolbar + print preview card)
   // ═══════════════════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-gray-100 pb-10">
+    <div className="pb-10">
 
       {/* ── Toolbar ── */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm sticky top-0 z-10">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-primary-50/70 via-white to-white px-5 py-4 shadow-card">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/quotes')} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 transition-colors">
+          <button onClick={() => navigate('/quotes')} className="btn-ghost p-2" title="Back to quotes">
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="text-base font-bold text-gray-900">{q.quoteNumber}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">{q.quoteNumber}</h1>
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-600'}`}>
               {STATUS_LABELS[q.status] || q.status}
             </span>
@@ -179,7 +179,7 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
                 value={q.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
                 title="Change status (also updates the Dealer app)"
-                className="px-3 py-2 text-sm font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors capitalize"
+                className="input w-auto font-semibold capitalize"
               >
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
@@ -187,7 +187,7 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
               </select>
               <button
                 onClick={() => navigate(`/quotes/${id}/edit`)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors"
+                className="btn-secondary"
               >
                 <Edit2 size={14} /> Edit
               </button>
@@ -199,7 +199,7 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
                 value={q.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
                 title="Change status"
-                className="px-3 py-2 text-sm font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors capitalize"
+                className="input w-auto font-semibold capitalize"
               >
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
@@ -207,13 +207,13 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
               </select>
               <button
                 onClick={() => navigate(`/quotes/${id}/edit`)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors"
+                className="btn-secondary"
               >
                 <Edit2 size={14} /> Edit
               </button>
               <button
                 onClick={handleDelete}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-red-200 rounded-lg hover:bg-red-50 text-red-500 transition-colors"
+                className="btn-secondary border-red-200 text-red-600 hover:bg-red-50"
               >
                 <Trash2 size={14} /> Delete
               </button>
@@ -221,7 +221,7 @@ body{margin:0;padding:24px;background:#fff;font-family:Arial,sans-serif;-webkit-
           )}
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow transition-colors"
+            className="btn-primary"
           >
             <Printer size={14} /> Print / Download PDF
           </button>

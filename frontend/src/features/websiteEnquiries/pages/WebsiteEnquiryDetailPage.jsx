@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchEnquiryById, updateEnquiryStatus } from '../websiteEnquirySlice';
 import { ArrowLeft, MessageSquare, Loader2, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const STATUS_OPTIONS = ['NEW', 'CONTACTED', 'CONVERTED', 'CLOSED'];
 
@@ -59,35 +60,26 @@ export default function WebsiteEnquiryDetailPage() {
   if (!enquiry) return null;
 
   return (
-    <div className="p-6 w-full px-6 space-y-5">
-      {/* Back */}
-      <button onClick={() => navigate('/website-enquiries')}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
-        <ArrowLeft size={16} /> Back to Enquiries
-      </button>
-
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100">
-            <MessageSquare size={18} className="text-purple-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{enquiry.enquiryNumber}</h1>
-            <p className="text-sm text-gray-500">{SOURCE_LABEL[enquiry.source] || enquiry.source}</p>
-          </div>
-        </div>
-        <span className={`text-sm font-semibold px-3 py-1.5 rounded-full ${BADGE[enquiry.status] || 'bg-gray-100 text-gray-600'}`}>
-          {enquiry.status}
-        </span>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        compact
+        icon={MessageSquare}
+        title={enquiry.enquiryNumber}
+        subtitle={SOURCE_LABEL[enquiry.source] || enquiry.source}
+        badge={(
+          <span className={`text-xs font-semibold capitalize px-2.5 py-1 rounded-md ${BADGE[enquiry.status] || 'bg-gray-100 text-gray-600'}`}>
+            {enquiry.status}
+          </span>
+        )}
+        back={{ label: 'Website enquiries', onClick: () => navigate('/website-enquiries') }}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left — enquiry details */}
         <div className="lg:col-span-2 space-y-4">
 
           {/* Contact info */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <div className="card p-4 shadow-sm">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Submitted By</h3>
             <p className="font-semibold text-gray-900">{enquiry.name}</p>
             {enquiry.mobile && <p className="text-sm text-gray-500 mt-0.5">📞 {enquiry.mobile}</p>}
@@ -98,7 +90,7 @@ export default function WebsiteEnquiryDetailPage() {
           </div>
 
           {/* Message */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <div className="card p-4 shadow-sm">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Message</h3>
             <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-lg p-3">
               {enquiry.message || 'No message provided.'}
@@ -119,7 +111,7 @@ export default function WebsiteEnquiryDetailPage() {
 
         {/* Right — actions */}
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-4">
+          <div className="card p-4 shadow-sm space-y-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Update Enquiry</h3>
 
             <div>

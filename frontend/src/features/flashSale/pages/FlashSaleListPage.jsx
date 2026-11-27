@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchFlashSales, updateFlashSale, deleteFlashSale } from '../flashSaleSlice';
 import { Plus, Zap, Pencil, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+import PageHeader from '../../../components/ui/PageHeader';
 
 const fmtDate = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
@@ -70,16 +71,15 @@ const FlashSaleListPage = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Flash Sale</h1>
-        <button onClick={() => navigate('/flash-sales/new')} className="btn-primary flex items-center gap-2 text-sm py-2 px-4">
-          <Plus size={14} /> New Flash Sale
+      <PageHeader
+        icon={Zap}
+        title="Flash sale"
+        subtitle="Only one flash sale can be live at a time. While live, its discount applies automatically to a customer's first order on the Buvvas website."
+      >
+        <button onClick={() => navigate('/flash-sales/new')} className="btn-primary">
+          <Plus size={16} /> New flash sale
         </button>
-      </div>
-
-      <p className="text-sm text-slate-500">
-        Only one flash sale can be live at a time. When live, the discount auto-applies at checkout on the Buvvas website for a customer's first order.
-      </p>
+      </PageHeader>
 
       {loading ? (
         <div className="flex items-center justify-center h-64">

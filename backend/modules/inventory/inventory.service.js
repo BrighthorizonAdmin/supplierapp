@@ -11,6 +11,9 @@ const { emitToRole } = require('../../websocket/socket');
 const { LOW_STOCK_ALERT } = require('../../websocket/events');
 const logger = require('../../utils/logger');
 const { withTransaction } = require('../../utils/transaction');
+const {
+  LOW_STOCK_THRESHOLD, lowStockExpr, outOfStockExpr, inStockExpr, stockStatusExpr,
+} = require('../../utils/stockLevels');
 
 const pushStockAlertToDealers = async (productId, quantityAvailable, reorderLevel) => {
   const dealerApiUrl = process.env.DEALER_API_URL;
@@ -63,18 +66,18 @@ const adjustStock = async (productId, warehouseId, quantity, type = 'add', userI
   if (!inv) throw new AppError('Insufficient stock for this operation', 400);
 
   // Low-stock / out-of-stock check — only relevant when stock is reduced
-  if (type === 'remove' && inv.quantityAvailable <= inv.reorderLevel) {
+  if (type === 'remove' && inv.quantityAvailable <= LOW_STOCK_THRESHOLD) {
     try {
       emitToRole('inventory-manager', LOW_STOCK_ALERT, {
         productId,
         warehouseId,
         quantityAvailable: inv.quantityAvailable,
-        reorderLevel: inv.reorderLevel,
+        reorderLevel: LOW_STOCK_THRESHOLD,
       });
     } catch {}
 
     // Push alert to dealer app (non-blocking, deduped on dealer side per 24 h)
-    pushStockAlertToDealers(productId, inv.quantityAvailable, inv.reorderLevel);
+    pushStockAlertToDealers(productId, inv.quantityAvailable, LOW_STOCK_THRESHOLD);
   }
 
   await auditService.log('inventory', inv._id, 'update', userId, {
@@ -185,15 +188,14 @@ const getInventory = async (query = {}) => {
       },
     },
 
-    // Compute isLowStock from product-level stock fields
+    // Stock status from the product's live stock (see utils/stockLevels.js):
+    // 0 = out of stock, 1–15 = low stock, more = in stock.
     {
       $addFields: {
-        isLowStock: {
-          $and: [
-            { $gt: ['$currentStockQty', 0] },
-            { $lte: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.25] }] },
-          ],
-        },
+        isLowStock: lowStockExpr('$currentStockQty'),
+        isOutOfStock: outOfStockExpr('$currentStockQty'),
+        stockStatus: stockStatusExpr('$currentStockQty'),
+        lowStockThreshold: LOW_STOCK_THRESHOLD,
       },
     },
 
@@ -227,28 +229,28 @@ const getInventory = async (query = {}) => {
       }
 
       // Stock Status column — match against the derived label strings
-      if ('out of stock'.includes(sl))              orClauses.push({ quantityOnHand: { $lte: 0 } });
-      if ('low stock'.includes(sl))                 orClauses.push({ isLowStock: true,  quantityOnHand: { $gt: 0 } });
+      if ('out of stock'.includes(sl))              orClauses.push({ stockStatus: 'out-of-stock' });
+      if ('low stock'.includes(sl))                 orClauses.push({ stockStatus: 'low-stock' });
       if ('in stock'.includes(sl) || 'in-stock'.includes(sl))
-                                                    orClauses.push({ isLowStock: false, quantityOnHand: { $gt: 0 } });
+                                                    orClauses.push({ stockStatus: 'in-stock' });
 
       // Forecast & Demand column — match against the derived label strings
-      if ('replenishment'.includes(sl))             orClauses.push({ quantityOnHand: { $lte: 0 } });
+      if ('replenishment'.includes(sl))             orClauses.push({ stockStatus: 'out-of-stock' });
       if ('projected'.includes(sl) || 'spike'.includes(sl))
-                                                    orClauses.push({ isLowStock: true,  quantityOnHand: { $gt: 0 } });
+                                                    orClauses.push({ stockStatus: 'low-stock' });
       if ('stable'.includes(sl) || 'demand'.includes(sl))
-                                                    orClauses.push({ isLowStock: false, quantityOnHand: { $gt: 0 } });
+                                                    orClauses.push({ stockStatus: 'in-stock' });
 
       return [{ $match: { $or: orClauses } }];
     })() : []),
 
     // Stock status filter (runs after virtual fields are computed)
     ...(query.status === 'low-stock' || query.lowStock === 'true'
-      ? [{ $match: { quantityOnHand: { $gt: 0 }, isLowStock: true } }]
+      ? [{ $match: { stockStatus: 'low-stock' } }]
       : query.status === 'out-of-stock'
-      ? [{ $match: { quantityOnHand: { $not: { $gt: 0 } } } }]
-      : query.status === 'high-stock'
-      ? [{ $match: { isLowStock: false, currentStockQty: { $gt: 0 } } }]
+      ? [{ $match: { stockStatus: 'out-of-stock' } }]
+      : query.status === 'high-stock' || query.status === 'in-stock'
+      ? [{ $match: { stockStatus: 'in-stock' } }]
       : []),
   ];
 
@@ -266,44 +268,17 @@ const getInventoryStats = async () => {
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
   //  Out of Stock : currentStockQty <= 0
-  //  Low Stock    : currentStockQty > 0  AND  currentStockQty <= openingStockQty * 0.25
-  //  In Stock     : currentStockQty > openingStockQty * 0.25
+  //  Low Stock    : 1 – 15 pieces (LOW_STOCK_THRESHOLD)
+  //  In Stock     : more than 15 pieces
   const [distResult, totalCatalogSKUs, fastMovingCount, slowMovingCount] = await Promise.all([
     Product.aggregate([
       { $match: { isActive: true } },
       {
         $group: {
           _id: null,
-          inStock: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $gt: ['$currentStockQty', 0] },
-                    { $gt: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.25] }] },
-                  ],
-                },
-                1, 0,
-              ],
-            },
-          },
-          lowStock: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $gt:  ['$currentStockQty', 0] },
-                    { $gt:  ['$openingStockQty', 0] },
-                    { $lte: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.25] }] },
-                  ],
-                },
-                1, 0,
-              ],
-            },
-          },
-          outOfStock: {
-            $sum: { $cond: [{ $lte: ['$currentStockQty', 0] }, 1, 0] },
-          },
+          inStock: { $sum: { $cond: [inStockExpr('$currentStockQty'), 1, 0] } },
+          lowStock: { $sum: { $cond: [lowStockExpr('$currentStockQty'), 1, 0] } },
+          outOfStock: { $sum: { $cond: [outOfStockExpr('$currentStockQty'), 1, 0] } },
           totalCurrentStock: { $sum: '$currentStockQty' },
         },
       },
@@ -320,6 +295,7 @@ const getInventoryStats = async () => {
 
   return {
     totalOnHand,
+    lowStockThreshold: LOW_STOCK_THRESHOLD,
     totalSKUs:       totalCatalogSKUs,
     inStockCount:    dist.inStock,
     lowStockCount:   dist.lowStock,

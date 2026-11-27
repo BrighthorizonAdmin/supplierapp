@@ -1,4 +1,5 @@
 const Dealer = require('../dealer/model/Dealer.model');
+const { STOCK_FILTERS } = require('../../utils/stockLevels');
 const Order = require('../orders/model/Order.model');
 const Invoice = require('../payments/model/Invoice.model');
 const Inventory = require('../inventory/model/Inventory.model');
@@ -116,30 +117,9 @@ const getKPIs = async ({ startDate, endDate } = {}) => {
       { $match: { status: { $in: ['issued', 'partial'] }, dueDate: { $lt: now } } },
       { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$totalAmount' } } },
     ]),
-    Product.aggregate([
-      { $lookup: { from: 'inventories', localField: '_id', foreignField: 'productId', as: '_inv' } },
-      { $unwind: { path: '$_inv', preserveNullAndEmptyArrays: true } },
-      {
-        $addFields: {
-          _qoh: { $ifNull: ['$_inv.quantityOnHand', '$openingStockQty'] },
-          _isLowStock: {
-            $and: [
-              { $gt: ['$currentStockQty', 0] },
-              { $lt: ['$currentStockQty', { $multiply: ['$openingStockQty', 0.2] }] },
-            ],
-          },
-        },
-      },
-      { $match: { _qoh: { $gt: 0 }, _isLowStock: true } },
-      { $count: 'total' },
-    ]).then(r => r[0]?.total || 0),
-    Product.aggregate([
-      { $lookup: { from: 'inventories', localField: '_id', foreignField: 'productId', as: '_inv' } },
-      { $unwind: { path: '$_inv', preserveNullAndEmptyArrays: true } },
-      { $addFields: { _qoh: { $ifNull: ['$_inv.quantityOnHand', '$openingStockQty'] } } },
-      { $match: { _qoh: { $not: { $gt: 0 } } } },
-      { $count: 'total' },
-    ]).then(r => r[0]?.total || 0),
+    // Same stock rule as the Inventory page (utils/stockLevels.js): 1–15 pieces = low, 0 = out.
+    Product.countDocuments({ isActive: true, ...STOCK_FILTERS['low-stock'] }),
+    Product.countDocuments({ isActive: true, ...STOCK_FILTERS['out-of-stock'] }),
     Return.countDocuments({ status: { $in: ['requested', 'approved'] } }),
     Inventory.aggregate([
       {
